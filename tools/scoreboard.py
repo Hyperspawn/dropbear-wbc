@@ -3,7 +3,7 @@
 CPU only. Reads a registry (skills.json: name -> kind + summary glob), takes the latest summary per skill and
 applies the soft gate: 0 falls, motor torque <= 1.5x rated (locomotion summaries), finite sim.
 
-    python tools/scoreboard.py --registry data/skills.json [--json out.json]
+    python tools/scoreboard.py --registry tools/skills.json [--json out.json]
 
 Exit code 1 if any registered skill is missing or fails, so it can gate a run.
 """
@@ -89,7 +89,7 @@ def render(rows: list[dict]) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--registry", type=Path, default=Path("data/skills.json"))
+    ap.add_argument("--registry", type=Path, default=Path("tools/skills.json"))
     ap.add_argument("--root", type=Path, default=Path("."))
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args(argv)
