@@ -16,7 +16,7 @@ outputs/
 
 # --- runs, logs, media, downloads (published on Hugging Face instead; see tools/fetch_assets.py) -------------
 logs/*
-assets/
+/assets/
 # small calibration evidence that the pinned calibration files and the tests reference by path
 !logs/gpu_pipeline/
 logs/gpu_pipeline/*
