@@ -1,0 +1,291 @@
+{
+ "name": "generated_wave",
+ "title": "Generated wave (hardware gate FAIL)",
+ "subtitle": "why the elbow is Dropbear's weak spot",
+ "notes": "Waving holds the forearm up; through the elbow's 4.8x speed-up linkage the X8 Pro sees 4.8x the gravity torque. The motion is tracked, but the motor would overheat. Kept here on purpose: the twin is only useful if it shows what the real robot cannot do.",
+ "fps": 25.0,
+ "frames": 151,
+ "duration_s": 6.04,
+ "body_names": [
+  "world",
+  "torso_RMD_X10__1_Rotor_1",
+  "PG_RMD_X10_S2_MIR4__2_Rotor_1",
+  "PG_RMD_X10_S2_MIR4__1_Rotor_1",
+  "torso_RMD_X10Rotot_1",
+  "head_5mm_ujoint_base__5__1",
+  "head_5mm_ujoint_base__2__1",
+  "head_5mm_ujoint_base__1__1",
+  "head_5mm_ujoint_base_1",
+  "head_5mm_ujoint_base__3__1",
+  "head_5mm_ujoint_base__4__1",
+  "LH_RMD_X8_Pro_MIR8_MIR1__1__1",
+  "PG_RMD_X10_V3Rotor_1",
+  "PG_RMD_X10_V3__1_Rotor_1",
+  "RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+  "head_u_joint_center__6__1",
+  "head_u_joint_center__1__1",
+  "head_u_joint_center__3__1",
+  "head_u_joint_center__2__1",
+  "head_u_joint_center__4__1",
+  "head_u_joint_center__5__1",
+  "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+  "LL_RMD_X10_S2_MIR4__3_Stator_1",
+  "RL_RMD_X10_S2_MIR4__3_Stator_1",
+  "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+  "head_8mm_ujoint_base__1__1",
+  "head_8mm_ujoint_base__4__1",
+  "head_8mm_ujoint_base__5__1",
+  "head_8mm_ujoint_base__6__1",
+  "head_8mm_ujoint_base__3__1",
+  "head_8mm_ujoint_base__2__1",
+  "LH_elbow_rear_hanger__1__1",
+  "LH_elbow_rear_hanger_1",
+  "LH_bicep_motor_mate_1",
+  "LH_6mm_bearing__9__1",
+  "LL_bearingstrap_1",
+  "LL_bearingstrap_inner_thigh_1",
+  "LL_RMD_X10_S2_MIR4Rotor_1",
+  "RL_bearingstrap_1",
+  "RL_bearingstrap_inner_thigh_1",
+  "RL_RMD_X10_S2_MIR4Rotor_1",
+  "RH_elbow_rear_hanger__1__1",
+  "RH_elbow_rear_hanger_1",
+  "RH_bicep_motor_mate_1",
+  "RH_6mm_bearing__9__1",
+  "head_screw_reciever_1",
+  "head_screw_reciever__4__1",
+  "head_screw_reciever__1__1",
+  "head_screw_reciever__2__1",
+  "head_screw_reciever__3__1",
+  "head_screw_reciever__5__1",
+  "LH_bicep_1",
+  "LH_6mm_bearing__4__1",
+  "LL_skateboard_bearing__20__1",
+  "LL_skateboard_bearing__16__1",
+  "LL_skateboard_bearing__13__1",
+  "LL_skateboard_bearing__14__1",
+  "RL_skateboard_bearing__20__1",
+  "RL_skateboard_bearing__16__1",
+  "RL_skateboard_bearing__13__1",
+  "RL_skateboard_bearing__14__1",
+  "RH_bicep_1",
+  "RH_6mm_bearing__4__1",
+  "head_u_joint_center__8__1",
+  "head_u_joint_center__11__1",
+  "head_u_joint_center__7__1",
+  "head_u_joint_center__9__1",
+  "head_u_joint_center_1",
+  "head_u_joint_center__10__1",
+  "LH_shoulder_ex_al_interface_1",
+  "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+  "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+  "RH_shoulder_ex_al_interface_1",
+  "head_10mm_ujoint_base__4__1",
+  "head_10mm_ujoint_base__2__1",
+  "head_10mm_ujoint_base__1__1",
+  "head_10mm_ujoint_base_1",
+  "head_10mm_ujoint_base__5__1",
+  "LL_calf_motor_driver_ext_1",
+  "LL_calf_motor_driver_ext_2",
+  "LL_basis_left_1",
+  "RL_calf_motor_driver_ext_1",
+  "RL_calf_motor_driver_ext_2",
+  "RL_basis_left_1",
+  "LL_skateboard_bearing_left_2",
+  "RL_skateboard_bearing_left_2",
+  "LL_210mm_tie_rod_v1_1",
+  "LL_290mm_tie_rod_v1_1",
+  "RL_290mm_tie_rod_v1_1",
+  "RL_210mm_tie_rod_v1_1"
+ ],
+ "events": [],
+ "facts": {
+  "actuator profile": "hw_v1i",
+  "policy": "lib_v6ts_nostate_v1i_fix / iter 10492",
+  "motor-steps over rated torque": "9.9 %",
+  "HW gate": "FAIL: right elbow 1.4x rated",
+  "falls": "0"
+ },
+ "motors": [
+  {
+   "name": "PG_left_leg_pitch",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "PG_left_leg_roll",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "LL_hip_joint",
+   "model": "RMD-X10-S2-V3-1:35",
+   "rated_nm": 50.0,
+   "peak_nm": 100.0
+  },
+  {
+   "name": "LL_knee_actuator_joint",
+   "model": "EPS-CEM-60",
+   "rated_nm": 34.0,
+   "peak_nm": 60.0
+  },
+  {
+   "name": "LL_Revolute67",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "LL_Revolute81",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "PG_right_leg_pitch",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "PG_right_leg_roll",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "RL_hip_joint",
+   "model": "RMD-X10-S2-V3-1:35",
+   "rated_nm": 50.0,
+   "peak_nm": 100.0
+  },
+  {
+   "name": "RL_knee_actuator_joint",
+   "model": "EPS-CEM-60",
+   "rated_nm": 34.0,
+   "peak_nm": 60.0
+  },
+  {
+   "name": "RL_Revolute67",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "RL_Revolute81",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "LH_yaw",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "LH_pitch",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "LH_roll",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "LH_elbow_joint",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "LH_wrist_roll",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "RH_yaw",
+   "model": "RMD-X10-V3-1:7",
+   "rated_nm": 15.0,
+   "peak_nm": 40.0
+  },
+  {
+   "name": "RH_pitch",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "RH_roll",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "RH_elbow_joint",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  },
+  {
+   "name": "RH_wrist_roll",
+   "model": "RMD-X8-Pro-V2-1:9",
+   "rated_nm": 10.0,
+   "peak_nm": 25.0
+  }
+ ],
+ "layout": {
+  "root_pos": {
+   "offset": 0,
+   "bytes": 1812,
+   "dtype": "<f4",
+   "shape": [
+    151,
+    3
+   ]
+  },
+  "rel_pos": {
+   "offset": 1812,
+   "bytes": 81540,
+   "dtype": "<i2",
+   "shape": [
+    151,
+    90,
+    3
+   ]
+  },
+  "quat": {
+   "offset": 83352,
+   "bytes": 108720,
+   "dtype": "<i2",
+   "shape": [
+    151,
+    90,
+    4
+   ]
+  },
+  "load": {
+   "offset": 192072,
+   "bytes": 3322,
+   "dtype": "|u1",
+   "shape": [
+    151,
+    22
+   ]
+  },
+  "contact": {
+   "offset": 195396,
+   "bytes": 151,
+   "dtype": "|u1",
+   "shape": [
+    151
+   ]
+  }
+ }
+}

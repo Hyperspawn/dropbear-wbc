@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dropbear Motor-Twin Replays</title>
+<meta name="description" content="Recorded physics rollouts of the Dropbear humanoid on its datasheet motor twin: live text to motion, deployable walks, and the hardware gate. Runs in the browser, no install.">
+<style>
+  :root {
+    --bg: #0e1116; --panel: rgba(18, 22, 28, 0.86); --line: rgba(255, 255, 255, 0.09); --line2: rgba(255, 255, 255, 0.16);
+    --text: #e9ecf0; --muted: #98a2ad; --dim: #6b7580; --accent: #f2b33d; --ok: #57c48a; --warn: #e8a13a; --bad: #e5604f;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  #view { position: fixed; inset: 0; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  /* top-left: title + rollout list */
+  #pick { top: 16px; left: 16px; width: 320px; max-width: calc(100vw - 32px); padding: 14px; }
+  #pick h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  #pick h1 span { color: var(--accent); }
+  #pick .lede { margin: 4px 0 10px; color: var(--muted); font-size: 12.5px; }
+  .roll { display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 8px; padding: 7px 9px; margin: 2px 0; cursor: pointer; font: inherit; }
+  .roll:hover { border-color: var(--line2); }
+  .roll.on { border-color: var(--accent); background: rgba(242, 179, 61, 0.07); }
+  .roll b { display: block; font-weight: 600; font-size: 13.5px; }
+  .roll small { color: var(--muted); font-size: 12px; }
+  /* right: facts + motors */
+  #info { top: 16px; right: 16px; width: 300px; padding: 14px; max-height: calc(100vh - 120px); overflow: auto; }
+  #info h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  dl { margin: 0 0 10px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12.5px; }
+  dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  dd.pass { color: var(--ok); font-weight: 600; } dd.fail { color: var(--bad); font-weight: 600; }
+  #notes { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+  .motors { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; }
+  .m { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+  .bar { height: 7px; background: rgba(255,255,255,0.07); border-radius: 4px; position: relative; overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 4px; background: var(--ok); }
+  .bar::after { content: ""; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: rgba(255,255,255,0.35); }
+  .legend { margin-top: 8px; font-size: 11.5px; color: var(--dim); }
+  /* bottom: transport */
+  #transport { left: 50%; transform: translateX(-50%); bottom: 16px; width: min(780px, calc(100vw - 32px)); padding: 10px 12px;
+    display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; }
+  #play { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: #1a1407; cursor: pointer;
+    font-size: 15px; font-weight: 700; }
+  #track { position: relative; height: 26px; cursor: pointer; touch-action: none; }
+  #track .rail { position: absolute; left: 0; right: 0; top: 11px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); }
+  #track .fill { position: absolute; left: 0; top: 11px; height: 4px; border-radius: 2px; background: var(--accent); width: 0; }
+  #track .ev { position: absolute; top: 6px; width: 3px; height: 14px; margin-left: -1px; border-radius: 2px; background: #fff; opacity: .75; }
+  #time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px; min-width: 88px; text-align: right; }
+  #speed { background: transparent; border: 1px solid var(--line2); color: var(--text); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12.5px; }
+  #caption { left: 50%; transform: translateX(-50%); bottom: 90px; padding: 9px 14px; font-size: 15px; max-width: calc(100vw - 32px);
+    text-align: center; opacity: 0; transition: opacity .35s; pointer-events: none; }
+  #caption.show { opacity: 1; }
+  #caption small { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: 2px; letter-spacing: .4px; text-transform: uppercase; }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+  @media (max-width: 900px) {
+    #info { display: none; }
+    #pick { width: auto; right: 16px; }
+    #pick .rolls { display: flex; gap: 6px; overflow-x: auto; }
+    .roll { min-width: 160px; }
+    #caption { bottom: 84px; font-size: 14px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="loading">Loading the robot…</div>
+<div id="pick" class="panel">
+  <h1>Dropbear <span>motor twin</span></h1>
+  <p class="lede">Recorded physics rollouts of the open Dropbear humanoid: Isaac Lab, datasheet motor models, 27 closed-loop
+    linkages. Drag to orbit, scroll to zoom. <a href="https://github.com/Hyperspawn/dropbear-wbc">Code &amp; docs</a></p>
+  <div class="rolls" id="rolls"></div>
+</div>
+<div id="info" class="panel">
+  <h2>This rollout</h2>
+  <dl id="facts"></dl>
+  <p id="notes"></p>
+  <h2>Motor torque / rated</h2>
+  <div class="motors" id="motors"></div>
+  <div class="legend">The tick is 100 % of the motor's rated (continuous) torque; bars turn amber above 70 % and red above rated.</div>
+</div>
+<div id="caption" class="panel"><small>prompt</small><span id="captext"></span></div>
+<div id="transport" class="panel">
+  <button id="play" aria-label="Play or pause">❚❚</button>
+  <div id="track"><div class="rail"></div><div class="fill" id="fill"></div></div>
+  <span id="time">0.0 / 0.0 s</span>
+  <select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const LABEL = {
+  PG_left_leg_pitch: "L hip roll", PG_left_leg_roll: "L hip yaw", LL_hip_joint: "L hip pitch", LL_knee_actuator_joint: "L knee",
+  LL_Revolute67: "L calf A", LL_Revolute81: "L calf B", PG_right_leg_pitch: "R hip roll", PG_right_leg_roll: "R hip yaw",
+  RL_hip_joint: "R hip pitch", RL_knee_actuator_joint: "R knee", RL_Revolute67: "R calf A", RL_Revolute81: "R calf B",
+  LH_yaw: "L sh pitch", LH_pitch: "L sh out", LH_roll: "L arm rot", LH_elbow_joint: "L elbow", LH_wrist_roll: "L wrist",
+  RH_yaw: "R sh pitch", RH_pitch: "R sh out", RH_roll: "R arm rot", RH_elbow_joint: "R elbow", RH_wrist_roll: "R wrist",
+};
+const $ = (id) => document.getElementById(id);
+const lowEnd = matchMedia("(max-width: 900px)").matches || (navigator.hardwareConcurrency || 8) <= 4;
+
+// ---------------------------------------------------------------- scene
+const renderer = new THREE.WebGLRenderer({ antialias: !lowEnd });
+renderer.setPixelRatio(Math.min(devicePixelRatio, lowEnd ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = !lowEnd;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+$("view").appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x13171d);
+scene.fog = new THREE.Fog(0x13171d, 14, 45);
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.05, 200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495;
+scene.add(new THREE.HemisphereLight(0xdfe8f5, 0x262b33, 1.15));
+const key = new THREE.DirectionalLight(0xffffff, 2.3);
+key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 20 });
+scene.add(key, key.target);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x2a2f37, roughness: 0.95 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(400, 400, 0x444e5a, 0x343b44); grid.position.y = 0.001; scene.add(grid);
+const world = new THREE.Group(); world.rotation.x = -Math.PI / 2; scene.add(world);  // data is Z-up; three.js is Y-up
+
+const nodes = {};
+const robotReady = new Promise((resolve, reject) => new GLTFLoader().load("assets/dropbear.glb", (g) => {
+  for (const n of [...g.scene.children]) {
+    n.traverse((o) => { if (o.isMesh) { o.castShadow = !lowEnd; o.material.roughness = 0.55; o.material.metalness = 0.05; } });
+    world.add(n); nodes[n.name] = n; n.visible = false;
+  }
+  resolve();
+}, undefined, reject));
+
+// ---------------------------------------------------------------- rollout data
+let R = null;  // { meta, root, rel, quat, load, contact, B, M, T }
+function view(buf, L) {
+  const C = { "<f4": Float32Array, "<i2": Int16Array, "|u1": Uint8Array, "<u1": Uint8Array };
+  const n = L.shape.reduce((a, b) => a * b, 1);
+  return new C[L.dtype](buf, L.offset, n);
+}
+async function loadRollout(name) {
+  const meta = await (await fetch(`data/${name}.json`)).json();
+  const buf = await (await fetch(`data/${name}.bin`)).arrayBuffer();
+  const L = meta.layout;
+  return { meta, root: view(buf, L.root_pos), rel: view(buf, L.rel_pos), quat: view(buf, L.quat), load: view(buf, L.load),
+           contact: view(buf, L.contact), B: meta.body_names.length, M: (meta.motors || []).length, T: meta.frames };
+}
+
+// ---------------------------------------------------------------- UI
+const index = await (await fetch("data/index.json")).json();
+for (const e of index) {
+  const b = document.createElement("button");
+  b.className = "roll"; b.dataset.name = e.name;
+  b.innerHTML = `<b>${e.title}</b><small>${e.subtitle} · ${Math.round(e.duration_s)} s</small>`;
+  b.onclick = () => select(e.name);
+  $("rolls").appendChild(b);
+}
+let bars = [];
+function buildSide(meta) {
+  const f = $("facts"); f.innerHTML = "";
+  for (const [k, v] of Object.entries(meta.facts || {})) {
+    if (!v) continue;
+    const cls = /^PASS/.test(v) ? "pass" : /^FAIL/.test(v) ? "fail" : "";
+    f.insertAdjacentHTML("beforeend", `<dt>${k}</dt><dd class="${cls}">${v}</dd>`);
+  }
+  $("notes").textContent = meta.notes || "";
+  const m = $("motors"); m.innerHTML = ""; bars = [];
+  // legs left column, arms right column, in the published motor order
+  (meta.motors || []).forEach((mo) => {
+    const row = document.createElement("div"); row.className = "m";
+    row.title = `${mo.name} · ${mo.model} · rated ${mo.rated_nm} N·m, peak ${mo.peak_nm} N·m`;
+    row.innerHTML = `<span>${LABEL[mo.name] || mo.name}</span><div class="bar"><i></i></div>`;
+    m.appendChild(row); bars.push(row.querySelector("i"));
+  });
+  const tr = $("track"); tr.querySelectorAll(".ev").forEach((e) => e.remove());
+  for (const e of meta.events || []) {
+    const d = document.createElement("div"); d.className = "ev"; d.title = e.text;
+    d.style.left = `${100 * e.t / meta.duration_s}%`; tr.appendChild(d);
+  }
+}
+
+// ---------------------------------------------------------------- playback
+let t = 0, playing = true, speed = 1, lastWall = performance.now();
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+const centroid = new THREE.Vector3(), prevCentroid = new THREE.Vector3(); let haveCentroid = false;
+
+function pose(time) {
+  if (!R) return;
+  const fps = R.meta.fps, x = Math.min(time * fps, R.T - 1.0001), i = Math.floor(x), a = x - i, j = Math.min(i + 1, R.T - 1);
+  const B = R.B, rt = R.root, rel = R.rel, q = R.quat, names = R.meta.body_names;
+  const rx = rt[3 * i] * (1 - a) + rt[3 * j] * a, ry = rt[3 * i + 1] * (1 - a) + rt[3 * j + 1] * a, rz = rt[3 * i + 2] * (1 - a) + rt[3 * j + 2] * a;
+  let cx = 0, cy = 0, cz = 0, k = 0;
+  for (let b = 0; b < B; b++) {
+    const n = nodes[names[b]]; if (!n) continue;
+    const pi = 3 * (i * B + b), pj = 3 * (j * B + b);
+    const x0 = rx + 0.001 * (rel[pi] * (1 - a) + rel[pj] * a), y0 = ry + 0.001 * (rel[pi + 1] * (1 - a) + rel[pj + 1] * a),
+          z0 = rz + 0.001 * (rel[pi + 2] * (1 - a) + rel[pj + 2] * a);
+    n.position.set(x0, y0, z0);
+    const qi = 4 * (i * B + b), qj = 4 * (j * B + b);
+    qa.set(q[qi + 1], q[qi + 2], q[qi + 3], q[qi]).normalize();
+    qb.set(q[qj + 1], q[qj + 2], q[qj + 3], q[qj]).normalize();
+    n.quaternion.copy(qa).slerp(qb, a);
+    n.visible = true; cx += x0; cy += y0; cz += z0; k++;
+  }
+  if (k) {
+    centroid.set(cx / k, cz / k, -cy / k);
+    if (haveCentroid) { const d = centroid.clone().sub(prevCentroid); d.y = 0; camera.position.add(d); controls.target.add(d); }
+    else { controls.target.copy(centroid); camera.position.set(centroid.x + 3.6, 1.55, centroid.z + 3.6); haveCentroid = true; }
+    prevCentroid.copy(centroid);
+    key.position.set(centroid.x + 3, 6, centroid.z + 2); key.target.position.copy(centroid);
+  }
+  const M = R.M;
+  for (let m = 0; m < M; m++) {
+    const v = R.load[i * M + m] / 100;  // fraction of rated torque
+    const el = bars[m]; if (!el) continue;
+    el.style.width = `${Math.min(v, 2) * 50}%`;
+    el.style.background = v > 1 ? "var(--bad)" : v > 0.7 ? "var(--warn)" : "var(--ok)";
+  }
+  // caption: the most recent event, shown for 4.5 s
+  const ev = (R.meta.events || []).filter((e) => e.t <= time && time - e.t < 4.5).pop();
+  $("caption").classList.toggle("show", !!ev);
+  if (ev) $("captext").textContent = ev.text;
+  $("fill").style.width = `${100 * time / R.meta.duration_s}%`;
+  $("time").textContent = `${time.toFixed(1)} / ${R.meta.duration_s.toFixed(1)} s`;
+}
+
+async function select(name) {
+  document.querySelectorAll(".roll").forEach((b) => b.classList.toggle("on", b.dataset.name === name));
+  $("loading").textContent = "Loading the rollout…"; $("loading").style.display = "grid";
+  const [r] = await Promise.all([loadRollout(name), robotReady]);
+  R = r; t = 0; haveCentroid = false; playing = true; $("play").textContent = "❚❚";
+  buildSide(R.meta); pose(0);
+  $("loading").style.display = "none";
+  history.replaceState(null, "", `#${name}`);
+}
+
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "❚❚" : "▶"; if (playing && R && t >= R.meta.duration_s - 0.05) t = 0; };
+$("speed").onchange = (e) => { speed = parseFloat(e.target.value); };
+function seek(ev) {
+  if (!R) return;
+  const r = $("track").getBoundingClientRect();
+  t = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * R.meta.duration_s; pose(t);
+}
+let dragging = false;
+$("track").addEventListener("pointerdown", (e) => { dragging = true; $("track").setPointerCapture(e.pointerId); seek(e); });
+$("track").addEventListener("pointermove", (e) => { if (dragging) seek(e); });
+$("track").addEventListener("pointerup", () => { dragging = false; });
+addEventListener("keydown", (e) => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("play").click(); } });
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+renderer.setAnimationLoop(() => {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastWall) / 1000); lastWall = now;
+  if (R && playing && !dragging) {
+    t += dt * speed;
+    if (t >= R.meta.duration_s) { t = R.meta.duration_s; playing = false; $("play").textContent = "▶"; }
+    pose(t);
+  }
+  controls.update(); renderer.render(scene, camera);
+});
+
+robotReady.catch(() => { $("loading").textContent = "Could not load the robot model."; });
+addEventListener("hashchange", () => { const h = decodeURIComponent(location.hash.slice(1)); if (index.some((e) => e.name === h) && (!R || R.meta.name !== h)) select(h); });
+const want = decodeURIComponent(location.hash.slice(1));
+select(index.some((e) => e.name === want) ? want : index[0].name);
+</script>
+</body>
+</html>

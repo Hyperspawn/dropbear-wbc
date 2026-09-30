@@ -1,0 +1,746 @@
+{
+ "schema": "dropbear-motion-library-v1",
+ "name": "accepted_v7gen_public",
+ "description": "accepted_v7gen restricted to redistributable sources (synthetic, kimodo_gen, kimodo_g1, asap_g1); dropped: gmr_lafan1, soma_retargeter_g1, unitree_rl_lab_mimic (tools/make_public_library.py, docs/DATA.md)",
+ "created": "2026-09-30T17:34:32",
+ "created_by": "tools/make_public_library.py",
+ "clips": [
+  {
+   "name": "TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ab0c6f4aad7947ee1c1978e58bbebc41b48702e0bf309ea16ea23895435e1e99"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_APT_level1_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_APT_level1_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "17d92dcfe41f23387407295ce4e42cbd2562244d272ebf3607e87d5cccf94d3a"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_APT_level2_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_APT_level2_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "40421eacaf27c1ee0df06232cf741ac713c64f19bc48f42993db1f1be28ce9fb"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "be5d3aa25707a99cbfa4eb5786332542204d55f68685b28e195b3e40fae5571c"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "cbc9eb9985db122c62c855c27489cd7b15669e68b9dc57f50ec09c2c92859dc2"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d6c3f38882135f3c593cf567bd11eef0c50e6fe19bf0bed6897ca407c8861555"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "4c2ff96805afec25b1faae8b70e2d60f7d8a46146275561a2b4b2ddcefe27d40"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "e1f411333a519055d17791f2fca76687f5cf621f2f4bd87a90d89de40e99009a"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d5fc93a4d4f1fe350e74c70abcf33f6c93d37595cb8c2bc2e17d921ec0b50bbc"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "cd13f62cb73cb9ac6948dd48c4a36113c39a7f4beade2d18a150abdad9d7fe4b"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b0a2e162a28c13c4465306bb7f0a2b6d2df71a2258090733471e8c561285e5b4"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ff87951fe98808595012c9dce545be45914df258bcf5fd6963a841e687a78e1b"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8eb67a6cbade2986c7ad421419affe96396475dab7591242902fbefb031616c6"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b40df3ffcb2184a1b4379179fb866479fd67d69d6930d135b918657f8a1a8be6"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ece29e56bf7ea64281d4c3738fa7b813836cbd0873a9f2aca6131f1ef6f1e673"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "5b40f13d7bd95c7b8b2f241f4715644c0c70659de8d87de5e5bc5a22cb4cceaf"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "05c2533348c1b82b0e284143146e73f0b6cb779aa800f3025572798720406797"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b044b1dfac89a6ce02e70a958f7ef538dbb8be686e341bf350d0a900c13e5f87"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d912af83e8906031f42968ac882e5b103d52e0e7aaa2664a48756784f78d4410"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "802d5f2c58d010add965e55eb6d80fb5ee285bdbd72dfcae3def015fec2a5a7d"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "203a268a65a4332dc87d85306a611cb3cdf979c255fe00de416d766accf18f21"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "714f7befe711fc1461b98857734f0bdbd98c49b55549ef30e2c7311ce8fafd0c"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "22a9f30791d42e339766368b8af6b591341f12d0b9dd93cfa3d1a26c2ac6ac70"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "793228e3b34f1fead03e836244e3d41640e942f643586364518a86c97228e840"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f3706b435dad6b8933111e75e62f93ad24a7fbcb7023ea1f34cff05315b57e5b"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b29bb385e82920f18d7b8e8832068a062da05e38322c455349daa3c8b57ef1b9"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "6c5bb21e931b25316189f234a7f34ceb838f3010f5b971d6e558605171079518"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "fc55b63e79a199b47e5ff38586af0f124caaec4ebbba74c75a07148dd2494d55"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "10a294287cb295173f35951d33134020a403d94d1a542d88794ef8c2093f936a"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "0fdd40dc7f12a4d635c132d85fb696d3282a284c2069b8cb20118f4f1bd938d5"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "007cf1a32c181f7eafee473ca78d462a135bb18b9968acd9dd94c9b54d9ee596"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8baf8935b3c9056c6dd83d173ae97488989c1ff06e5af9290e2872c948f1c271"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "036ca294f7324b209c153af7c97edf8e45a0a6321974d557748bc9defb844858"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "45bd127f3659255e03ee127c9300c74d8e2d99caf682e25767ebaeae32aef3c0"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "32c1cc8b42937dc90a26124843c46255027e0ab6720786cc81845de97f5fa506"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "a48a5c909c2305aefa66661675116bfd8146f5a95afaa6d4a7f1fd906133a42f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "3a9d11daea86149d74503918c3ca7d4f3d1dbe8eb70b6d43eecc9ff2318de762"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "53ade422f9f1655f5a94735bc0376a45c15a2f5b0bd150f63d53720b62afe069"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f86d46efffaa7903ec69ba10b6c2ff98ba9b7d8b8ff12e3205ee1f1765e84bc9"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "987a8446b89c2c8d70d4a4c1ada94f31aa6bf32f8593e20fb9acc5faa3fbbbb9"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "a0adadcaff6a2eaccc5a689c8ba84639bf4a09d7883af341fa8b017d2dd6bb3f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "32d3255aafeb08506e6d7cb0e1f07128177f2e78bc24d419fa8bb57a04b08bdd"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "6e290600cd6ef8074fb7bdda6acdc375c9cf4096f3a63f41bda0db558cbd9501"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "cb9404c962c66ba58af9ed0d03cbab7f51be5875d76ac68f6110e85758f993a8"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "15763615b7ae2aaee674ed03d3fd37540a87844bcbbb597d4895bba9458c6cd5"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "4112b1c4a87783eb194967607d4660801a6fc85a0435e30b332da05925ceedd0"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8982da1c7329b195828a36462299e1a6857dc0145ef96b7e1659b6b7772f81c7"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "864cf01f01792da15441e3d5d9db4a5a9942a75bdc6668afbf6d680a665608cb"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "47e2f2b8789b56191d1bf6df57f423c1eac13f32ab0780a0693d221c5b6e8f14"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "68a96e4a71a0ef174e5a41fc8d68024c0bb63624bd500c985b59f660375ba090"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d751fc6f4b9b09ba90f9514d6d409a062c0fd7ef6f983705feffa01103414b9e"
+  },
+  {
+   "name": "output_dance_ts1.19_v6",
+   "npz": "../kimodo_g1/output_dance_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "82351d273387cc0e3edc6090e5c5cedfc7cf622fc9e99c93ee4a7667200a12e1"
+  },
+  {
+   "name": "output_high5_ts1.19_v6",
+   "npz": "../kimodo_g1/output_high5_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "00e98686bfdd8af27dc55ff1d1dcc45e001147e126db724502391ca6a2f9ba50"
+  },
+  {
+   "name": "output_jumpjack_ts1.19_v6",
+   "npz": "../kimodo_g1/output_jumpjack_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "a843cb86a22b09a6db1a0d31c56ebfbb56e648a6affe518d3914845fe507964d"
+  },
+  {
+   "name": "output_walk_ts1.19_v6",
+   "npz": "../kimodo_g1/output_walk_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "47412a43a839fea270a37432d680d4b7a725fd95d9b799f8d347e42c243f6db3"
+  },
+  {
+   "name": "output_wave_ts1.19_v6",
+   "npz": "../kimodo_g1/output_wave_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "73abc602c418d06ac9013aa32527c247da4096ca3be8be3e0454f04e2dfef230"
+  },
+  {
+   "name": "arm_swing",
+   "npz": "../synthetic/arm_swing.npz",
+   "weight": 1.0,
+   "sha256": "c03e5e3cdef68ac3a8366c4c00b7ba2610fc44de035373b3c578a28ea15e8827"
+  },
+  {
+   "name": "squat_lite",
+   "npz": "../synthetic/squat_lite.npz",
+   "weight": 1.0,
+   "sha256": "6c0a88cda1562aee00ca3a513e8baade383bfbe79f3722c1aca170bfc86dfa79"
+  },
+  {
+   "name": "stand",
+   "npz": "../synthetic/stand.npz",
+   "weight": 1.0,
+   "sha256": "3ccdc058f634c2fe3094af7ab3dc64b39fc77a5815008c2801ec87177476cc54"
+  },
+  {
+   "name": "wave_right",
+   "npz": "../synthetic/wave_right.npz",
+   "weight": 1.0,
+   "sha256": "3bf616d7861b953a9842d34d0536afcb54dedc732dcd51c530552467354b9550"
+  },
+  {
+   "name": "wave_right_v2",
+   "npz": "../synthetic/wave_right_v2.npz",
+   "weight": 1.0,
+   "sha256": "fda33a093db630c5a81683c164d8fed95e7ea20342b73c7f55fb0c0db15de4ba"
+  },
+  {
+   "name": "weight_shift",
+   "npz": "../synthetic/weight_shift.npz",
+   "weight": 1.0,
+   "sha256": "79647b5dc73f93dd5022eecf19b39e502f8a80c6f600e71aa3a7631cffda408e"
+  },
+  {
+   "name": "arm_circles_ts1.19_v6",
+   "npz": "../kimodo_gen/arm_circles_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "4b997068dcddca4cfaed7279e831ca3f82013ee4a14ba1d6ccf6c0eab5f2dcfc"
+  },
+  {
+   "name": "arms_crossed_ts1.19_v6",
+   "npz": "../kimodo_gen/arms_crossed_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "9657c5089ddec9cb63f6ea191eb82b955b7ab04079342000524fe00a77c43672"
+  },
+  {
+   "name": "arms_up_ts1.19_v6",
+   "npz": "../kimodo_gen/arms_up_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8322eb16ac09ed7cc7981e3e3581e8059c2cf44412e90969ec4f39663f5dd3d6"
+  },
+  {
+   "name": "beckon_ts1.19_v6",
+   "npz": "../kimodo_gen/beckon_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "cd76fedd389b683007f9578990d7abf31f8f8eac341bb400f6ef3f6db5242b8c"
+  },
+  {
+   "name": "bounce_ts1.19_v6",
+   "npz": "../kimodo_gen/bounce_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "4b0b307f121f7dcaaeb3a46ec353120df48418daea0812c41b878afe544d2b0f"
+  },
+  {
+   "name": "bow_ts1.19_v6",
+   "npz": "../kimodo_gen/bow_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8b11d59a20b7e40551fe1b08becc47e6d3473bd27733d190ada4bec4cba76cff"
+  },
+  {
+   "name": "boxing_ts1.19_v6",
+   "npz": "../kimodo_gen/boxing_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b2446b6b1684c4e8f7e99740ec20f4b0ad6aa743f8f1f325783e167efeadb317"
+  },
+  {
+   "name": "calf_raise_ts1.19_v6",
+   "npz": "../kimodo_gen/calf_raise_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "1608b8aae1345204fa5440b4bd930db029750100a8d49757a9a3c5335c8556c2"
+  },
+  {
+   "name": "celebrate_ts1.19_v6",
+   "npz": "../kimodo_gen/celebrate_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "1fb4e97230cb4cd2c240afb6f125a18937270c104afdead676f3bbfd7c449df3"
+  },
+  {
+   "name": "check_watch_ts1.19_v6",
+   "npz": "../kimodo_gen/check_watch_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "99203a93d188ada73ee32b1ab31bbab7ad5a0db3a382b364afe5f6e9d975c4a9"
+  },
+  {
+   "name": "cheer_ts1.19_v6",
+   "npz": "../kimodo_gen/cheer_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "eda1ca506a5c6bdeac00500fc96f53eae3c803dbc0618dd30dad64e103cb13e9"
+  },
+  {
+   "name": "clap_ts1.19_v6",
+   "npz": "../kimodo_gen/clap_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "e90d8ab27b96cafd5214351016fefcc6008e7b27742a921d3a1fa0c80dc1071e"
+  },
+  {
+   "name": "dance_arms_ts1.19_v6",
+   "npz": "../kimodo_gen/dance_arms_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "64397fd61f035a48ba9b0bdb00137f78ab233f8ff9c26647b6abfdb29a21d2a3"
+  },
+  {
+   "name": "dance_step_ts1.19_v6",
+   "npz": "../kimodo_gen/dance_step_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "7aebd11a9b2aef21182d02bbf064b2bb220e67e2b1c9d2e0256f83efa34e3cf6"
+  },
+  {
+   "name": "disco_ts1.19_v6",
+   "npz": "../kimodo_gen/disco_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "33eef166fc34d124d0ed93646c77bcbe15ab2debdebdb5ff3cb7cebb86bfedbe"
+  },
+  {
+   "name": "half_squat_ts1.19_v6",
+   "npz": "../kimodo_gen/half_squat_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "6436f1f14b39d49fcfa557de4830363acecb7264e4a7da507c39922ef57d032b"
+  },
+  {
+   "name": "hands_hips_ts1.19_v6",
+   "npz": "../kimodo_gen/hands_hips_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "fea65fbc57513581be8f40ec9d79ddb4ed05c92812a99d57557c4ebea61c9293"
+  },
+  {
+   "name": "idle_shift_ts1.19_v6",
+   "npz": "../kimodo_gen/idle_shift_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b9d90eae2c0269ce63cb36d71e6d2491474af32086ad246199aaf03886397364"
+  },
+  {
+   "name": "jumping_jacks_slow_ts1.19_v6",
+   "npz": "../kimodo_gen/jumping_jacks_slow_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f6889e7ae06233a012175417835c688ddf8c54900f23b7954941f959c2e9d8ae"
+  },
+  {
+   "name": "kick_light_ts1.19_v6",
+   "npz": "../kimodo_gen/kick_light_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "aa6ae39e9de269dcb552c748069c18307ed5966849837ff5dc65e1bfe4ee43c2"
+  },
+  {
+   "name": "knee_raise_ts1.19_v6",
+   "npz": "../kimodo_gen/knee_raise_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "04fd7d8b96256ff99a4ad3d385156709b5a07674ccf838f18d2075dd5f2c1ad8"
+  },
+  {
+   "name": "look_around_ts1.19_v6",
+   "npz": "../kimodo_gen/look_around_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "b4f8a9177a4713061489a74ad8ffb3f05d3265f7dd1b8c98cc03a60a6e8833c3"
+  },
+  {
+   "name": "lunge_ts1.19_v6",
+   "npz": "../kimodo_gen/lunge_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ab64c59f61af07a6d2d21d58e44f58101122cca7e6e94843f40a0e2a2f56c9fc"
+  },
+  {
+   "name": "march_ts1.19_v6",
+   "npz": "../kimodo_gen/march_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "78c3404522a1ffe8d8a208c0d1fd8cc03145cc2226656d8c0f4b7b0a75af31a7"
+  },
+  {
+   "name": "one_leg_ts1.19_v6",
+   "npz": "../kimodo_gen/one_leg_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f0aa83d6dc20f22e6539ea71e62a385c47a00daf1876b71c06d54ccc795de108"
+  },
+  {
+   "name": "pick_up_ts1.19_v6",
+   "npz": "../kimodo_gen/pick_up_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "3aa58c06ddf5b48bc20be9ba5e4f1a1b20b773774a85575660c5f9429c296a15"
+  },
+  {
+   "name": "point_forward_ts1.19_v6",
+   "npz": "../kimodo_gen/point_forward_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f3b9ee84a9bd2e1315971bfa783c9190bd70b9358b70c99ab3fc7e92fa3dad6c"
+  },
+  {
+   "name": "push_forward_ts1.19_v6",
+   "npz": "../kimodo_gen/push_forward_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "7b2e394b28306f94794af1b774df88f03c6af8bd5419dcddd924dce8f3842287"
+  },
+  {
+   "name": "reach_down_ts1.19_v6",
+   "npz": "../kimodo_gen/reach_down_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "93c3fdf1fb5539f9960ed5872fb4e62df85ed2167c3b3d95c5497f50b96b51bb"
+  },
+  {
+   "name": "reach_forward_ts1.19_v6",
+   "npz": "../kimodo_gen/reach_forward_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "2cdb2efad36ecdd17da1cd2b9431f60122ecd5684b0ebb8d2660dc40495590b4"
+  },
+  {
+   "name": "salute_ts1.19_v6",
+   "npz": "../kimodo_gen/salute_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "9c7fecf142445ad70b04779c4a89423f2e71f0824b828a49c93ffaedafe96ea2"
+  },
+  {
+   "name": "scratch_head_ts1.19_v6",
+   "npz": "../kimodo_gen/scratch_head_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "fbcd1ae8edaddf4e0b59eb1d23237593fa18a7f7e0f939f131646489c5354ee1"
+  },
+  {
+   "name": "shrug_ts1.19_v6",
+   "npz": "../kimodo_gen/shrug_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "a4fb2f17baadf70c89e3ae8950da2ea94f3fe4852ba97de21d91401454be83f5"
+  },
+  {
+   "name": "side_left_ts1.19_v6",
+   "npz": "../kimodo_gen/side_left_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8f3a4957e051ba31111d7b84592dca81bec3a1c70646ba9e244e1138c41aa48a"
+  },
+  {
+   "name": "side_right_ts1.19_v6",
+   "npz": "../kimodo_gen/side_right_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f94632bf8e8f791bab8959f368c819e7eaf90e2e93aa19576db2b15e6b41d542"
+  },
+  {
+   "name": "squat_ts1.19_v6",
+   "npz": "../kimodo_gen/squat_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d2f09a9d1d7e10554ee36f8c82e0cf7eced861190c1e7749a1fb77405f94413d"
+  },
+  {
+   "name": "step_fwd_back_ts1.19_v6",
+   "npz": "../kimodo_gen/step_fwd_back_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "fe8bd8bbab8ea89056ff00d6decb2270bd76621077907ddb85ad6fbe9e0389d0"
+  },
+  {
+   "name": "stop_sign_ts1.19_v6",
+   "npz": "../kimodo_gen/stop_sign_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "23dd644c34152edd64367ea2bc4c769c79dd5711f04607efd616284ef49b8b7c"
+  },
+  {
+   "name": "stretch_up_ts1.19_v6",
+   "npz": "../kimodo_gen/stretch_up_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "104a5da1b70ec13a98c38e87846928389d31916fdd2af0deb5550a89294cc02d"
+  },
+  {
+   "name": "sway_ts1.19_v6",
+   "npz": "../kimodo_gen/sway_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "7819b5784c559550d408aba95475202a8307f367e9e32eeca9c9f0ff6a9e8a18"
+  },
+  {
+   "name": "tap_foot_ts1.19_v6",
+   "npz": "../kimodo_gen/tap_foot_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "90825157be95036cc1d3848b16fa7d9dbc5008e1aacb17d7a9cfa560e8da16e7"
+  },
+  {
+   "name": "think_ts1.19_v6",
+   "npz": "../kimodo_gen/think_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "56fcb8103b489d5f83fcdcca57f8fb35817c0fcb735a7705698b6d70ea35a07c"
+  },
+  {
+   "name": "thumbs_up_ts1.19_v6",
+   "npz": "../kimodo_gen/thumbs_up_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "dcfe3a43633e0aee41a4e13257f9d55577cdc7a105c6734eac7dbfe807871576"
+  },
+  {
+   "name": "tired_ts1.19_v6",
+   "npz": "../kimodo_gen/tired_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "12231108c778c05b14a078b464e753804613cee0e5fcc7a0c865fe7ad77fdf42"
+  },
+  {
+   "name": "turn_around_ts1.19_v6",
+   "npz": "../kimodo_gen/turn_around_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "0e75251c4fadcb01abe913852275c8977d2bbdbf86e643c6ff307ce3ea9597a8"
+  },
+  {
+   "name": "twist_ts1.19_v6",
+   "npz": "../kimodo_gen/twist_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d7e642b74052fec3db0948ee070ca02abda69033a8079bf6bcbed035b20d618a"
+  },
+  {
+   "name": "walk_back_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_back_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "7a827fea6f3be50c7f99f0dae7eac8f1c2e6ab3abedc9f298cdd8434c9b927a6"
+  },
+  {
+   "name": "walk_brisk_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_brisk_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "a07de28226bc1887966ba27aa14b021d3c42ecaed39160a6448baa11daba8093"
+  },
+  {
+   "name": "walk_circle_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_circle_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "c1444c4aaa7f012bae8406d3050420cf893ed0f6f230ca0e67ee7c7dc485634b"
+  },
+  {
+   "name": "walk_look_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_look_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "1279fa62aa07e1b87d11f6980744090408f8b4aa8db757b396e1dce631ec1818"
+  },
+  {
+   "name": "walk_normal_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_normal_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "9a0415f42da53b67a941a15a95e21cc9b9edbfc3e23764972bcfab2279badd1e"
+  },
+  {
+   "name": "walk_slow_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_slow_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "8d669f1bab18ebeef45bbc7dce912fa169f4999e641dd5355b9b7119241f12e7"
+  },
+  {
+   "name": "walk_stop_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_stop_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f30d0e87c4c61eaf4f0d79164431db243005da8e0dc27078fda66b244dfe6c64"
+  },
+  {
+   "name": "walk_turn_left_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_turn_left_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "e0e5739b0c9ed4048457c631ad538f8b240d642e832cae81355214825d0d5a31"
+  },
+  {
+   "name": "walk_turn_right_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_turn_right_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "481951950f01df0d1250effe294ae5cc5e05c08864f1837a5863b16abbe59de6"
+  },
+  {
+   "name": "walk_wave_ts1.19_v6",
+   "npz": "../kimodo_gen/walk_wave_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ef74812bcbb56f04178f703876c64f260d230fe53d74d2fd1ca93b7952091851"
+  },
+  {
+   "name": "wave_both_ts1.19_v6",
+   "npz": "../kimodo_gen/wave_both_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "bba3d6c4454cf20b1655a1fca685be9705f991e8c8f034b1bad50b74352c28ba"
+  },
+  {
+   "name": "wave_left_ts1.19_v6",
+   "npz": "../kimodo_gen/wave_left_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "5d8579c2beb5ecf03ec3713f4d323ee19af5a48bb2fd1fd7f76746022ca848ee"
+  },
+  {
+   "name": "wave_right_ts1.19_v6",
+   "npz": "../kimodo_gen/wave_right_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "063e433a7ba6727b535be783deb5a77ad3caf159619b88a74a3c913bea031b6a"
+  },
+  {
+   "name": "weight_shift_ts1.19_v6",
+   "npz": "../kimodo_gen/weight_shift_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "0df979537d621c412934c9fbe4e94a9e24e79802189100364a092ec50a12fdb7"
+  }
+ ],
+ "derived_from": {
+  "manifest": "accepted_v7gen.json",
+  "num_clips": 138,
+  "library_sha256": "d9121b0baf31cbb398e0a27dc0ff311f76af450ac81e12ba47020747fc20e5dc"
+ }
+}

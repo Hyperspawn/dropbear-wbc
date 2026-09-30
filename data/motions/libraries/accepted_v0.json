@@ -1,0 +1,14 @@
+{
+ "schema": "dropbear-motion-library-v1",
+ "name": "accepted_v0",
+ "description": "Every clip with a validated 'accepted' verdict on the contract plant (spherical ankle, calibration v3) as of 2026-09-24 15:00: the 5 synthetic clips. Kimodo output_wave was dropped (REJECTED by the v4 motor-dynamics gate: 45.8 rad/s, 1.08 rad/frame). smoke/dropbear_static_stand is left out (duplicates synthetic/stand). Add clips here once tools/validate_motion_npz.py --write-verdicts accepts them (e.g. foot-contact-fixed G1/GMR clips).",
+ "created": "2026-09-24T15:00:00+05:30",
+ "created_by": "multiclip track (logs/multiclip/PROGRESS.md)",
+ "clips": [
+  {"name": "stand", "npz": "../synthetic/stand.npz", "weight": 1.0},
+  {"name": "wave_right", "npz": "../synthetic/wave_right.npz", "weight": 1.0},
+  {"name": "arm_swing", "npz": "../synthetic/arm_swing.npz", "weight": 1.0},
+  {"name": "weight_shift", "npz": "../synthetic/weight_shift.npz", "weight": 1.0},
+  {"name": "squat_lite", "npz": "../synthetic/squat_lite.npz", "weight": 1.0}
+ ]
+}

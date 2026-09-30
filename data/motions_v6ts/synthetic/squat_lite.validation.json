@@ -1,0 +1,78 @@
+{
+ "schema": "dropbear-motion-validation-v1",
+ "tool": "tools/validate_motion_npz.py",
+ "created": "2026-09-24T12:50:07",
+ "npz": "data/motions/synthetic/squat_lite.npz",
+ "npz_sha256": "6c0a88cda1562aee00ca3a513e8baade383bfbe79f3722c1aca170bfc86dfa79",
+ "verdict": "accepted",
+ "reasons": [],
+ "gates": {
+  "closure_max_mm": 5.0,
+  "contact_sole_abs_z_mm": 15.0,
+  "fps": 50,
+  "max_motor_vel_rad_s": 10.0,
+  "max_motor_step_rad": 0.3
+ },
+ "closure_mm": {
+  "p50": 0.25052763521671295,
+  "p95": 0.35174208460375667,
+  "max": 0.3524361818563193
+ },
+ "contact_sole_z_mm": {
+  "min": -0.17644653153595785,
+  "max": 0.3787014996245591,
+  "abs_p95": 0.17282231853638738,
+  "frac_over_limit": 0.0
+ },
+ "contact_foot_slip_mps": {
+  "p95": 0.03191311274197316,
+  "max": 0.03822174464889697
+ },
+ "anchor_z_m": {
+  "min": 1.431090235710144,
+  "max": 1.480272650718689,
+  "first": 1.480272650718689
+ },
+ "motor_dynamics": {
+  "max_abs_vel_rad_s": 0.18036887049674988,
+  "max_abs_vel_joint": "RL_Revolute67",
+  "frames_over_vel_limit": 0,
+  "max_step_rad": 0.003624051809310913,
+  "max_step_joint": "RL_Revolute67",
+  "max_step_frame": 137,
+  "steps_over_limit": 0,
+  "worst_vel": [
+   {
+    "joint": "RL_Revolute67",
+    "max_abs_vel_rad_s": 0.18
+   },
+   {
+    "joint": "LL_Revolute67",
+    "max_abs_vel_rad_s": 0.18
+   },
+   {
+    "joint": "LL_Revolute81",
+    "max_abs_vel_rad_s": 0.11
+   }
+  ],
+  "limits": {
+   "max_motor_vel_rad_s": 10.0,
+   "max_motor_step_rad": 0.3
+  }
+ },
+ "saturation": {
+  "any_frac": 0.0,
+  "joints_saturated": 0,
+  "worst": [],
+  "max_excess_deg": 0.0,
+  "keys": [
+   "frames_with_any_saturation_frac",
+   "semantic_map_info_keys",
+   "semantic_map_report_clip_frac_on_achieved",
+   "usd_motor_limit_violation_deg",
+   "worst_joint"
+  ]
+ },
+ "log": "logs/review_fixes/validate_motion_npz_v4.log",
+ "note": "settle meta.status refers to the settle's closure gate; this file is the additional validation gate"
+}

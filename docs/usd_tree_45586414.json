@@ -1,0 +1,2745 @@
+{
+"bodies": [
+[
+"world",
+"/humanoid/world",
+[
+0.0,
+0.0,
+0.0
+],
+19.505033493041992
+],
+[
+"torso_RMD_X10__1_Rotor_1",
+"/humanoid/torso_RMD_X10__1_Rotor_1",
+[
+-0.035,
+0.105,
+1.621
+],
+0.34392252564430237
+],
+[
+"LH_RMD_X8_Pro_MIR8_MIR1__1__1",
+"/humanoid/LH_RMD_X8_Pro_MIR8_MIR1__1__1",
+[
+-0.062,
+0.155,
+1.621
+],
+1.2004154920578003
+],
+[
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+"/humanoid/LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+[
+-0.035,
+0.169,
+1.514
+],
+1.74918794631958
+],
+[
+"LH_elbow_rear_hanger__1__1",
+"/humanoid/LH_elbow_rear_hanger__1__1",
+[
+-0.034,
+0.196,
+1.338
+],
+0.010281646624207497
+],
+[
+"LH_elbow_rear_hanger_1",
+"/humanoid/LH_elbow_rear_hanger_1",
+[
+-0.033,
+0.162,
+1.338
+],
+0.010281646624207497
+],
+[
+"LH_bicep_motor_mate_1",
+"/humanoid/LH_bicep_motor_mate_1",
+[
+-0.035,
+0.16,
+1.413
+],
+0.03617339953780174
+],
+[
+"LH_bicep_1",
+"/humanoid/LH_bicep_1",
+[
+0.017,
+0.167,
+1.384
+],
+0.005289691034704447
+],
+[
+"LH_6mm_bearing__9__1",
+"/humanoid/LH_6mm_bearing__9__1",
+[
+0.011,
+0.162,
+1.334
+],
+0.047284238040447235
+],
+[
+"LH_6mm_bearing__4__1",
+"/humanoid/LH_6mm_bearing__4__1",
+[
+-0.054,
+0.196,
+1.302
+],
+0.8950967192649841
+],
+[
+"LH_shoulder_ex_al_interface_1",
+"/humanoid/LH_shoulder_ex_al_interface_1",
+[
+-0.035,
+0.169,
+1.217
+],
+0.6525801420211792
+],
+[
+"PG_RMD_X10_S2_MIR4__2_Rotor_1",
+"/humanoid/PG_RMD_X10_S2_MIR4__2_Rotor_1",
+[
+-0.085,
+-0.009,
+1.198
+],
+1.8784096240997314
+],
+[
+"PG_RMD_X10_V3Rotor_1",
+"/humanoid/PG_RMD_X10_V3Rotor_1",
+[
+0.026,
+-0.003,
+1.176
+],
+0.46074891090393066
+],
+[
+"LL_RMD_X10_S2_MIR4__3_Stator_1",
+"/humanoid/LL_RMD_X10_S2_MIR4__3_Stator_1",
+[
+0.042,
+0.006,
+1.112
+],
+3.4599056243896484
+],
+[
+"LL_bearingstrap_1",
+"/humanoid/LL_bearingstrap_1",
+[
+0.092,
+0.082,
+1.082
+],
+0.43394386768341064
+],
+[
+"LL_skateboard_bearing__11__1",
+"/humanoid/LL_skateboard_bearing__11__1",
+[
+0.09,
+0.044,
+0.754
+],
+0.01812620460987091
+],
+[
+"LL_skateboard_bearing__20__1",
+"/humanoid/LL_skateboard_bearing__20__1",
+[
+0.03,
+0.044,
+0.754
+],
+0.2867460250854492
+],
+[
+"LL_double_bracket_10deg_MIR_MIR_MIR_1",
+"/humanoid/LL_double_bracket_10deg_MIR_MIR_MIR_1",
+[
+0.076,
+0.027,
+0.656
+],
+2.37115478515625
+],
+[
+"LL_calf_motor_driver_ext_1",
+"/humanoid/LL_calf_motor_driver_ext_1",
+[
+0.021,
+-0.006,
+0.488
+],
+0.045684460550546646
+],
+[
+"LL_290mm_tie_rod_v1_1",
+"/humanoid/LL_290mm_tie_rod_v1_1",
+[
+0.058,
+-0.033,
+0.472
+],
+0.3167129456996918
+],
+[
+"LL_calf_motor_driver_ext_2",
+"/humanoid/LL_calf_motor_driver_ext_2",
+[
+0.023,
+0.034,
+0.39
+],
+0.045684460550546646
+],
+[
+"LL_210mm_tie_rod_v1_1",
+"/humanoid/LL_210mm_tie_rod_v1_1",
+[
+0.063,
+0.061,
+0.391
+],
+0.08376049250364304
+],
+[
+"LL_basis_left_1",
+"/humanoid/LL_basis_left_1",
+[
+0.087,
+0.004,
+0.205
+],
+0.1042453721165657
+],
+[
+"LL_skateboard_bearing_left_2",
+"/humanoid/LL_skateboard_bearing_left_2",
+[
+0.109,
+0.014,
+0.166
+],
+0.9352174401283264
+],
+[
+"LL_skateboard_bearing__10__1",
+"/humanoid/LL_skateboard_bearing__10__1",
+[
+0.09,
+0.024,
+0.757
+],
+0.01812620460987091
+],
+[
+"LL_skateboard_bearing__16__1",
+"/humanoid/LL_skateboard_bearing__16__1",
+[
+0.03,
+0.024,
+0.758
+],
+0.07358713448047638
+],
+[
+"LL_bearingstrap_inner_thigh_1",
+"/humanoid/LL_bearingstrap_inner_thigh_1",
+[
+0.092,
+-0.013,
+1.099
+],
+0.4044934809207916
+],
+[
+"LL_RMD_X10_S2_MIR4Rotor_1",
+"/humanoid/LL_RMD_X10_S2_MIR4Rotor_1",
+[
+-0.03,
+0.051,
+1.004
+],
+1.0089629888534546
+],
+[
+"LL_skateboard_bearing__13__1",
+"/humanoid/LL_skateboard_bearing__13__1",
+[
+-0.01,
+0.016,
+0.711
+],
+0.13708066940307617
+],
+[
+"LL_skateboard_bearing__14__1",
+"/humanoid/LL_skateboard_bearing__14__1",
+[
+-0.01,
+0.036,
+0.708
+],
+0.1375255435705185
+],
+[
+"PG_RMD_X10_S2_MIR4__1_Rotor_1",
+"/humanoid/PG_RMD_X10_S2_MIR4__1_Rotor_1",
+[
+-0.085,
+-0.131,
+1.198
+],
+1.8626781702041626
+],
+[
+"PG_RMD_X10_V3__1_Rotor_1",
+"/humanoid/PG_RMD_X10_V3__1_Rotor_1",
+[
+0.026,
+-0.136,
+1.176
+],
+0.4690443277359009
+],
+[
+"RL_RMD_X10_S2_MIR4__3_Stator_1",
+"/humanoid/RL_RMD_X10_S2_MIR4__3_Stator_1",
+[
+0.042,
+-0.145,
+1.112
+],
+3.4599056243896484
+],
+[
+"RL_bearingstrap_1",
+"/humanoid/RL_bearingstrap_1",
+[
+0.092,
+-0.221,
+1.082
+],
+0.43394386768341064
+],
+[
+"RL_skateboard_bearing__11__1",
+"/humanoid/RL_skateboard_bearing__11__1",
+[
+0.09,
+-0.183,
+0.754
+],
+0.01812620460987091
+],
+[
+"RL_skateboard_bearing__20__1",
+"/humanoid/RL_skateboard_bearing__20__1",
+[
+0.03,
+-0.184,
+0.754
+],
+0.2867460250854492
+],
+[
+"RL_double_bracket_10deg_MIR_MIR_MIR_1",
+"/humanoid/RL_double_bracket_10deg_MIR_MIR_MIR_1",
+[
+0.076,
+-0.166,
+0.656
+],
+2.37115478515625
+],
+[
+"RL_calf_motor_driver_ext_1",
+"/humanoid/RL_calf_motor_driver_ext_1",
+[
+0.021,
+-0.133,
+0.488
+],
+0.045684460550546646
+],
+[
+"RL_290mm_tie_rod_v1_1",
+"/humanoid/RL_290mm_tie_rod_v1_1",
+[
+0.058,
+-0.106,
+0.472
+],
+0.3167129456996918
+],
+[
+"RL_calf_motor_driver_ext_2",
+"/humanoid/RL_calf_motor_driver_ext_2",
+[
+0.023,
+-0.173,
+0.39
+],
+0.045684460550546646
+],
+[
+"RL_210mm_tie_rod_v1_1",
+"/humanoid/RL_210mm_tie_rod_v1_1",
+[
+0.063,
+-0.2,
+0.391
+],
+0.08376049250364304
+],
+[
+"RL_basis_left_1",
+"/humanoid/RL_basis_left_1",
+[
+0.087,
+-0.143,
+0.205
+],
+0.1042453721165657
+],
+[
+"RL_skateboard_bearing_left_2",
+"/humanoid/RL_skateboard_bearing_left_2",
+[
+0.109,
+-0.154,
+0.166
+],
+0.9352174401283264
+],
+[
+"RL_skateboard_bearing__16__1",
+"/humanoid/RL_skateboard_bearing__16__1",
+[
+0.03,
+-0.164,
+0.758
+],
+0.07358713448047638
+],
+[
+"RL_bearingstrap_inner_thigh_1",
+"/humanoid/RL_bearingstrap_inner_thigh_1",
+[
+0.092,
+-0.126,
+1.099
+],
+0.4044934809207916
+],
+[
+"RL_RMD_X10_S2_MIR4Rotor_1",
+"/humanoid/RL_RMD_X10_S2_MIR4Rotor_1",
+[
+-0.03,
+-0.19,
+1.004
+],
+1.0089629888534546
+],
+[
+"RL_skateboard_bearing__13__1",
+"/humanoid/RL_skateboard_bearing__13__1",
+[
+-0.01,
+-0.156,
+0.711
+],
+0.13708066940307617
+],
+[
+"RL_skateboard_bearing__14__1",
+"/humanoid/RL_skateboard_bearing__14__1",
+[
+-0.01,
+-0.175,
+0.708
+],
+0.1375255435705185
+],
+[
+"torso_RMD_X10Rotot_1",
+"/humanoid/torso_RMD_X10Rotot_1",
+[
+-0.035,
+-0.244,
+1.621
+],
+0.34392252564430237
+],
+[
+"RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+"/humanoid/RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+[
+-0.062,
+-0.294,
+1.621
+],
+1.2004154920578003
+],
+[
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+"/humanoid/RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+[
+-0.035,
+-0.308,
+1.514
+],
+1.74918794631958
+],
+[
+"RH_elbow_rear_hanger__1__1",
+"/humanoid/RH_elbow_rear_hanger__1__1",
+[
+-0.034,
+-0.336,
+1.338
+],
+0.010281646624207497
+],
+[
+"RH_elbow_rear_hanger_1",
+"/humanoid/RH_elbow_rear_hanger_1",
+[
+-0.033,
+-0.302,
+1.338
+],
+0.010281646624207497
+],
+[
+"RH_bicep_motor_mate_1",
+"/humanoid/RH_bicep_motor_mate_1",
+[
+-0.035,
+-0.299,
+1.413
+],
+0.03617339953780174
+],
+[
+"RH_bicep_1",
+"/humanoid/RH_bicep_1",
+[
+0.017,
+-0.307,
+1.384
+],
+0.005289691034704447
+],
+[
+"RH_6mm_bearing__9__1",
+"/humanoid/RH_6mm_bearing__9__1",
+[
+0.011,
+-0.302,
+1.334
+],
+0.047284238040447235
+],
+[
+"RH_6mm_bearing__4__1",
+"/humanoid/RH_6mm_bearing__4__1",
+[
+-0.054,
+-0.336,
+1.302
+],
+0.8950967192649841
+],
+[
+"RH_shoulder_ex_al_interface_1",
+"/humanoid/RH_shoulder_ex_al_interface_1",
+[
+-0.035,
+-0.308,
+1.217
+],
+0.6525801420211792
+],
+[
+"head_5mm_ujoint_base__5__1",
+"/humanoid/head_5mm_ujoint_base__5__1",
+[
+0.101,
+-0.045,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__6__1",
+"/humanoid/head_u_joint_center__6__1",
+[
+0.104,
+-0.041,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__1__1",
+"/humanoid/head_8mm_ujoint_base__1__1",
+[
+0.095,
+-0.041,
+1.644
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever_1",
+"/humanoid/head_screw_reciever_1",
+[
+0.098,
+-0.043,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center__8__1",
+"/humanoid/head_u_joint_center__8__1",
+[
+0.044,
+-0.01,
+1.778
+],
+1.8698921203613281
+],
+[
+"head_5mm_ujoint_base__2__1",
+"/humanoid/head_5mm_ujoint_base__2__1",
+[
+0.101,
+-0.095,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__1__1",
+"/humanoid/head_u_joint_center__1__1",
+[
+0.102,
+-0.09,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__4__1",
+"/humanoid/head_8mm_ujoint_base__4__1",
+[
+0.108,
+-0.096,
+1.651
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever__4__1",
+"/humanoid/head_screw_reciever__4__1",
+[
+0.098,
+-0.097,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center__11__1",
+"/humanoid/head_u_joint_center__11__1",
+[
+0.049,
+-0.125,
+1.781
+],
+0.0009727380238473415
+],
+[
+"head_10mm_ujoint_base__4__1",
+"/humanoid/head_10mm_ujoint_base__4__1",
+[
+0.045,
+-0.117,
+1.779
+],
+0.0014232383109629154
+],
+[
+"head_5mm_ujoint_base__1__1",
+"/humanoid/head_5mm_ujoint_base__1__1",
+[
+-0.027,
+0.029,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__3__1",
+"/humanoid/head_u_joint_center__3__1",
+[
+-0.028,
+0.034,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__5__1",
+"/humanoid/head_8mm_ujoint_base__5__1",
+[
+-0.035,
+0.029,
+1.651
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever__1__1",
+"/humanoid/head_screw_reciever__1__1",
+[
+-0.024,
+0.027,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center__7__1",
+"/humanoid/head_u_joint_center__7__1",
+[
+0.023,
+-0.003,
+1.781
+],
+0.0009727380238473415
+],
+[
+"head_10mm_ujoint_base__2__1",
+"/humanoid/head_10mm_ujoint_base__2__1",
+[
+0.029,
+0.004,
+1.779
+],
+0.0014232383109629154
+],
+[
+"head_5mm_ujoint_base_1",
+"/humanoid/head_5mm_ujoint_base_1",
+[
+-0.071,
+0.004,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__2__1",
+"/humanoid/head_u_joint_center__2__1",
+[
+-0.075,
+0.003,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__6__1",
+"/humanoid/head_8mm_ujoint_base__6__1",
+[
+-0.073,
+0.011,
+1.651
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever__2__1",
+"/humanoid/head_screw_reciever__2__1",
+[
+-0.071,
+0.0,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center__9__1",
+"/humanoid/head_u_joint_center__9__1",
+[
+-0.073,
+-0.062,
+1.778
+],
+0.0009727380238473415
+],
+[
+"head_10mm_ujoint_base__1__1",
+"/humanoid/head_10mm_ujoint_base__1__1",
+[
+-0.073,
+-0.053,
+1.779
+],
+0.0014232383109629154
+],
+[
+"head_5mm_ujoint_base__3__1",
+"/humanoid/head_5mm_ujoint_base__3__1",
+[
+-0.071,
+-0.144,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__4__1",
+"/humanoid/head_u_joint_center__4__1",
+[
+-0.068,
+-0.148,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__3__1",
+"/humanoid/head_8mm_ujoint_base__3__1",
+[
+-0.077,
+-0.148,
+1.65
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever__3__1",
+"/humanoid/head_screw_reciever__3__1",
+[
+-0.071,
+-0.14,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center_1",
+"/humanoid/head_u_joint_center_1",
+[
+-0.073,
+-0.077,
+1.778
+],
+0.0009727380238473415
+],
+[
+"head_10mm_ujoint_base_1",
+"/humanoid/head_10mm_ujoint_base_1",
+[
+-0.073,
+-0.087,
+1.779
+],
+0.0014232383109629154
+],
+[
+"head_5mm_ujoint_base__4__1",
+"/humanoid/head_5mm_ujoint_base__4__1",
+[
+-0.027,
+-0.169,
+1.639
+],
+0.001903416821733117
+],
+[
+"head_u_joint_center__5__1",
+"/humanoid/head_u_joint_center__5__1",
+[
+-0.028,
+-0.174,
+1.648
+],
+0.0009727380238473415
+],
+[
+"head_8mm_ujoint_base__2__1",
+"/humanoid/head_8mm_ujoint_base__2__1",
+[
+-0.035,
+-0.168,
+1.651
+],
+0.041870325803756714
+],
+[
+"head_screw_reciever__5__1",
+"/humanoid/head_screw_reciever__5__1",
+[
+-0.024,
+-0.167,
+1.656
+],
+0.04298268258571625
+],
+[
+"head_u_joint_center__10__1",
+"/humanoid/head_u_joint_center__10__1",
+[
+0.023,
+-0.137,
+1.781
+],
+0.0009727380238473415
+],
+[
+"head_10mm_ujoint_base__5__1",
+"/humanoid/head_10mm_ujoint_base__5__1",
+[
+0.03,
+-0.143,
+1.779
+],
+0.0014232383109629154
+]
+],
+"joints": [
+{
+"name": "LH_yaw",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"world"
+],
+"b1": [
+"torso_RMD_X10__1_Rotor_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LH_pitch",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"torso_RMD_X10__1_Rotor_1"
+],
+"b1": [
+"LH_RMD_X8_Pro_MIR8_MIR1__1__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 10.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LH_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_RMD_X8_Pro_MIR8_MIR1__1__1"
+],
+"b1": [
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LH_Revolute41",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"LH_elbow_rear_hanger__1__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LH_Revolute42",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"LH_elbow_rear_hanger_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LH_elbow_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"LH_bicep_motor_mate_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": 0.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LH_Revolute32",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_bicep_motor_mate_1"
+],
+"b1": [
+"LH_bicep_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LH_Revolute33",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_bicep_1"
+],
+"b1": [
+"LH_6mm_bearing__9__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LH_Revolute44",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_6mm_bearing__9__1"
+],
+"b1": [
+"LH_6mm_bearing__4__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LH_wrist_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_6mm_bearing__4__1"
+],
+"b1": [
+"LH_shoulder_ex_al_interface_1"
+],
+"excl": false,
+"axis": "Y",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "PG_left_leg_pitch",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"world"
+],
+"b1": [
+"PG_RMD_X10_S2_MIR4__2_Rotor_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -15.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "PG_left_leg_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"PG_RMD_X10_S2_MIR4__2_Rotor_1"
+],
+"b1": [
+"PG_RMD_X10_V3Rotor_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -30.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LL_hip_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"PG_RMD_X10_V3Rotor_1"
+],
+"b1": [
+"LL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -50.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LL_Revolute33",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"LL_bearingstrap_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute46",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_bearingstrap_1"
+],
+"b1": [
+"LL_skateboard_bearing__14__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute47",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_bearingstrap_1"
+],
+"b1": [
+"LL_skateboard_bearing__20__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute57",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_skateboard_bearing__20__1"
+],
+"b1": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute67",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"LL_calf_motor_driver_ext_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -50.0,
+"hi": 60.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LL_Revolute112",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_calf_motor_driver_ext_1"
+],
+"b1": [
+"LL_290mm_tie_rod_v1_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute81",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"LL_calf_motor_driver_ext_2"
+],
+"excl": false,
+"axis": "Z",
+"lo": -50.0,
+"hi": 60.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LL_Revolute111",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_calf_motor_driver_ext_2"
+],
+"b1": [
+"LL_210mm_tie_rod_v1_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute87",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"LL_basis_left_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute88",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_basis_left_1"
+],
+"b1": [
+"LL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute48",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_bearingstrap_1"
+],
+"b1": [
+"LL_skateboard_bearing__13__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute49",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_bearingstrap_1"
+],
+"b1": [
+"LL_skateboard_bearing__16__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute37",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"LL_bearingstrap_inner_thigh_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_knee_actuator_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"LL_RMD_X10_S2_MIR4Rotor_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": 0.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "LL_Revolute28",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_RMD_X10_S2_MIR4Rotor_1"
+],
+"b1": [
+"LL_skateboard_bearing__13__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "LL_Revolute29",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_RMD_X10_S2_MIR4Rotor_1"
+],
+"b1": [
+"LL_skateboard_bearing__14__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "PG_right_leg_pitch",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"world"
+],
+"b1": [
+"PG_RMD_X10_S2_MIR4__1_Rotor_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -30.0,
+"hi": 15.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "PG_right_leg_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"PG_RMD_X10_S2_MIR4__1_Rotor_1"
+],
+"b1": [
+"PG_RMD_X10_V3__1_Rotor_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -30.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RL_hip_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"PG_RMD_X10_V3__1_Rotor_1"
+],
+"b1": [
+"RL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -50.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RL_Revolute33",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"RL_bearingstrap_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute46",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_bearingstrap_1"
+],
+"b1": [
+"RL_skateboard_bearing__14__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute47",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_bearingstrap_1"
+],
+"b1": [
+"RL_skateboard_bearing__20__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute57",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_skateboard_bearing__20__1"
+],
+"b1": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute67",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"RL_calf_motor_driver_ext_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -50.0,
+"hi": 60.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RL_Revolute112",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_calf_motor_driver_ext_1"
+],
+"b1": [
+"RL_290mm_tie_rod_v1_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute81",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"RL_calf_motor_driver_ext_2"
+],
+"excl": false,
+"axis": "Z",
+"lo": -60.0,
+"hi": 50.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RL_Revolute111",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_calf_motor_driver_ext_2"
+],
+"b1": [
+"RL_210mm_tie_rod_v1_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute87",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"b1": [
+"RL_basis_left_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute88",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_basis_left_1"
+],
+"b1": [
+"RL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute48",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_bearingstrap_1"
+],
+"b1": [
+"RL_skateboard_bearing__13__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute49",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_bearingstrap_1"
+],
+"b1": [
+"RL_skateboard_bearing__16__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute37",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"RL_bearingstrap_inner_thigh_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_knee_actuator_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_RMD_X10_S2_MIR4__3_Stator_1"
+],
+"b1": [
+"RL_RMD_X10_S2_MIR4Rotor_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": 0.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RL_Revolute28",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_RMD_X10_S2_MIR4Rotor_1"
+],
+"b1": [
+"RL_skateboard_bearing__13__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RL_Revolute29",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_RMD_X10_S2_MIR4Rotor_1"
+],
+"b1": [
+"RL_skateboard_bearing__14__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_yaw",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"world"
+],
+"b1": [
+"torso_RMD_X10Rotot_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RH_pitch",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"torso_RMD_X10Rotot_1"
+],
+"b1": [
+"RH_RMD_X8_Pro_MIR8_MIR1__1__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 10.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RH_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_RMD_X8_Pro_MIR8_MIR1__1__1"
+],
+"b1": [
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RH_Revolute41",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"RH_elbow_rear_hanger__1__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_Revolute42",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"RH_elbow_rear_hanger_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_elbow_joint",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"RH_bicep_motor_mate_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": 0.0,
+"hi": 30.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "RH_Revolute32",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_bicep_motor_mate_1"
+],
+"b1": [
+"RH_bicep_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_Revolute33",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_bicep_1"
+],
+"b1": [
+"RH_6mm_bearing__9__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_Revolute44",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_6mm_bearing__9__1"
+],
+"b1": [
+"RH_6mm_bearing__4__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -180.00001525878906,
+"hi": 180.00001525878906,
+"drive": []
+},
+{
+"name": "RH_wrist_roll",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_6mm_bearing__4__1"
+],
+"b1": [
+"RH_shoulder_ex_al_interface_1"
+],
+"excl": false,
+"axis": "Y",
+"lo": -180.0,
+"hi": 180.0,
+"drive": [
+"PhysicsDriveAPI:angular"
+]
+},
+{
+"name": "head_Platform_Base_Joint1",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base__5__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_26",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base__5__1"
+],
+"b1": [
+"head_u_joint_center__6__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_27",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__6__1"
+],
+"b1": [
+"head_8mm_ujoint_base__1__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew1",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__1__1"
+],
+"b1": [
+"head_screw_reciever_1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_34",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever_1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Platform_Base_Joint2",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base__2__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_37",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base__2__1"
+],
+"b1": [
+"head_u_joint_center__1__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_38",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__1__1"
+],
+"b1": [
+"head_8mm_ujoint_base__4__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew2",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__4__1"
+],
+"b1": [
+"head_screw_reciever__4__1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_44",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever__4__1"
+],
+"b1": [
+"head_u_joint_center__11__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_45",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__11__1"
+],
+"b1": [
+"head_10mm_ujoint_base__4__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Platform_Base_Joint3",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base__1__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_47",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base__1__1"
+],
+"b1": [
+"head_u_joint_center__3__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_48",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__3__1"
+],
+"b1": [
+"head_8mm_ujoint_base__5__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew3",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__5__1"
+],
+"b1": [
+"head_screw_reciever__1__1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_54",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever__1__1"
+],
+"b1": [
+"head_u_joint_center__7__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_55",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__7__1"
+],
+"b1": [
+"head_10mm_ujoint_base__2__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Platform_Base_Joint4",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base_1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_57",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base_1"
+],
+"b1": [
+"head_u_joint_center__2__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_58",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__2__1"
+],
+"b1": [
+"head_8mm_ujoint_base__6__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew4",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__6__1"
+],
+"b1": [
+"head_screw_reciever__2__1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_64",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever__2__1"
+],
+"b1": [
+"head_u_joint_center__9__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_65",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__9__1"
+],
+"b1": [
+"head_10mm_ujoint_base__1__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Platform_Base_Joint5",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base__3__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_67",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base__3__1"
+],
+"b1": [
+"head_u_joint_center__4__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_68",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__4__1"
+],
+"b1": [
+"head_8mm_ujoint_base__3__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew5",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__3__1"
+],
+"b1": [
+"head_screw_reciever__3__1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_74",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever__3__1"
+],
+"b1": [
+"head_u_joint_center_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_75",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center_1"
+],
+"b1": [
+"head_10mm_ujoint_base_1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Platform_Base_Joint6",
+"type": "PhysicsFixedJoint",
+"b0": [
+"world"
+],
+"b1": [
+"head_5mm_ujoint_base__4__1"
+],
+"excl": false,
+"axis": "Y",
+"lo": 0.0,
+"hi": 360.0000305175781,
+"drive": []
+},
+{
+"name": "head_Revolute_77",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_5mm_ujoint_base__4__1"
+],
+"b1": [
+"head_u_joint_center__5__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_78",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__5__1"
+],
+"b1": [
+"head_8mm_ujoint_base__2__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_LeadScrew6",
+"type": "PhysicsPrismaticJoint",
+"b0": [
+"head_8mm_ujoint_base__2__1"
+],
+"b1": [
+"head_screw_reciever__5__1"
+],
+"excl": false,
+"axis": "",
+"lo": -0.05000000074505806,
+"hi": 0.0,
+"drive": [
+"PhysicsDriveAPI:linear"
+]
+},
+{
+"name": "head_Revolute_84",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_screw_reciever__5__1"
+],
+"b1": [
+"head_u_joint_center__10__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "head_Revolute_85",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"head_u_joint_center__10__1"
+],
+"b1": [
+"head_10mm_ujoint_base__5__1"
+],
+"excl": false,
+"axis": "X",
+"lo": -180.0,
+"hi": 180.0,
+"drive": []
+},
+{
+"name": "RL_Revolute117",
+"type": "PhysicsSphericalJoint",
+"b0": [
+"RL_290mm_tie_rod_v1_1"
+],
+"b1": [
+"RL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "RL_Revolute115",
+"type": "PhysicsSphericalJoint",
+"b0": [
+"RL_210mm_tie_rod_v1_1"
+],
+"b1": [
+"RL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "LL_Revolute115",
+"type": "PhysicsSphericalJoint",
+"b0": [
+"LL_210mm_tie_rod_v1_1"
+],
+"b1": [
+"LL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "LL_Revolute117",
+"type": "PhysicsSphericalJoint",
+"b0": [
+"LL_290mm_tie_rod_v1_1"
+],
+"b1": [
+"LL_skateboard_bearing_left_2"
+],
+"excl": false,
+"axis": "X",
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "LH_Revolute123",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"LH_6mm_bearing__9__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "LH_Revolute125",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_elbow_rear_hanger__1__1"
+],
+"b1": [
+"LH_6mm_bearing__4__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "LH_Revolute127",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LH_elbow_rear_hanger_1"
+],
+"b1": [
+"LH_6mm_bearing__4__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "LL_Fixed_Thigh",
+"type": "PhysicsFixedJoint",
+"b0": [
+"LL_bearingstrap_inner_thigh_1"
+],
+"b1": [
+"LL_bearingstrap_1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "LL_Revolute58",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_skateboard_bearing__16__1"
+],
+"b1": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "LL_Revolute119",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_skateboard_bearing__14__1"
+],
+"b1": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "LL_Revolute121",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"LL_skateboard_bearing__13__1"
+],
+"b1": [
+"LL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "X",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RL_Fixed_Thigh",
+"type": "PhysicsFixedJoint",
+"b0": [
+"RL_bearingstrap_inner_thigh_1"
+],
+"b1": [
+"RL_bearingstrap_1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "RL_Revolute58",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_skateboard_bearing__16__1"
+],
+"b1": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RL_Revolute119",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_skateboard_bearing__14__1"
+],
+"b1": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RL_Revolute121",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RL_skateboard_bearing__13__1"
+],
+"b1": [
+"RL_double_bracket_10deg_MIR_MIR_MIR_1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RH_Revolute123",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+],
+"b1": [
+"RH_6mm_bearing__9__1"
+],
+"excl": false,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RH_Revolute125",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_elbow_rear_hanger__1__1"
+],
+"b1": [
+"RH_6mm_bearing__4__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "RH_Revolute127",
+"type": "PhysicsRevoluteJoint",
+"b0": [
+"RH_elbow_rear_hanger_1"
+],
+"b1": [
+"RH_6mm_bearing__4__1"
+],
+"excl": true,
+"axis": "Z",
+"lo": -Infinity,
+"hi": Infinity,
+"drive": []
+},
+{
+"name": "head_joint2",
+"type": "PhysicsFixedJoint",
+"b0": [
+"head_10mm_ujoint_base__4__1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "head_joint6",
+"type": "PhysicsFixedJoint",
+"b0": [
+"head_10mm_ujoint_base__5__1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "head_joint5",
+"type": "PhysicsFixedJoint",
+"b0": [
+"head_10mm_ujoint_base_1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "head_joint4",
+"type": "PhysicsFixedJoint",
+"b0": [
+"head_10mm_ujoint_base__1__1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "head_joint3",
+"type": "PhysicsFixedJoint",
+"b0": [
+"head_10mm_ujoint_base__2__1"
+],
+"b1": [
+"head_u_joint_center__8__1"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+},
+{
+"name": "debugging_joint",
+"type": "PhysicsFixedJoint",
+"b0": [],
+"b1": [
+"world"
+],
+"excl": true,
+"axis": null,
+"lo": null,
+"hi": null,
+"drive": []
+}
+]
+}

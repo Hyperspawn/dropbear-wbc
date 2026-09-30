@@ -1,0 +1,10 @@
+# Kimodo text -> motion service (tools/kimodo_live_service.py, tools/kimodo_batch_generate.py), Linux or WSL2, CUDA GPU.
+# Python 3.10 venv (.venv-kimodo-wsl). Order:
+#   bash tools/setup_kimodo.sh                                   # clone NVIDIA Kimodo @ pinned commit + overlay
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+#   pip install -r requirements/kimodo.txt && pip install -e third_party/kimodo   # builds a C++ extension (cmake, g++)
+# Tested versions (2026-09-26):
+transformers==5.1.0
+peft==0.21.0
+numpy
+scipy

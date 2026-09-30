@@ -1,0 +1,9 @@
+# Text encoder server (tools/kimodo_text_embed_server.py): LLM2Vec / Llama-3-8B on the CPU.
+# Python 3.12 venv (.venv-embed). Install torch from the CPU index first:
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu
+# Tested versions (2026-09-26):
+transformers==5.1.0
+peft==0.21.0
+huggingface_hub
+safetensors
+numpy

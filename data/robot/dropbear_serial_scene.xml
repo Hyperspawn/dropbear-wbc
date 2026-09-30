@@ -1,0 +1,13 @@
+<mujoco model="dropbear_serial_scene">
+  <!-- Scene wrapper for dropbear_serial.xml (floor + light). DERIVED, NOT CANONICAL: serial output-space surrogate of the Dropbear USD plant (sha 45586414...). Closed loops (knee/elbow four-bars, parallel ankle, head Stewart platform) are collapsed into the dropbear-semantic-v1 joints; motors are reached through SemanticMap.semantic_to_motor. -->
+  <include file="dropbear_serial.xml"/>
+  <visual><headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/></visual>
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance="0.1"/>
+  </asset>
+  <worldbody>
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid" contype="0" conaffinity="1" group="0"/>
+  </worldbody>
+</mujoco>

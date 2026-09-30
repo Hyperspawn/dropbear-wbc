@@ -1,0 +1,60 @@
+# --- local machine / tooling -------------------------------------------------------------------------------
+.dropbear.env
+.venv*/
+.uv-cache/
+.warp-cache/
+.cache/
+.locks/
+.pytest_cache/
+.workflows/
+.gstack/
+__pycache__/
+*.pyc
+*.egg-info/
+*.stackdump
+outputs/
+
+# --- runs, logs, media, downloads (published on Hugging Face instead; see tools/fetch_assets.py) -------------
+logs/*
+assets/
+# small calibration evidence that the pinned calibration files and the tests reference by path
+!logs/gpu_pipeline/
+logs/gpu_pipeline/*
+!logs/gpu_pipeline/calib/
+logs/gpu_pipeline/calib/*
+!logs/gpu_pipeline/calib/raw/
+!logs/calibrate_settle/
+logs/calibrate_settle/*
+!logs/calibrate_settle/usd_joint_frames.json
+!logs/calibrate_settle/raw/
+logs/calibrate_settle/raw/*
+!logs/calibrate_settle/raw/semantic_verify.npz
+
+# --- third-party clones (tools/setup_kimodo.sh, tools/setup_gmr.py) --------------------------------------------
+third_party/kimodo/
+
+# --- data -------------------------------------------------------------------------------------------------------
+# Only small, redistributable data lives in git (docs/DATA.md). Everything else is either on Hugging Face
+# (tools/fetch_assets.py --motions) or must be rebuilt from each user's own download because its license does not
+# allow redistribution (LAFAN1 CC BY-NC-ND 4.0, BONES-SEED sample data, GR00T/SONIC references, unitree_rl_lab
+# dance mocap of unconfirmed provenance).
+data/*
+!data/calibration/
+!data/robot/
+!data/teleop/
+data/teleop/*
+!data/teleop/arm_inertia.json
+!data/motions/
+data/motions/*
+!data/motions/synthetic/
+!data/motions/smoke/
+!data/motions/libraries/
+!data/motions_v6ts/
+data/motions_v6ts/*
+!data/motions_v6ts/synthetic/
+!data/motions_v6ts/libraries/
+!data/motions_gen/
+data/motions_gen/*
+!data/motions_gen/prompts/
+# MOCK-calibrated motion outputs (motion pipeline dev only; never train on these)
+data/motions_mock/

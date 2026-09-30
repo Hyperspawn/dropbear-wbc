@@ -1,0 +1,72 @@
+{
+ "schema": "dropbear-motion-validation-v1",
+ "tool": "tools/validate_motion_npz.py",
+ "created": "2026-09-24T12:50:07",
+ "npz": "data/motions/smoke/dropbear_static_stand.npz",
+ "npz_sha256": "582ee95357c5a97824bbd289bd9f5ddc8ff83e65b4eeb6578451ce43eae91947",
+ "verdict": "accepted",
+ "reasons": [],
+ "gates": {
+  "closure_max_mm": 5.0,
+  "contact_sole_abs_z_mm": 15.0,
+  "fps": 50,
+  "max_motor_vel_rad_s": 10.0,
+  "max_motor_step_rad": 0.3
+ },
+ "closure_mm": {
+  "p50": 0.1821324258344248,
+  "p95": 0.1821324258344248,
+  "max": 0.1821324258344248
+ },
+ "contact_sole_z_mm": {
+  "min": -3.689845804594194e-05,
+  "max": -3.689845804594194e-05,
+  "abs_p95": 3.689845804594194e-05,
+  "frac_over_limit": 0.0
+ },
+ "contact_foot_slip_mps": {
+  "p95": 0.0,
+  "max": 0.0
+ },
+ "anchor_z_m": {
+  "min": 1.4977694749832153,
+  "max": 1.4977694749832153,
+  "first": 1.4977694749832153
+ },
+ "motor_dynamics": {
+  "max_abs_vel_rad_s": 0.0,
+  "max_abs_vel_joint": "PG_left_leg_pitch",
+  "frames_over_vel_limit": 0,
+  "max_step_rad": 0.0,
+  "max_step_joint": "PG_left_leg_pitch",
+  "max_step_frame": 0,
+  "steps_over_limit": 0,
+  "worst_vel": [
+   {
+    "joint": "PG_left_leg_pitch",
+    "max_abs_vel_rad_s": 0.0
+   },
+   {
+    "joint": "RH_roll",
+    "max_abs_vel_rad_s": 0.0
+   },
+   {
+    "joint": "RH_pitch",
+    "max_abs_vel_rad_s": 0.0
+   }
+  ],
+  "limits": {
+   "max_motor_vel_rad_s": 10.0,
+   "max_motor_step_rad": 0.3
+  }
+ },
+ "saturation": {
+  "any_frac": 0.0,
+  "joints_saturated": 0,
+  "worst": [],
+  "max_excess_deg": 0.0,
+  "keys": []
+ },
+ "log": "logs/review_fixes/validate_motion_npz_v4.log",
+ "note": "settle meta.status refers to the settle's closure gate; this file is the additional validation gate"
+}

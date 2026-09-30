@@ -1,0 +1,1154 @@
+{
+ "schema": "dropbear-motion-library-v1",
+ "name": "accepted_v2",
+ "description": "accepted_v1 (6 synthetic) + the foot_contact track's library v4: every retargeted clip rebuilt with the foot-contact stage (dropbear_wbc.motion.foot_contact), settled with --hold 36 and ACCEPTED by tools/validate_motion_npz.py (2026-09-24 23:20). gmr_lafan1_via_g1 (G1 comparison route of the same LAFAN1 windows) excluded as duplicates. LAFAN1 clips (gmr_lafan1/*) are CC BY-NC-ND 4.0: internal R&D only. Evidence: logs/foot_contact/PROGRESS.md, gate_report.md.",
+ "created": "2026-09-24T23:18:03+05:30",
+ "created_by": "tools/build_motion_library_manifest.py",
+ "clips": [
+  {
+   "name": "stand",
+   "npz": "../synthetic/stand.npz",
+   "weight": 1.0,
+   "sha256": "3ccdc058f634c2fe3094af7ab3dc64b39fc77a5815008c2801ec87177476cc54"
+  },
+  {
+   "name": "wave_right",
+   "npz": "../synthetic/wave_right.npz",
+   "weight": 1.0,
+   "sha256": "3bf616d7861b953a9842d34d0536afcb54dedc732dcd51c530552467354b9550"
+  },
+  {
+   "name": "arm_swing",
+   "npz": "../synthetic/arm_swing.npz",
+   "weight": 1.0,
+   "sha256": "c03e5e3cdef68ac3a8366c4c00b7ba2610fc44de035373b3c578a28ea15e8827"
+  },
+  {
+   "name": "weight_shift",
+   "npz": "../synthetic/weight_shift.npz",
+   "weight": 1.0,
+   "sha256": "79647b5dc73f93dd5022eecf19b39e502f8a80c6f600e71aa3a7631cffda408e"
+  },
+  {
+   "name": "squat_lite",
+   "npz": "../synthetic/squat_lite.npz",
+   "weight": 1.0,
+   "sha256": "6c0a88cda1562aee00ca3a513e8baade383bfbe79f3722c1aca170bfc86dfa79"
+  },
+  {
+   "name": "wave_right_v2",
+   "npz": "../synthetic/wave_right_v2.npz",
+   "weight": 1.0,
+   "sha256": "fda33a093db630c5a81683c164d8fed95e7ea20342b73c7f55fb0c0db15de4ba"
+  },
+  {
+   "name": "TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_v4",
+   "npz": "../asap_g1/TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "cd019f9ea40e86a88d7c76bc255484aaeb29e4f67ff30d9fe98917a525600073"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_APT_level1_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_APT_level1_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "86d410ab51386852ac01a2446bf80ce7d1294b951dc9c820d0bfe4fc0d1ae44a"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_APT_level2_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_APT_level2_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "429a381b321a26f2336d554dceb98b41445c90b924c01480a7db4d1c25b23970"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "fa8d14056ade77f364c65d50722ac27ec64ebb77f899628b4954505fa09937ba"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "79cc669944a1b2ec503e863d62c6105edd65541ae2119e3c10b1559573e9b761"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "137863754ac4a53c10bfe7f960f28457f6803bce9dc9d10a683b04cb0e34b4a4"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "aea14737ab3b4726c0fc4dee8eb128c76e283bfe5681d27e42126d830b3e5936"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "934312d1269325d4f4a929d71e297bbd129190b71732aac1ae2d0ea37b18fb85"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "7a90efa670894c8206216f084f7ef304a2f3513059c347472be91a42a9bd1789"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "17f8b25d89fd32a24f00b84a90cf4de8141ab695b1f73b371cc4264efc706ce7"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "2f32ab221cec6f118247ec76a1f5c43da34703c01338f1933b025b2840fd0b6f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "b401516c218ae5834b588fe403a123af916e94ef631c46ed17a136a61831c042"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "3133d44fb7075664eb3ec68e1850b3c29a7067aab63ebd5ad42586d6f16dcef0"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "e6ed1400d0bef2e2dcc22c314933c9cb669a4ffa7de185e479bd06017b03391b"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "b00a4e776b11553c948be7faaad2a636dfedfc465740ca90770f793f3b604142"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "72e522361426ab82ddf6453581a0dfca3d4d3ba524f4e4d2273032babf070155"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "876a5b2678d65635361e94634d2c179f68a1db4fe7a63fe04c3ab2545bc647c7"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "68a5e134c36c1d8e5806021cd4da34226209236fed79f299b8a13d547d6bc5dd"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "93a05d1494e34f7bce4acf90e1ecbe6756e6ef9cf430e1ca870fdb6b890e16e8"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "b14638dc0ef0c7f032cde73c4b8e2adab6bfd9cebb3161f7c2bfd9caee345aa3"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "66823bdb4143fc98eb7a37da9eabab97076f1d55fe45cff6bd6c1c411e748b6e"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "d5aaddccad4b81949b622dad62267ffa7d942df6df9b28459b087588e9f32db2"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "69c46142f1c803d0a8d7eb901d449dbbd2c90c7c2a5005b027c599d78ab8be0e"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "7365caf6c26332e386714496f7c3c7b58b0bb01f73db0c0884ec6346b555adf2"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "b151eedc800aa5bea881893eae3869413c35b7da76f53cddd28509e097b64098"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "1e78da19c8a3bc002b6dd7a304136c7bdfc2155efc70e6f372a934088bd90118"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "2b434d8e30da8e3cf34f62e66b854551b7c04f9ffecca9f7015cbd91485d4ecb"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "fe8d42165372b063bf2ba1dfc4619804315cc38802ab6630dbd89ad6aad050ff"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "f2d8cb6c439d8811be040f2ef80697482d71091b00ca1416a05d0881a3cf90a6"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "6acee80f8197871d933902bf0fbc2d5fcfc72d3f0c2d561f96b039b14276be7c"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "f665464f793913d6055690636c2e42943f23a77ae33da6858138ad716d9aa4cc"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "ad948c47915d9c30bc911d81c6ac94f287b691ea06d36511714965c3701853dc"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "a44f32a29f00d85ef84d0b656eb9301d11c25aa1ba4a5d9c36d6211d892faa4f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "746263412c56d1749eb586da8f772072bc0b07cffae0932bcb2519b1c83a6e05"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "a4f3f9713ec8513231cadb537a694ffde08c345418b2bfdd00b1ed3469481d15"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "e1db19e82d9e1934067844013292516ce7388991aa4c63aaab7753d046701cd6"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "06e1995498c88c94de641ee255667dd76c2bef02a95570a07089743b78874e52"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "b6b795c094ee955ec868351061c8fab6bf699655771389f130a6dc3b007f3326"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "30c6a6ba8515a1d88ef8fb8214e2e8378a6a146169488a688087fcddb7b86232"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "41ed11bcddc19a6037f86a77f86822f2c9dc4b42fa7edc38b530c97ae51ce81d"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "579c902732c651ff3990ac5bfdde9d60b019a5f7eb334588353a32f617dc67b8"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "9d2dde9c7de11a15ba038d3b2f2d1815fc245aef2dc9cd5c870021d64bbda923"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "dcb3ddf9b1a72de5259c8e175a0f44205b37b6a7d77e54f30496a6786ccc5ece"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "ed490be9f0fcc0511147af1eb8d0298860376f9542aeba26f6c1485978adf0b9"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "27d2a5a0a8687337109ace7bd6ac14ff8e5ca15761f310d0bccca4d71e15cb5a"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "17b6cee873627efa59447288feb9c13c6f9c2c492b4350ca4860ef151acdd81b"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "c3bd3986edeeb549df66f6f30b9956e607f24fc7d5b9519f667cf4e2a620fd5f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "dbf066f2c0f0bb1459d6992d73852bb560b70c433839ccbc982bb28f2979ae32"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "693affb6ab2532e6a4dc6a283cdd69413f026b4781ce555ebd77db3f7eddcf2f"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "d7ed31993c31a210f3bac6bb97db09196724ac82478559fa17caab446d276342"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_v4",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_v4.npz",
+   "weight": 1.0,
+   "sha256": "58cbee983d0787fa955f83dd048a6e4454d7b760114ac0678c7e90b101c5245c"
+  },
+  {
+   "name": "lafan1_armraise_dance2_subject1_v4",
+   "npz": "../gmr_lafan1/lafan1_armraise_dance2_subject1_v4.npz",
+   "weight": 1.0,
+   "sha256": "4c607cd6a22c6767785a478597f01203b6cc42cf2f978ccd35e56fed1b9dd379"
+  },
+  {
+   "name": "lafan1_dance2_subject1_v4",
+   "npz": "../gmr_lafan1/lafan1_dance2_subject1_v4.npz",
+   "weight": 1.0,
+   "sha256": "ddc9d1682320c9e326832dbb56cdee5dfac96f6ee6ca58996b9f0d9e8fcb1010"
+  },
+  {
+   "name": "lafan1_run1_subject2_v4",
+   "npz": "../gmr_lafan1/lafan1_run1_subject2_v4.npz",
+   "weight": 1.0,
+   "sha256": "1cd8590b7d42851e37aca357789cdc65df8f09aa3edd6d329ada207e10a50f98"
+  },
+  {
+   "name": "lafan1_walk1_subject1_v4",
+   "npz": "../gmr_lafan1/lafan1_walk1_subject1_v4.npz",
+   "weight": 1.0,
+   "sha256": "f97312646fc075f77670f9e8ed61f34998c71fcdb483ee7a6ddfb80a0d5f95a4"
+  },
+  {
+   "name": "output_dance_v4",
+   "npz": "../kimodo_g1/output_dance_v4.npz",
+   "weight": 1.0,
+   "sha256": "3733ade4a82e437972dcb356e05e6eb4d7e28b57315508d3ac8a9a4f959c1bf8"
+  },
+  {
+   "name": "output_high5_v4",
+   "npz": "../kimodo_g1/output_high5_v4.npz",
+   "weight": 1.0,
+   "sha256": "cb60f303a570539c118f5d6b90e5c326806ffe58cc0fa6cff9b6dd2079b7c2ea"
+  },
+  {
+   "name": "output_jumpjack_v4",
+   "npz": "../kimodo_g1/output_jumpjack_v4.npz",
+   "weight": 1.0,
+   "sha256": "60bcfcdf27d6ab6ff563f39db03fa02a28f567644ae1f1aebff94f9ade245291"
+  },
+  {
+   "name": "output_walk_v4",
+   "npz": "../kimodo_g1/output_walk_v4.npz",
+   "weight": 1.0,
+   "sha256": "5f81c37d4263d29396efef745ed231fac7541bb73bb6fd5ac5cbd14c99dcb0ff"
+  },
+  {
+   "name": "output_wave_v4",
+   "npz": "../kimodo_g1/output_wave_v4.npz",
+   "weight": 1.0,
+   "sha256": "bd663475172323d0f83221f07dd3f2cc241680a0f47778201e740e5e4ccafd68"
+  },
+  {
+   "name": "Neutral_throw_ball_001__A057_v4",
+   "npz": "../soma_retargeter_g1/Neutral_throw_ball_001__A057_v4.npz",
+   "weight": 1.0,
+   "sha256": "1873521d348748b8113cbe42bc470151adfce1e83e54d6683206905e00f8ee6a"
+  },
+  {
+   "name": "Neutral_walk_forward_002__A057_v4",
+   "npz": "../soma_retargeter_g1/Neutral_walk_forward_002__A057_v4.npz",
+   "weight": 1.0,
+   "sha256": "849ab6945279e84fbb0aed7a44b64ae14cc7f1e3615ef5479c27b57da8cf2dad"
+  },
+  {
+   "name": "big_light_one_hand_pick_up_front_low_R_005__A508_v4",
+   "npz": "../soma_retargeter_g1/big_light_one_hand_pick_up_front_low_R_005__A508_v4.npz",
+   "weight": 1.0,
+   "sha256": "b6fd07da07a0d188e4f19bfbb432ecc8d32689d0c2fd560765894a9a9729047b"
+  },
+  {
+   "name": "body_stretch_1_004__A069_v4",
+   "npz": "../soma_retargeter_g1/body_stretch_1_004__A069_v4.npz",
+   "weight": 1.0,
+   "sha256": "a697bc9368c4e791718eb5a322691217506f88401ac9144bf6cc63b53766eba6"
+  },
+  {
+   "name": "dance_basic_chaines_180_R_001__A306_v4",
+   "npz": "../soma_retargeter_g1/dance_basic_chaines_180_R_001__A306_v4.npz",
+   "weight": 1.0,
+   "sha256": "4309f309cb1d3d9e743534d91b433b87536ff2072614e6a52f2e9833e9b21927"
+  },
+  {
+   "name": "dance_hiphop_shuffle_square_R_fast_002__A318_v4",
+   "npz": "../soma_retargeter_g1/dance_hiphop_shuffle_square_R_fast_002__A318_v4.npz",
+   "weight": 1.0,
+   "sha256": "689cc3d84396cda2085677c57f44dfea0cbd2d7f7f29184afba25ce3f80d46ef"
+  },
+  {
+   "name": "high_jump_R_001__A277_v4",
+   "npz": "../soma_retargeter_g1/high_jump_R_001__A277_v4.npz",
+   "weight": 1.0,
+   "sha256": "587a2b31a5502b442f9898f4bc270be0dfc2879c08ad726d10232136f2329d19"
+  },
+  {
+   "name": "item_pick_up_standing_R_001__A410_v4",
+   "npz": "../soma_retargeter_g1/item_pick_up_standing_R_001__A410_v4.npz",
+   "weight": 1.0,
+   "sha256": "19f4ca0c29986165efd6a5d65270c131ad33a2d40b57ba884ba05da08e67da69"
+  },
+  {
+   "name": "small_light_one_hand_pick_up_front_low_002__A507_v4",
+   "npz": "../soma_retargeter_g1/small_light_one_hand_pick_up_front_low_002__A507_v4.npz",
+   "weight": 1.0,
+   "sha256": "8bb4b8624186bf37f752b9e6790cbb520b5c2d42ee201b65a1e13f85218b6e05"
+  },
+  {
+   "name": "wave_R_001__A428_v4",
+   "npz": "../soma_retargeter_g1/wave_R_001__A428_v4.npz",
+   "weight": 1.0,
+   "sha256": "c85c8099daac8bae22c4bc4e4f6e55d19c68b2d7096313b4968fa950eedc96b5"
+  },
+  {
+   "name": "G1_Take_102_v4",
+   "npz": "../unitree_rl_lab_mimic/G1_Take_102_v4.npz",
+   "weight": 1.0,
+   "sha256": "09804f13f55208b557999486d768a9b847bfedb5cf8ad612c348bab59f8acb35"
+  },
+  {
+   "name": "G1_gangnam_style_V01_v4",
+   "npz": "../unitree_rl_lab_mimic/G1_gangnam_style_V01_v4.npz",
+   "weight": 1.0,
+   "sha256": "4e583baa13cff3b809ec9176b9ac4c7f110c794149b1f66f13b64afa092ead7e"
+  }
+ ],
+ "selection": {
+  "root": "data/motions",
+  "include": null,
+  "exclude": "smoke/**,**/archive/**,libraries/**,gmr_lafan1_via_g1/**",
+  "authored_ankle_tierods": false,
+  "calibration_sha256_target": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+  "base_manifest": "accepted_v1.json",
+  "included": [
+   {
+    "name": "stand",
+    "npz": "synthetic/stand.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "wave_right",
+    "npz": "synthetic/wave_right.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "arm_swing",
+    "npz": "synthetic/arm_swing.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "weight_shift",
+    "npz": "synthetic/weight_shift.npz",
+    "num_frames": 701,
+    "duration_s": 14.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "squat_lite",
+    "npz": "synthetic/squat_lite.npz",
+    "num_frames": 901,
+    "duration_s": 18.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "wave_right_v2",
+    "npz": "synthetic/wave_right_v2.npz",
+    "num_frames": 551,
+    "duration_s": 11.0,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T15:05:48"
+   },
+   {
+    "name": "TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_v4",
+    "npz": "asap_g1/TairanTestbed_TairanTestbed_CR7_video_CR7_level1_filter_amass_v4.npz",
+    "num_frames": 197,
+    "duration_s": 3.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_APT_level1_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_APT_level1_amass_v4.npz",
+    "num_frames": 382,
+    "duration_s": 7.62,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_APT_level2_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_APT_level2_amass_v4.npz",
+    "num_frames": 229,
+    "duration_s": 4.56,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_Bolt_level1_amass_v4.npz",
+    "num_frames": 217,
+    "duration_s": 4.32,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level1_filter_amass_v4.npz",
+    "num_frames": 197,
+    "duration_s": 3.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_Kobe_level1_amass_v4.npz",
+    "num_frames": 207,
+    "duration_s": 4.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_v4.npz",
+    "num_frames": 262,
+    "duration_s": 5.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_TigerWoods_level1_amass_v4.npz",
+    "num_frames": 197,
+    "duration_s": 3.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level1_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level2_filter_amass_v4.npz",
+    "num_frames": 207,
+    "duration_s": 4.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level4_filter_amass_v4.npz",
+    "num_frames": 212,
+    "duration_s": 4.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level5_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level1_filter_amass_v4.npz",
+    "num_frames": 187,
+    "duration_s": 3.72,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_v4.npz",
+    "num_frames": 177,
+    "duration_s": 3.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level3_filter_amass_v4.npz",
+    "num_frames": 212,
+    "duration_s": 4.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level4_filter_amass_v4.npz",
+    "num_frames": 227,
+    "duration_s": 4.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level5_filter_amass_v4.npz",
+    "num_frames": 202,
+    "duration_s": 4.02,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_v4.npz",
+    "num_frames": 197,
+    "duration_s": 3.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_kick_level2_filter_amass_v4.npz",
+    "num_frames": 167,
+    "duration_s": 3.32,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_kick_level3_filter_amass_v4.npz",
+    "num_frames": 227,
+    "duration_s": 4.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_lebron1_filter_amass_v4.npz",
+    "num_frames": 252,
+    "duration_s": 5.02,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_lebron2_filter_amass_v4.npz",
+    "num_frames": 347,
+    "duration_s": 6.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level1_filter_amass_v4.npz",
+    "num_frames": 237,
+    "duration_s": 4.72,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level2_filter_amass_v4.npz",
+    "num_frames": 207,
+    "duration_s": 4.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_v4.npz",
+    "num_frames": 207,
+    "duration_s": 4.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level1_filter_amass_v4.npz",
+    "num_frames": 152,
+    "duration_s": 3.02,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level2_filter_amass_v4.npz",
+    "num_frames": 177,
+    "duration_s": 3.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_v4.npz",
+    "num_frames": 182,
+    "duration_s": 3.62,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level4_filter_amass_v4.npz",
+    "num_frames": 167,
+    "duration_s": 3.32,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_v4.npz",
+    "num_frames": 362,
+    "duration_s": 7.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level2_filter_amass_v4.npz",
+    "num_frames": 486,
+    "duration_s": 9.7,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level3_filter_amass_v4.npz",
+    "num_frames": 451,
+    "duration_s": 9.0,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level4_filter_amass_v4.npz",
+    "num_frames": 441,
+    "duration_s": 8.8,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level1_filter_amass_v4.npz",
+    "num_frames": 262,
+    "duration_s": 5.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_jump_level2_filter_amass_v4.npz",
+    "num_frames": 282,
+    "duration_s": 5.62,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_v4.npz",
+    "num_frames": 262,
+    "duration_s": 5.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_v4.npz",
+    "num_frames": 317,
+    "duration_s": 6.32,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_v4.npz",
+    "num_frames": 307,
+    "duration_s": 6.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level1_filter_amass_v4.npz",
+    "num_frames": 197,
+    "duration_s": 3.92,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level2_filter_amass_v4.npz",
+    "num_frames": 232,
+    "duration_s": 4.62,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level3_filter_amass_v4.npz",
+    "num_frames": 252,
+    "duration_s": 5.02,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_back_level4_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level1_filter_amass_v4.npz",
+    "num_frames": 182,
+    "duration_s": 3.62,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level2_filter_amass_v4.npz",
+    "num_frames": 217,
+    "duration_s": 4.32,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level3_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_step_forward_forward_level4_filter_amass_v4.npz",
+    "num_frames": 212,
+    "duration_s": 4.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_walk_level1_filter_amass_v4.npz",
+    "num_frames": 252,
+    "duration_s": 5.02,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_walk_level2_filter_amass_v4.npz",
+    "num_frames": 172,
+    "duration_s": 3.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_walk_level3_filter_amass_v4.npz",
+    "num_frames": 237,
+    "duration_s": 4.72,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_v4",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_walk_level4_filter_amass_v4.npz",
+    "num_frames": 222,
+    "duration_s": 4.42,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "lafan1_armraise_dance2_subject1_v4",
+    "npz": "gmr_lafan1/lafan1_armraise_dance2_subject1_v4.npz",
+    "num_frames": 449,
+    "duration_s": 8.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "lafan1_dance2_subject1_v4",
+    "npz": "gmr_lafan1/lafan1_dance2_subject1_v4.npz",
+    "num_frames": 999,
+    "duration_s": 19.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "lafan1_run1_subject2_v4",
+    "npz": "gmr_lafan1/lafan1_run1_subject2_v4.npz",
+    "num_frames": 599,
+    "duration_s": 11.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "lafan1_walk1_subject1_v4",
+    "npz": "gmr_lafan1/lafan1_walk1_subject1_v4.npz",
+    "num_frames": 749,
+    "duration_s": 14.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "output_dance_v4",
+    "npz": "kimodo_g1/output_dance_v4.npz",
+    "num_frames": 249,
+    "duration_s": 4.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "output_high5_v4",
+    "npz": "kimodo_g1/output_high5_v4.npz",
+    "num_frames": 249,
+    "duration_s": 4.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "output_jumpjack_v4",
+    "npz": "kimodo_g1/output_jumpjack_v4.npz",
+    "num_frames": 199,
+    "duration_s": 3.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "output_walk_v4",
+    "npz": "kimodo_g1/output_walk_v4.npz",
+    "num_frames": 249,
+    "duration_s": 4.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "output_wave_v4",
+    "npz": "kimodo_g1/output_wave_v4.npz",
+    "num_frames": 249,
+    "duration_s": 4.96,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "Neutral_throw_ball_001__A057_v4",
+    "npz": "soma_retargeter_g1/Neutral_throw_ball_001__A057_v4.npz",
+    "num_frames": 145,
+    "duration_s": 2.88,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "Neutral_walk_forward_002__A057_v4",
+    "npz": "soma_retargeter_g1/Neutral_walk_forward_002__A057_v4.npz",
+    "num_frames": 453,
+    "duration_s": 9.04,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "big_light_one_hand_pick_up_front_low_R_005__A508_v4",
+    "npz": "soma_retargeter_g1/big_light_one_hand_pick_up_front_low_R_005__A508_v4.npz",
+    "num_frames": 379,
+    "duration_s": 7.56,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "body_stretch_1_004__A069_v4",
+    "npz": "soma_retargeter_g1/body_stretch_1_004__A069_v4.npz",
+    "num_frames": 312,
+    "duration_s": 6.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "dance_basic_chaines_180_R_001__A306_v4",
+    "npz": "soma_retargeter_g1/dance_basic_chaines_180_R_001__A306_v4.npz",
+    "num_frames": 205,
+    "duration_s": 4.08,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "dance_hiphop_shuffle_square_R_fast_002__A318_v4",
+    "npz": "soma_retargeter_g1/dance_hiphop_shuffle_square_R_fast_002__A318_v4.npz",
+    "num_frames": 288,
+    "duration_s": 5.74,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "high_jump_R_001__A277_v4",
+    "npz": "soma_retargeter_g1/high_jump_R_001__A277_v4.npz",
+    "num_frames": 133,
+    "duration_s": 2.64,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "item_pick_up_standing_R_001__A410_v4",
+    "npz": "soma_retargeter_g1/item_pick_up_standing_R_001__A410_v4.npz",
+    "num_frames": 177,
+    "duration_s": 3.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "small_light_one_hand_pick_up_front_low_002__A507_v4",
+    "npz": "soma_retargeter_g1/small_light_one_hand_pick_up_front_low_002__A507_v4.npz",
+    "num_frames": 361,
+    "duration_s": 7.2,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "wave_R_001__A428_v4",
+    "npz": "soma_retargeter_g1/wave_R_001__A428_v4.npz",
+    "num_frames": 219,
+    "duration_s": 4.36,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "G1_Take_102_v4",
+    "npz": "unitree_rl_lab_mimic/G1_Take_102_v4.npz",
+    "num_frames": 1457,
+    "duration_s": 29.12,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   },
+   {
+    "name": "G1_gangnam_style_V01_v4",
+    "npz": "unitree_rl_lab_mimic/G1_gangnam_style_V01_v4.npz",
+    "num_frames": 1618,
+    "duration_s": 32.34,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T23:17:20"
+   }
+  ],
+  "excluded": [
+   {
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_jump_degree_level3_filter_amass_v4.npz",
+    "reason": "verdict 'rejected': anchor z range [1.276, 2.017] m outside [0.8, 2.0]"
+   },
+   {
+    "npz": "kimodo_g1/output_walk.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 31.3 mm > 15 mm on 11.0% of contact samples; motor reference speed up to 17.5 rad/s (LL_Revolute67) > 10 rad/s motor cap on 11 frames; motor reference jumps 0.43 rad in one frame (LL_Revolute67, frame 109) > 0.3 rad on 5 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "kimodo_g1/output_wave.npz",
+    "reason": "verdict 'rejected': motor reference speed up to 45.8 rad/s (RH_yaw) > 10 rad/s motor cap on 7 frames; motor reference jumps 1.08 rad in one frame (RH_yaw, frame 160) > 0.3 rad on 5 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "soma_retargeter_g1/wave_R_001__A428.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 125.4 mm > 15 mm on 18.9% of contact samples"
+   },
+   {
+    "npz": "unitree_rl_lab_mimic/G1_gangnam_style_V01.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 130.5 mm > 15 mm on 21.5% of contact samples; motor reference speed up to 84.2 rad/s (RH_roll) > 10 rad/s motor cap on 270 frames; motor reference jumps 3.14 rad in one frame (RH_yaw, frame 1469) > 0.3 rad on 82 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "unitree_rl_lab_mimic/G1_Take_102.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 138.2 mm > 15 mm on 32.6% of contact samples; motor reference speed up to 77.5 rad/s (RH_roll) > 10 rad/s motor cap on 74 frames; motor reference jumps 3.02 rad in one frame (RH_yaw, frame 1104) > 0.3 rad on 24 frames (retarget branch flip?)"
+   }
+  ]
+ },
+ "library": {
+  "sha256": "a5725e8bcdca283a7dd96092d271aa277c7feabd90b9066f92cdf206ab46ac9e",
+  "num_clips": 78,
+  "num_frames_total": 25680,
+  "duration_s_total": 512.04,
+  "calibration_sha256": [
+   "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513"
+  ],
+  "calibration_unknown_clips": [
+   "stand",
+   "wave_right",
+   "arm_swing",
+   "weight_shift",
+   "squat_lite"
+  ],
+  "all_accepted": true
+ }
+}

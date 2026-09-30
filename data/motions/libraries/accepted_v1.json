@@ -1,0 +1,142 @@
+{
+ "schema": "dropbear-motion-library-v1",
+ "name": "accepted_v1",
+ "description": "Every clip with a non-stale 'accepted' validator verdict on the contract plant (spherical ankle, calibration v3 e51033d4 where recorded) as of 2026-09-24 16:19: the 6 synthetic clips (stand, wave_right, arm_swing, weight_shift, squat_lite, wave_right_v2). Regenerated from the verdicts by tools/build_motion_library_manifest.py (same clips/order/weights as the hand-written v1, so the same library sha256; backup logs/multiclip/accepted_v1_handwritten.json.bak). Rejected (not included): kimodo output_walk/output_wave, soma wave_R_001, G1_Take_102, G1_gangnam_style (see selection.excluded). smoke/dropbear_static_stand is excluded by the default smoke/** glob (duplicates synthetic/stand).",
+ "created": "2026-09-24T16:19:26+05:30",
+ "created_by": "tools/build_motion_library_manifest.py",
+ "clips": [
+  {
+   "name": "stand",
+   "npz": "../synthetic/stand.npz",
+   "weight": 1.0,
+   "sha256": "3ccdc058f634c2fe3094af7ab3dc64b39fc77a5815008c2801ec87177476cc54"
+  },
+  {
+   "name": "wave_right",
+   "npz": "../synthetic/wave_right.npz",
+   "weight": 1.0,
+   "sha256": "3bf616d7861b953a9842d34d0536afcb54dedc732dcd51c530552467354b9550"
+  },
+  {
+   "name": "arm_swing",
+   "npz": "../synthetic/arm_swing.npz",
+   "weight": 1.0,
+   "sha256": "c03e5e3cdef68ac3a8366c4c00b7ba2610fc44de035373b3c578a28ea15e8827"
+  },
+  {
+   "name": "weight_shift",
+   "npz": "../synthetic/weight_shift.npz",
+   "weight": 1.0,
+   "sha256": "79647b5dc73f93dd5022eecf19b39e502f8a80c6f600e71aa3a7631cffda408e"
+  },
+  {
+   "name": "squat_lite",
+   "npz": "../synthetic/squat_lite.npz",
+   "weight": 1.0,
+   "sha256": "6c0a88cda1562aee00ca3a513e8baade383bfbe79f3722c1aca170bfc86dfa79"
+  },
+  {
+   "name": "wave_right_v2",
+   "npz": "../synthetic/wave_right_v2.npz",
+   "weight": 1.0,
+   "sha256": "fda33a093db630c5a81683c164d8fed95e7ea20342b73c7f55fb0c0db15de4ba"
+  }
+ ],
+ "selection": {
+  "root": "data/motions",
+  "include": null,
+  "exclude": "smoke/**,**/archive/**,libraries/**",
+  "authored_ankle_tierods": false,
+  "calibration_sha256_target": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+  "base_manifest": "accepted_v1.json",
+  "included": [
+   {
+    "name": "stand",
+    "npz": "synthetic/stand.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "wave_right",
+    "npz": "synthetic/wave_right.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "arm_swing",
+    "npz": "synthetic/arm_swing.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "weight_shift",
+    "npz": "synthetic/weight_shift.npz",
+    "num_frames": 701,
+    "duration_s": 14.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "squat_lite",
+    "npz": "synthetic/squat_lite.npz",
+    "num_frames": 901,
+    "duration_s": 18.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "wave_right_v2",
+    "npz": "synthetic/wave_right_v2.npz",
+    "num_frames": 551,
+    "duration_s": 11.0,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-24T15:05:48"
+   }
+  ],
+  "excluded": [
+   {
+    "npz": "kimodo_g1/output_walk.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 31.3 mm > 15 mm on 11.0% of contact samples; motor reference speed up to 17.5 rad/s (LL_Revolute67) > 10 rad/s motor cap on 11 frames; motor reference jumps 0.43 rad in one frame (LL_Revolute67, frame 109) > 0.3 rad on 5 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "kimodo_g1/output_wave.npz",
+    "reason": "verdict 'rejected': motor reference speed up to 45.8 rad/s (RH_yaw) > 10 rad/s motor cap on 7 frames; motor reference jumps 1.08 rad in one frame (RH_yaw, frame 160) > 0.3 rad on 5 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "soma_retargeter_g1/wave_R_001__A428.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 125.4 mm > 15 mm on 18.9% of contact samples"
+   },
+   {
+    "npz": "unitree_rl_lab_mimic/G1_gangnam_style_V01.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 130.5 mm > 15 mm on 21.5% of contact samples; motor reference speed up to 84.2 rad/s (RH_roll) > 10 rad/s motor cap on 270 frames; motor reference jumps 3.14 rad in one frame (RH_yaw, frame 1469) > 0.3 rad on 82 frames (retarget branch flip?)"
+   },
+   {
+    "npz": "unitree_rl_lab_mimic/G1_Take_102.npz",
+    "reason": "verdict 'rejected': contact foot |z| up to 138.2 mm > 15 mm on 32.6% of contact samples; motor reference speed up to 77.5 rad/s (RH_roll) > 10 rad/s motor cap on 74 frames; motor reference jumps 3.02 rad in one frame (RH_yaw, frame 1104) > 0.3 rad on 24 frames (retarget branch flip?)"
+   }
+  ]
+ },
+ "library": {
+  "sha256": "a089f262ab4863e17bf5b843c9e6efd33d177a45e5016200746a88ba5d6bdd26",
+  "num_clips": 6,
+  "num_frames_total": 3656,
+  "duration_s_total": 73.0,
+  "calibration_sha256": [
+   "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513"
+  ],
+  "calibration_unknown_clips": [
+   "stand",
+   "wave_right",
+   "arm_swing",
+   "weight_shift",
+   "squat_lite"
+  ],
+  "all_accepted": true
+ }
+}

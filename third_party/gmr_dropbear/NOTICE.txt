@@ -1,0 +1,7 @@
+GMR (General Motion Retargeting), https://github.com/YanjieZe/GMR
+Copyright (c) Yanjie Ze and contributors. MIT License (see LICENSE in the GMR repository).
+
+dropbear-wbc does not vendor GMR source. `gmr_dropbear.patch` is the diff applied by tools/setup_gmr.py to a
+fresh shallow clone at $DROPBEAR_UPSTREAM/GMR-dropbear (commit recorded in gmr_commit.txt):
+  1. mink.solve_ik limits passed by keyword (the positional call bound them to `safety_break`);
+  2. 'dropbear' robot registration (params.py) + --robot choices in scripts/{bvh,smplx}_to_robot.py.

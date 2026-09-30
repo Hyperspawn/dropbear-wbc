@@ -1,0 +1,15 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+# Data is pinned by SHA-256 (calibration files, library manifests, clip sidecars, serial model): store the exact bytes.
+data/** -text
+logs/** -text
+tests/fixtures/** -text
+site/data/** -text
+assets_manifest.json -text
+*.npz binary
+*.glb binary
+*.bin binary
+*.jpg binary
+*.png binary
+*.stl binary

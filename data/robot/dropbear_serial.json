@@ -1,0 +1,2888 @@
+{
+ "schema": "dropbear-serial-model-v1",
+ "model": "dropbear_serial",
+ "status": "DERIVED, NOT CANONICAL: serial output-space surrogate of the Dropbear USD plant (sha 45586414...). Closed loops (knee/elbow four-bars, parallel ankle, head Stewart platform) are collapsed into the dropbear-semantic-v1 joints; motors are reached through SemanticMap.semantic_to_motor.",
+ "created": "2026-09-24T11:38:26+05:30",
+ "inputs": {
+  "calibration": "H:/dropbear/dropbear-wbc/data/calibration/dropbear_semantic_calibration.json",
+  "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+  "calibration_created": "2026-09-24T10:23:56+05:30",
+  "calibration_plant_variant": "contract plant: authoritative USD + docs/CONTRACTS.md 0.1 spawn fixes (orphan bodies deactivated, joint friction 0, LL_Revolute121 axis Z, min principal inertia 2e-6) + 0.2 ankle tie rods *_Revolute111/112 spherical",
+  "raw_sweep": "H:/dropbear/dropbear-wbc/logs/gpu_pipeline/calib/raw/semantic_sweep_v3.npz",
+  "raw_sweep_sha256": "ddc818902f2b1ee71358c78da36616fd602151090eb8c4c5a7b8a678045db0a0",
+  "usd_sha256": "45586414b065cd982d487cbd868fe982108b3b8ccec64d3dfcf629652ed8db0f",
+  "body_properties": "H:/dropbear/dropbear-wbc/data/robot/usd_body_properties_45586414.json",
+  "body_properties_sha256": "9c2541fde5388acba130bc5e4eedacf64949a13082ba7c8d6b3bdb9a3bfac8df",
+  "sole_hulls": "H:/dropbear/dropbear-wbc/data/calibration/dropbear_foot_sole_hulls.json",
+  "reference_sample_for_linkage_bodies": "verify semantic_zero record (semantic_verify_v3.npz)"
+ },
+ "frames": {
+  "world": "USD root body 'world' frame at the semantic zero (x fwd, y left, z up)",
+  "pelvis_in_root": {
+   "pos": [
+    0.041357119654633734,
+    -0.06972201315601213,
+    1.1123563873405982
+   ],
+   "quat_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "model_zero": "all 22 joints 0 = semantic zero (legs straight, soles level, arms hanging, forearms forward: G1 elbow 0); body frames are world-aligned there except knee/elbow/wrist-roll links (bodies[*].frame_rotation_world0), rotated so every joint axis is an integer unit vector",
+  "root_conversion": "T_world(USD root) = T_pelvis * inv(pelvis_in_root)",
+  "pelvis_height_above_sole_at_zero_m": 0.9856871430329126
+ },
+ "fit": {
+  "left_hip": {
+   "position_error": {
+    "rms_mm": 11.672428576448965,
+    "p50_mm": 6.914452821021412,
+    "p95_mm": 23.774148677620907,
+    "max_mm": 35.879381041497055,
+    "n": 3303
+   },
+   "position_error_uniform_only": {
+    "rms_mm": 12.188642473456914,
+    "p50_mm": 7.754990641015157,
+    "p95_mm": 24.07366082767034,
+    "max_mm": 35.879381041497055,
+    "n": 3000
+   },
+   "orientation_error_max_deg": 5.744136527496849e-14,
+   "samples": "uniform in the serial3 semantic box (clipped to reachable) + single-DOF sweeps",
+   "note": "chain-order approximation: physical hip is roll->yaw->pitch, semantic is pitch->roll->yaw; the error is a pure translation of the thigh"
+  },
+  "left_shoulder": {
+   "position_error": {
+    "rms_mm": 0.01377853327307031,
+    "p50_mm": 0.0007995173633455915,
+    "p95_mm": 0.006670579307350684,
+    "max_mm": 0.36297853610464687,
+    "n": 3303
+   },
+   "orientation_error_max_deg": 2.4760388280074397e-11
+  },
+  "left_knee": {
+   "axis_world_at_zero": [
+    -0.019744485947692143,
+    0.9850301492651528,
+    -0.17124765783312895
+   ],
+   "axis_tilt_from_y_deg": 9.926351166565416,
+   "ankle_centre_error": {
+    "rms_mm": 8.311816870931604,
+    "p50_mm": 7.290540448994326,
+    "p95_mm": 15.634563985678467,
+    "max_mm": 18.557167435162828,
+    "n": 241
+   },
+   "orientation_error_max_deg": 3.5003102081674504e-05,
+   "knee_range_deg": [
+    -4.865810190144615,
+    47.181829643029474
+   ],
+   "error_by_angle": [
+    {
+     "knee_deg": -4.865810190144615,
+     "ankle_error_mm": 17.858777629988563
+    },
+    {
+     "knee_deg": -1.4701281602560121,
+     "ankle_error_mm": 10.439339016786485
+    },
+    {
+     "knee_deg": 2.0689190192908615,
+     "ankle_error_mm": 4.078209235623856
+    },
+    {
+     "knee_deg": 5.76649073548266,
+     "ankle_error_mm": 1.35732026215098
+    },
+    {
+     "knee_deg": 9.633070875479564,
+     "ankle_error_mm": 5.281493144686514
+    },
+    {
+     "knee_deg": 13.678420696626828,
+     "ankle_error_mm": 7.966463891584015
+    },
+    {
+     "knee_deg": 17.910574344666518,
+     "ankle_error_mm": 9.222643677594785
+    },
+    {
+     "knee_deg": 22.335062488850287,
+     "ankle_error_mm": 8.93991812880174
+    },
+    {
+     "knee_deg": 26.953831228321068,
+     "ankle_error_mm": 7.018059705870534
+    },
+    {
+     "knee_deg": 31.76345427733998,
+     "ankle_error_mm": 3.3812142644720975
+    },
+    {
+     "knee_deg": 36.75345055676836,
+     "ankle_error_mm": 2.180802116478252
+    },
+    {
+     "knee_deg": 41.904069713574465,
+     "ankle_error_mm": 9.431728078124165
+    },
+    {
+     "knee_deg": 47.181829643029474,
+     "ankle_error_mm": 18.557167435162828
+    }
+   ],
+   "zero_pose_shift_mm": 7.624352402790498,
+   "zero_pose_shift_vector_m": [
+    0.005626874151845353,
+    -0.0007716710199471427,
+    -0.005086606007762506
+   ],
+   "note": "polycentric four-bar knee approximated by the least-squares fixed-pivot hinge over the valid knee range (pivot and zero position fitted; the shank subtree is translated by zero_pose_shift at the model zero)"
+  },
+  "left_ankle": {
+   "foot_point_error": {
+    "rms_mm": 0.16567428778008977,
+    "p50_mm": 0.10000025851427491,
+    "p95_mm": 0.3296612443899455,
+    "max_mm": 0.9248212015945269,
+    "n": 5043
+   },
+   "yaw_residual_max_deg": 0.6113070663901466,
+   "grid_nodes_used": 1681,
+   "pitch_anchor_to_roll_anchor_m": 0.04025260638656921
+  },
+  "left_elbow": {
+   "axis_world_at_zero": [
+    -2.1497109506805505e-07,
+    0.9999999999999747,
+    6.694431602600538e-08
+   ],
+   "wrist_error": {
+    "rms_mm": 3.060421305784875,
+    "p50_mm": 2.5744873840588203,
+    "p95_mm": 5.994241117901765,
+    "max_mm": 7.426352423749522,
+    "n": 241
+   },
+   "orientation_error_max_deg": 2.3639844614913733e-05,
+   "elbow_range_deg": [
+    -32.80061805257108,
+    88.49064368405567
+   ],
+   "zero_pose_shift_mm": 1.1220389537592474,
+   "zero_pose_shift_vector_m": [
+    0.0007759406837866273,
+    2.8280897573784713e-07,
+    -0.0008104858968649431
+   ],
+   "note": "polycentric four-bar elbow approximated by the least-squares fixed-pivot hinge over the valid elbow range (forearm subtree translated by zero_pose_shift)"
+  },
+  "left_wrist": {
+   "axis_world_at_zero": [
+    0.9999999998431622,
+    2.1012287707246143e-07,
+    -1.770963118824978e-05
+   ],
+   "hand_error": {
+    "rms_mm": 3.430195783707007e-13,
+    "p50_mm": 2.486410087150353e-13,
+    "p95_mm": 6.10780345318845e-13,
+    "max_mm": 6.661338147750939e-13,
+    "n": 81
+   },
+   "orientation_error_max_deg": 1.8085285054231075e-07,
+   "semantic_map_type": "linear"
+  },
+  "right_hip": {
+   "position_error": {
+    "rms_mm": 11.344050607760648,
+    "p50_mm": 6.55068995078718,
+    "p95_mm": 23.20399788138505,
+    "max_mm": 34.87861778847273,
+    "n": 3303
+   },
+   "position_error_uniform_only": {
+    "rms_mm": 11.833341339768559,
+    "p50_mm": 7.394676804575998,
+    "p95_mm": 23.702576313909166,
+    "max_mm": 34.87861778847273,
+    "n": 3000
+   },
+   "orientation_error_max_deg": 5.147698110673522e-14,
+   "samples": "uniform in the serial3 semantic box (clipped to reachable) + single-DOF sweeps",
+   "note": "chain-order approximation: physical hip is roll->yaw->pitch, semantic is pitch->roll->yaw; the error is a pure translation of the thigh"
+  },
+  "right_shoulder": {
+   "position_error": {
+    "rms_mm": 0.022357400035223247,
+    "p50_mm": 0.000735522892352567,
+    "p95_mm": 0.00560161755159153,
+    "max_mm": 0.8058248878119785,
+    "n": 3303
+   },
+   "orientation_error_max_deg": 1.2253645421062559e-11
+  },
+  "right_knee": {
+   "axis_world_at_zero": [
+    0.019828550442905647,
+    0.9850272975321488,
+    0.1712543479852262
+   ],
+   "axis_tilt_from_y_deg": 9.927298970876958,
+   "ankle_centre_error": {
+    "rms_mm": 8.414469262521786,
+    "p50_mm": 7.374616647074211,
+    "p95_mm": 15.835269797250424,
+    "max_mm": 18.8046157425077,
+    "n": 241
+   },
+   "orientation_error_max_deg": 2.224914467821281e-05,
+   "knee_range_deg": [
+    -4.921571019456275,
+    48.014650973727
+   ],
+   "error_by_angle": [
+    {
+     "knee_deg": -4.921571019456275,
+     "ankle_error_mm": 18.06330537276189
+    },
+    {
+     "knee_deg": -1.486587406321382,
+     "ankle_error_mm": 10.578333295601944
+    },
+    {
+     "knee_deg": 2.0954423650645113,
+     "ankle_error_mm": 4.15535784266865
+    },
+    {
+     "knee_deg": 5.840299441814677,
+     "ankle_error_mm": 1.3503920715991702
+    },
+    {
+     "knee_deg": 9.759419402849025,
+     "ankle_error_mm": 5.318756324056815
+    },
+    {
+     "knee_deg": 13.863400828009183,
+     "ankle_error_mm": 8.045103279043772
+    },
+    {
+     "knee_deg": 18.161072976862517,
+     "ankle_error_mm": 9.329934618202358
+    },
+    {
+     "knee_deg": 22.65890368868472,
+     "ankle_error_mm": 9.058712955568831
+    },
+    {
+     "knee_deg": 27.359418394997583,
+     "ankle_error_mm": 7.127014339113795
+    },
+    {
+     "knee_deg": 32.26057913064984,
+     "ankle_error_mm": 3.453905255807101
+    },
+    {
+     "knee_deg": 37.352534718744835,
+     "ankle_error_mm": 2.183539250110845
+    },
+    {
+     "knee_deg": 42.61548190772299,
+     "ankle_error_mm": 9.536592013398598
+    },
+    {
+     "knee_deg": 48.014650973727,
+     "ankle_error_mm": 18.8046157425077
+    }
+   ],
+   "zero_pose_shift_mm": 7.73896189977211,
+   "zero_pose_shift_vector_m": [
+    0.005747147321889565,
+    0.0007753223536796638,
+    -0.00512451989892776
+   ],
+   "note": "polycentric four-bar knee approximated by the least-squares fixed-pivot hinge over the valid knee range (pivot and zero position fitted; the shank subtree is translated by zero_pose_shift at the model zero)"
+  },
+  "right_ankle": {
+   "foot_point_error": {
+    "rms_mm": 0.1847556183814986,
+    "p50_mm": 0.10840738384820628,
+    "p95_mm": 0.3797449105612433,
+    "max_mm": 1.0278883961707348,
+    "n": 5043
+   },
+   "yaw_residual_max_deg": 0.6875722502254394,
+   "grid_nodes_used": 1681,
+   "pitch_anchor_to_roll_anchor_m": 0.04028790883797437
+  },
+  "right_elbow": {
+   "axis_world_at_zero": [
+    -1.1660816870161098e-07,
+    0.9999999999999238,
+    -3.7254774173336133e-07
+   ],
+   "wrist_error": {
+    "rms_mm": 3.267245782271761,
+    "p50_mm": 2.7463517248239255,
+    "p95_mm": 6.420019144592156,
+    "max_mm": 7.975804536057042,
+    "n": 241
+   },
+   "orientation_error_max_deg": 2.652506347897001e-05,
+   "elbow_range_deg": [
+    -36.328063462300776,
+    88.38457380847909
+   ],
+   "zero_pose_shift_mm": 1.6112759664307679,
+   "zero_pose_shift_vector_m": [
+    0.001019918736260353,
+    -9.730860950352138e-09,
+    -0.0012473876748340107
+   ],
+   "note": "polycentric four-bar elbow approximated by the least-squares fixed-pivot hinge over the valid elbow range (forearm subtree translated by zero_pose_shift)"
+  },
+  "right_wrist": {
+   "axis_world_at_zero": [
+    0.9999999998619156,
+    1.281773425342276e-07,
+    1.6617842268607263e-05
+   ],
+   "hand_error": {
+    "rms_mm": 2.35468433503831e-13,
+    "p50_mm": 2.2247786310271854e-13,
+    "p95_mm": 4.4754520913118095e-13,
+    "max_mm": 4.744904746134193e-13,
+    "n": 81
+   },
+   "orientation_error_max_deg": 2.359914228974364e-07,
+   "semantic_map_type": "linear"
+  }
+ },
+ "anchor_reference_points": {
+  "left": {
+   "hip_centre": [
+    0.041357165035736956,
+    0.006188124736118902,
+    1.1123559582174956
+   ],
+   "ankle_centre": [
+    0.04698403918758233,
+    0.005416453716171769,
+    0.19679881872797794
+   ],
+   "wrist_centre": [
+    0.08764371471822019,
+    0.16877952338964158,
+    1.3027458067750537
+   ]
+  },
+  "right": {
+   "hip_centre": [
+    0.04135707427353054,
+    -0.14563215104814317,
+    1.1123568164637005
+   ],
+   "ankle_centre": [
+    0.047104221595420104,
+    -0.1448568286944635,
+    0.19679535875009485
+   ],
+   "wrist_centre": [
+    0.08620518691858214,
+    -0.3082200862746948,
+    1.3018937690198071
+   ]
+  }
+ },
+ "segment_assignment": {
+  "world": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "torso_RMD_X10__1_Rotor_1": {
+   "segment": "torso_RMD_X10__1_Rotor_1",
+   "serial_body": "left_shoulder_pitch_link"
+  },
+  "PG_RMD_X10_S2_MIR4__2_Rotor_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "PG_RMD_X10_S2_MIR4__1_Rotor_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "torso_RMD_X10Rotot_1": {
+   "segment": "torso_RMD_X10Rotot_1",
+   "serial_body": "right_shoulder_pitch_link"
+  },
+  "head_5mm_ujoint_base__5__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_5mm_ujoint_base__2__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_5mm_ujoint_base__1__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_5mm_ujoint_base_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_5mm_ujoint_base__3__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_5mm_ujoint_base__4__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LH_RMD_X8_Pro_MIR8_MIR1__1__1": {
+   "segment": "LH_RMD_X8_Pro_MIR8_MIR1__1__1",
+   "serial_body": "left_shoulder_roll_link"
+  },
+  "PG_RMD_X10_V3Rotor_1": {
+   "segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "left_hip_yaw_link"
+  },
+  "PG_RMD_X10_V3__1_Rotor_1": {
+   "segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "right_hip_yaw_link"
+  },
+  "RH_RMD_X8_Pro_MIR8_MIR1__1__1": {
+   "segment": "RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+   "serial_body": "right_shoulder_roll_link"
+  },
+  "head_u_joint_center__6__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__1__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__3__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__2__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__4__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__5__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LH_RMD_X8_Pro_MIR8_MIR1__3__1": {
+   "segment": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "left_shoulder_yaw_link"
+  },
+  "LL_RMD_X10_S2_MIR4__3_Stator_1": {
+   "segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "left_hip_yaw_link"
+  },
+  "RL_RMD_X10_S2_MIR4__3_Stator_1": {
+   "segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "right_hip_yaw_link"
+  },
+  "RH_RMD_X8_Pro_MIR8_MIR1__3__1": {
+   "segment": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "right_shoulder_yaw_link"
+  },
+  "head_8mm_ujoint_base__1__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_8mm_ujoint_base__4__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_8mm_ujoint_base__5__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_8mm_ujoint_base__6__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_8mm_ujoint_base__3__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_8mm_ujoint_base__2__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LH_elbow_rear_hanger__1__1": {
+   "segment": "LH_6mm_bearing__4__1",
+   "serial_body": "left_elbow_link"
+  },
+  "LH_elbow_rear_hanger_1": {
+   "segment": "LH_6mm_bearing__4__1",
+   "serial_body": "left_elbow_link"
+  },
+  "LH_bicep_motor_mate_1": {
+   "segment": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "left_shoulder_yaw_link"
+  },
+  "LH_6mm_bearing__9__1": {
+   "segment": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "left_shoulder_yaw_link"
+  },
+  "LL_bearingstrap_1": {
+   "segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "left_hip_yaw_link"
+  },
+  "LL_bearingstrap_inner_thigh_1": {
+   "segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "left_hip_yaw_link"
+  },
+  "LL_RMD_X10_S2_MIR4Rotor_1": {
+   "segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "left_hip_yaw_link"
+  },
+  "RL_bearingstrap_1": {
+   "segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "right_hip_yaw_link"
+  },
+  "RL_bearingstrap_inner_thigh_1": {
+   "segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "right_hip_yaw_link"
+  },
+  "RL_RMD_X10_S2_MIR4Rotor_1": {
+   "segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "serial_body": "right_hip_yaw_link"
+  },
+  "RH_elbow_rear_hanger__1__1": {
+   "segment": "RH_6mm_bearing__4__1",
+   "serial_body": "right_elbow_link"
+  },
+  "RH_elbow_rear_hanger_1": {
+   "segment": "RH_6mm_bearing__4__1",
+   "serial_body": "right_elbow_link"
+  },
+  "RH_bicep_motor_mate_1": {
+   "segment": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "right_shoulder_yaw_link"
+  },
+  "RH_6mm_bearing__9__1": {
+   "segment": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "right_shoulder_yaw_link"
+  },
+  "head_screw_reciever_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_screw_reciever__4__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_screw_reciever__1__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_screw_reciever__2__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_screw_reciever__3__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_screw_reciever__5__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LH_bicep_1": {
+   "segment": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "left_shoulder_yaw_link"
+  },
+  "LH_6mm_bearing__4__1": {
+   "segment": "LH_6mm_bearing__4__1",
+   "serial_body": "left_elbow_link"
+  },
+  "LL_skateboard_bearing__20__1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_skateboard_bearing__16__1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_skateboard_bearing__13__1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_skateboard_bearing__14__1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "RL_skateboard_bearing__20__1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_skateboard_bearing__16__1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_skateboard_bearing__13__1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_skateboard_bearing__14__1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RH_bicep_1": {
+   "segment": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "serial_body": "right_shoulder_yaw_link"
+  },
+  "RH_6mm_bearing__4__1": {
+   "segment": "RH_6mm_bearing__4__1",
+   "serial_body": "right_elbow_link"
+  },
+  "head_u_joint_center__8__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__11__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__7__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__9__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_u_joint_center__10__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LH_shoulder_ex_al_interface_1": {
+   "segment": "LH_shoulder_ex_al_interface_1",
+   "serial_body": "left_wrist_roll_link"
+  },
+  "LL_double_bracket_10deg_MIR_MIR_MIR_1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "RL_double_bracket_10deg_MIR_MIR_MIR_1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RH_shoulder_ex_al_interface_1": {
+   "segment": "RH_shoulder_ex_al_interface_1",
+   "serial_body": "right_wrist_roll_link"
+  },
+  "head_10mm_ujoint_base__4__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_10mm_ujoint_base__2__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_10mm_ujoint_base__1__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_10mm_ujoint_base_1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "head_10mm_ujoint_base__5__1": {
+   "segment": "world",
+   "serial_body": "pelvis"
+  },
+  "LL_calf_motor_driver_ext_1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_calf_motor_driver_ext_2": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_basis_left_1": {
+   "segment": "LL_basis_left_1",
+   "serial_body": "left_ankle_pitch_link"
+  },
+  "RL_calf_motor_driver_ext_1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_calf_motor_driver_ext_2": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_basis_left_1": {
+   "segment": "RL_basis_left_1",
+   "serial_body": "right_ankle_pitch_link"
+  },
+  "LL_skateboard_bearing_left_2": {
+   "segment": "LL_skateboard_bearing_left_2",
+   "serial_body": "left_ankle_roll_link"
+  },
+  "RL_skateboard_bearing_left_2": {
+   "segment": "RL_skateboard_bearing_left_2",
+   "serial_body": "right_ankle_roll_link"
+  },
+  "LL_210mm_tie_rod_v1_1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "LL_290mm_tie_rod_v1_1": {
+   "segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "left_knee_link"
+  },
+  "RL_290mm_tie_rod_v1_1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  },
+  "RL_210mm_tie_rod_v1_1": {
+   "segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "serial_body": "right_knee_link"
+  }
+ },
+ "excluded_bodies": [
+  "LL_skateboard_bearing__10__1",
+  "LL_skateboard_bearing__11__1",
+  "RL_skateboard_bearing__11__1"
+ ],
+ "placeholder_bodies": [
+  "left_hip_pitch_link",
+  "left_hip_roll_link",
+  "right_hip_pitch_link",
+  "right_hip_roll_link"
+ ],
+ "surrogate_actuators": {
+  "method": "J = d(motor)/d(semantic) at standing_semantic_pos (SemanticMap, finite differences); effort = sum|J_ji| effort_j, kp = sum J_ji^2 kp_j, kd, armature likewise; legacy DROPBEAR_CFG motor groups",
+  "joints": {
+   "left_hip_pitch": {
+    "effort": 235.31089226974726,
+    "kp": 150.1531208237529,
+    "kd": 5.0051040274584295,
+    "armature": 0.010010208054916859,
+    "motors": [
+     "PG_left_leg_pitch",
+     "PG_left_leg_roll",
+     "LL_hip_joint"
+    ]
+   },
+   "left_hip_roll": {
+    "effort": 223.76346414287272,
+    "kp": 149.73765364229175,
+    "kd": 4.991255121409726,
+    "armature": 0.00998251024281945,
+    "motors": [
+     "PG_left_leg_pitch",
+     "PG_left_leg_roll",
+     "LL_hip_joint"
+    ]
+   },
+   "left_hip_yaw": {
+    "effort": 254.01592613029823,
+    "kp": 150.22247936981304,
+    "kd": 5.007415978993768,
+    "armature": 0.010014831957987535,
+    "motors": [
+     "PG_left_leg_pitch",
+     "PG_left_leg_roll",
+     "LL_hip_joint"
+    ]
+   },
+   "left_shoulder_pitch": {
+    "effort": 40.00165065117212,
+    "kp": 50.000000996111474,
+    "kd": 2.000000039844459,
+    "armature": 0.010000000199222295,
+    "motors": [
+     "LH_yaw"
+    ]
+   },
+   "left_shoulder_roll": {
+    "effort": 40.00012039926413,
+    "kp": 50.0000010296944,
+    "kd": 2.000000041187776,
+    "armature": 0.01000000020593888,
+    "motors": [
+     "LH_pitch"
+    ]
+   },
+   "left_shoulder_yaw": {
+    "effort": 40.0002089967389,
+    "kp": 50.0000027131749,
+    "kd": 2.000000108526996,
+    "armature": 0.010000000542634979,
+    "motors": [
+     "LH_roll"
+    ]
+   },
+   "left_knee": {
+    "effort": 167.44618280369883,
+    "kp": 62.30716474562161,
+    "kd": 3.7384298847372968,
+    "armature": 0.0031153582372810806,
+    "motors": [
+     "LL_knee_actuator_joint"
+    ]
+   },
+   "left_ankle_pitch": {
+    "effort": 178.62579317450945,
+    "kp": 204.7438086406127,
+    "kd": 10.237190432030635,
+    "armature": 0.025592976080076588,
+    "motors": [
+     "LL_Revolute67",
+     "LL_Revolute81"
+    ]
+   },
+   "left_ankle_roll": {
+    "effort": 235.2664293033002,
+    "kp": 355.8752352629738,
+    "kd": 17.79376176314869,
+    "armature": 0.04448440440787173,
+    "motors": [
+     "LL_Revolute67",
+     "LL_Revolute81"
+    ]
+   },
+   "left_elbow": {
+    "effort": 8.304158658406779,
+    "kp": 2.1549703444997585,
+    "kd": 0.08619881377999035,
+    "armature": 0.00043099406889995174,
+    "motors": [
+     "LH_elbow_joint"
+    ]
+   },
+   "left_wrist_roll": {
+    "effort": 40.00000062608085,
+    "kp": 50.00000156520213,
+    "kd": 2.0000000626080854,
+    "armature": 0.010000000313040427,
+    "motors": [
+     "LH_wrist_roll"
+    ]
+   },
+   "right_hip_pitch": {
+    "effort": 235.65574544416577,
+    "kp": 150.20537287001883,
+    "kd": 5.006845762333961,
+    "armature": 0.010013691524667922,
+    "motors": [
+     "PG_right_leg_pitch",
+     "PG_right_leg_roll",
+     "RL_hip_joint"
+    ]
+   },
+   "right_hip_roll": {
+    "effort": 224.34737760479328,
+    "kp": 150.03549601221403,
+    "kd": 5.0011832004071355,
+    "armature": 0.01000236640081427,
+    "motors": [
+     "PG_right_leg_pitch",
+     "PG_right_leg_roll",
+     "RL_hip_joint"
+    ]
+   },
+   "right_hip_yaw": {
+    "effort": 252.33872163632827,
+    "kp": 149.86823237312132,
+    "kd": 4.995607745770711,
+    "armature": 0.00999121549154142,
+    "motors": [
+     "PG_right_leg_pitch",
+     "PG_right_leg_roll",
+     "RL_hip_joint"
+    ]
+   },
+   "right_shoulder_pitch": {
+    "effort": 40.001682943533936,
+    "kp": 50.000001576995174,
+    "kd": 2.0000000630798067,
+    "armature": 0.010000000315399033,
+    "motors": [
+     "RH_yaw"
+    ]
+   },
+   "right_shoulder_roll": {
+    "effort": 40.00019529883709,
+    "kp": 50.00000891090702,
+    "kd": 2.0000003564362805,
+    "armature": 0.010000001782181404,
+    "motors": [
+     "RH_pitch"
+    ]
+   },
+   "right_shoulder_yaw": {
+    "effort": 40.000419479938365,
+    "kp": 49.99999889611638,
+    "kd": 1.999999955844655,
+    "armature": 0.009999999779223275,
+    "motors": [
+     "RH_roll"
+    ]
+   },
+   "right_knee": {
+    "effort": 165.34291321555483,
+    "kp": 60.75173100134778,
+    "kd": 3.6451038600808667,
+    "armature": 0.003037586550067389,
+    "motors": [
+     "RL_knee_actuator_joint"
+    ]
+   },
+   "right_ankle_pitch": {
+    "effort": 178.79405631915148,
+    "kp": 205.81563592502846,
+    "kd": 10.290781796251423,
+    "armature": 0.025726954490628555,
+    "motors": [
+     "RL_Revolute67",
+     "RL_Revolute81"
+    ]
+   },
+   "right_ankle_roll": {
+    "effort": 235.63787371198464,
+    "kp": 356.87604418305057,
+    "kd": 17.84380220915253,
+    "armature": 0.04460950552288132,
+    "motors": [
+     "RL_Revolute67",
+     "RL_Revolute81"
+    ]
+   },
+   "right_elbow": {
+    "effort": 7.891828012512869,
+    "kp": 1.9462796680963383,
+    "kd": 0.07785118672385354,
+    "armature": 0.0003892559336192677,
+    "motors": [
+     "RH_elbow_joint"
+    ]
+   },
+   "right_wrist_roll": {
+    "effort": 40.000000800324635,
+    "kp": 50.000002000811605,
+    "kd": 2.000000080032464,
+    "armature": 0.010000000400162322,
+    "motors": [
+     "RH_wrist_roll"
+    ]
+   }
+  }
+ },
+ "calibration_findings": [
+  "left sole is not level in the authored rest pose (sole-plane normal tilted -3.33 deg in x, +0.04 deg in y); the semantic zero levels the sole",
+  "right sole is not level in the authored rest pose (sole-plane normal tilted -3.32 deg in x, -0.07 deg in y); the semantic zero levels the sole",
+  "left_hip_yaw (PG_left_leg_roll) cross-talk d(other)/d(motor): left_hip_pitch -0.167",
+  "left_hip_pitch (LL_hip_joint) cross-talk d(other)/d(motor): left_hip_yaw -0.161",
+  "right_hip_yaw (PG_right_leg_roll) cross-talk d(other)/d(motor): right_hip_pitch +0.167",
+  "right_hip_pitch (RL_hip_joint) cross-talk d(other)/d(motor): right_hip_yaw +0.161",
+  "L/R asymmetry in ankle_pitch: left valid range [-40.5, 44.0] deg vs mirrored right [-44.2, 42.7] deg (max diff 3.7 deg)",
+  "L/R asymmetry in ankle_roll: left valid range [-44.9, 32.7] deg vs mirrored right [-48.1, 30.3] deg (max diff 3.2 deg)",
+  "L/R asymmetry in elbow: left valid range [-32.8, 88.5] deg vs mirrored right [-36.3, 88.4] deg (max diff 3.5 deg)"
+ ],
+ "fk_model_findings": [],
+ "joints": {
+  "left_hip_pitch": {
+   "semantic_index": 2,
+   "body": "left_hip_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.04094782701405838,
+    0.006188124736118902,
+    1.1184269818245705
+   ],
+   "range": [
+    -1.0264308277487775,
+    0.5847107423430566
+   ]
+  },
+  "left_hip_roll": {
+   "semantic_index": 1,
+   "body": "left_hip_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.041357165035736956,
+    -0.008105330175704306,
+    1.18814952549844
+   ],
+   "range": [
+    -0.49773254794544103,
+    0.7931911910285178
+   ]
+  },
+  "left_hip_yaw": {
+   "semantic_index": 0,
+   "body": "left_hip_yaw_link",
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "anchor_world0": [
+    0.04070041616375302,
+    -0.014740592999143768,
+    1.1123559582174956
+   ],
+   "range": [
+    -0.665783781285017,
+    0.6609811860526724
+   ]
+  },
+  "left_shoulder_pitch": {
+   "semantic_index": 12,
+   "body": "left_shoulder_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    -0.03493019243749339,
+    0.10477995872497559,
+    1.621456621376172
+   ],
+   "range": [
+    -3.142279167756014,
+    3.142544329242898
+   ]
+  },
+  "left_shoulder_roll": {
+   "semantic_index": 13,
+   "body": "left_shoulder_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    -0.03493022918701172,
+    0.15478044663752244,
+    1.6214567583269397
+   ],
+   "range": [
+    -0.17457937316421102,
+    3.1416322642615033
+   ]
+  },
+  "left_shoulder_yaw": {
+   "semantic_index": 14,
+   "body": "left_shoulder_yaw_link",
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "anchor_world0": [
+    -0.03492913886528992,
+    0.16877999658462217,
+    1.6214566230773926
+   ],
+   "range": [
+    -3.142285232418427,
+    3.1425451487075957
+   ]
+  },
+  "left_knee": {
+   "semantic_index": 3,
+   "body": "left_knee_link",
+   "axis": [
+    -0.019744485947692143,
+    0.9850301492651528,
+    -0.17124765783312895
+   ],
+   "anchor_world0": [
+    0.12344933913072154,
+    -0.013836039864371694,
+    0.5324750531463998
+   ],
+   "range": [
+    -0.08492440859511488,
+    0.823478274385925
+   ]
+  },
+  "left_ankle_pitch": {
+   "semantic_index": 4,
+   "body": "left_ankle_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.04697447463140072,
+    0.005416453716171769,
+    0.1968553696264338
+   ],
+   "range": [
+    -0.7070614485241075,
+    0.7676358717722466
+   ]
+  },
+  "left_ankle_roll": {
+   "semantic_index": 5,
+   "body": "left_ankle_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.04698403918758233,
+    0.01532442679486317,
+    0.15660276437619766
+   ],
+   "range": [
+    -0.7833637058032483,
+    0.5709203058265275
+   ]
+  },
+  "left_elbow": {
+   "semantic_index": 15,
+   "body": "left_elbow_link",
+   "axis": [
+    -2.1497109506805505e-07,
+    0.9999999999999747,
+    6.694431602600538e-08
+   ],
+   "anchor_world0": [
+    -0.011683110680704415,
+    0.1597800274754501,
+    1.3239091721663687
+   ],
+   "range": [
+    -0.5724787817064558,
+    1.544453089495896
+   ]
+  },
+  "left_wrist_roll": {
+   "semantic_index": 16,
+   "body": "left_wrist_roll_link",
+   "axis": [
+    0.9999999998431622,
+    2.1012287707246143e-07,
+    -1.770963118824978e-05
+   ],
+   "anchor_world0": [
+    0.08764371471472746,
+    0.16877965790009858,
+    1.302745611148179
+   ],
+   "range": [
+    -3.141592653589793,
+    3.141592653589793
+   ]
+  },
+  "right_hip_pitch": {
+   "semantic_index": 8,
+   "body": "right_hip_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.04104370579017241,
+    -0.14563215104814317,
+    1.1182696269974646
+   ],
+   "range": [
+    -1.0247539113776654,
+    0.5847341818331584
+   ]
+  },
+  "right_hip_roll": {
+   "semantic_index": 7,
+   "body": "right_hip_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.04135707427353054,
+    -0.13145816974515984,
+    1.187459470640829
+   ],
+   "range": [
+    -0.7900693032423388,
+    0.49469539910686433
+   ]
+  },
+  "right_hip_yaw": {
+   "semantic_index": 6,
+   "body": "right_hip_yaw_link",
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "anchor_world0": [
+    0.041892287056635225,
+    -0.12444194393674533,
+    1.1123568164637005
+   ],
+   "range": [
+    -0.6641764951777627,
+    0.6640589592424062
+   ]
+  },
+  "right_shoulder_pitch": {
+   "semantic_index": 17,
+   "body": "right_shoulder_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    -0.03492907027481648,
+    -0.2442200481891632,
+    1.6214565451439074
+   ],
+   "range": [
+    -3.1425784895692934,
+    3.1423145660232663
+   ]
+  },
+  "right_shoulder_roll": {
+   "semantic_index": 18,
+   "body": "right_shoulder_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    -0.03493022918701172,
+    -0.2942202920881419,
+    1.6214565976874642
+   ],
+   "range": [
+    -3.1416447815373685,
+    0.17458372966209987
+   ]
+  },
+  "right_shoulder_yaw": {
+   "semantic_index": 19,
+   "body": "right_shoulder_yaw_link",
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "anchor_world0": [
+    -0.03492904803677259,
+    -0.3082203098441014,
+    1.6214567422866821
+   ],
+   "range": [
+    -3.1421548123632994,
+    3.142366631897691
+   ]
+  },
+  "right_knee": {
+   "semantic_index": 9,
+   "body": "right_knee_link",
+   "axis": [
+    0.019828550442905647,
+    0.9850272975321488,
+    0.1712543479852262
+   ],
+   "anchor_world0": [
+    0.12370019231463737,
+    -0.12607287526583844,
+    0.5351025249269893
+   ],
+   "range": [
+    -0.08589761866024591,
+    0.8380137486874374
+   ]
+  },
+  "right_ankle_pitch": {
+   "semantic_index": 10,
+   "body": "right_ankle_pitch_link",
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.047105471749472216,
+    -0.1448568286944635,
+    0.19685553209525172
+   ],
+   "range": [
+    -0.7710283241308037,
+    0.744878517558865
+   ]
+  },
+  "right_ankle_roll": {
+   "semantic_index": 11,
+   "body": "right_ankle_roll_link",
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "anchor_world0": [
+    0.047104221595420104,
+    -0.15473350247759174,
+    0.1565676232766738
+   ],
+   "range": [
+    -0.5284203326809234,
+    0.8387709674925727
+   ]
+  },
+  "right_elbow": {
+   "semantic_index": 20,
+   "body": "right_elbow_link",
+   "axis": [
+    -1.1660816870161098e-07,
+    0.9999999999999238,
+    -3.7254774173336133e-07
+   ],
+   "anchor_world0": [
+    -0.011536391956652807,
+    -0.2992201070185645,
+    1.3228532587539221
+   ],
+   "range": [
+    -0.6340443182905995,
+    1.5426018209299042
+   ]
+  },
+  "right_wrist_roll": {
+   "semantic_index": 21,
+   "body": "right_wrist_roll_link",
+   "axis": [
+    0.9999999998619156,
+    1.281773425342276e-07,
+    1.6617842268607263e-05
+   ],
+   "anchor_world0": [
+    0.08620518692107032,
+    -0.3082201292287197,
+    1.3018936196235378
+   ],
+   "range": [
+    -3.141592653589793,
+    3.141592653589793
+   ]
+  }
+ },
+ "total_mass_kg": 56.17459898395464,
+ "visual_meshes": {
+  "dir": "H:/dropbear/dropbear-wbc/data/robot/meshes",
+  "count": 19,
+  "source": "per serial body: union of the convex hulls of its USD members' collision hulls (usd_body_properties), baked into the body frame at the model zero; visual only (contype 0)",
+  "meshes": {
+   "mesh_pelvis": {
+    "usd_bodies": [
+     "world",
+     "PG_RMD_X10_S2_MIR4__2_Rotor_1",
+     "PG_RMD_X10_S2_MIR4__1_Rotor_1",
+     "head_5mm_ujoint_base__5__1",
+     "head_5mm_ujoint_base__2__1",
+     "head_5mm_ujoint_base__1__1",
+     "head_5mm_ujoint_base_1",
+     "head_5mm_ujoint_base__3__1",
+     "head_5mm_ujoint_base__4__1",
+     "head_u_joint_center__6__1",
+     "head_u_joint_center__1__1",
+     "head_u_joint_center__3__1",
+     "head_u_joint_center__2__1",
+     "head_u_joint_center__4__1",
+     "head_u_joint_center__5__1",
+     "head_8mm_ujoint_base__1__1",
+     "head_8mm_ujoint_base__4__1",
+     "head_8mm_ujoint_base__5__1",
+     "head_8mm_ujoint_base__6__1",
+     "head_8mm_ujoint_base__3__1",
+     "head_8mm_ujoint_base__2__1",
+     "head_screw_reciever_1",
+     "head_screw_reciever__4__1",
+     "head_screw_reciever__1__1",
+     "head_screw_reciever__2__1",
+     "head_screw_reciever__3__1",
+     "head_screw_reciever__5__1",
+     "head_u_joint_center__8__1",
+     "head_u_joint_center__11__1",
+     "head_u_joint_center__7__1",
+     "head_u_joint_center__9__1",
+     "head_u_joint_center_1",
+     "head_u_joint_center__10__1",
+     "head_10mm_ujoint_base__4__1",
+     "head_10mm_ujoint_base__2__1",
+     "head_10mm_ujoint_base__1__1",
+     "head_10mm_ujoint_base_1",
+     "head_10mm_ujoint_base__5__1"
+    ],
+    "triangles": 11942
+   },
+   "mesh_left_hip_yaw_link": {
+    "usd_bodies": [
+     "PG_RMD_X10_V3Rotor_1",
+     "LL_RMD_X10_S2_MIR4__3_Stator_1",
+     "LL_bearingstrap_1",
+     "LL_bearingstrap_inner_thigh_1",
+     "LL_RMD_X10_S2_MIR4Rotor_1"
+    ],
+    "triangles": 1550
+   },
+   "mesh_left_knee_link": {
+    "usd_bodies": [
+     "LL_skateboard_bearing__20__1",
+     "LL_skateboard_bearing__16__1",
+     "LL_skateboard_bearing__13__1",
+     "LL_skateboard_bearing__14__1",
+     "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+     "LL_calf_motor_driver_ext_1",
+     "LL_calf_motor_driver_ext_2",
+     "LL_210mm_tie_rod_v1_1",
+     "LL_290mm_tie_rod_v1_1"
+    ],
+    "triangles": 2508
+   },
+   "mesh_left_ankle_pitch_link": {
+    "usd_bodies": [
+     "LL_basis_left_1"
+    ],
+    "triangles": 288
+   },
+   "mesh_left_ankle_roll_link": {
+    "usd_bodies": [
+     "LL_skateboard_bearing_left_2"
+    ],
+    "triangles": 304
+   },
+   "mesh_right_hip_yaw_link": {
+    "usd_bodies": [
+     "PG_RMD_X10_V3__1_Rotor_1",
+     "RL_RMD_X10_S2_MIR4__3_Stator_1",
+     "RL_bearingstrap_1",
+     "RL_bearingstrap_inner_thigh_1",
+     "RL_RMD_X10_S2_MIR4Rotor_1"
+    ],
+    "triangles": 1550
+   },
+   "mesh_right_knee_link": {
+    "usd_bodies": [
+     "RL_skateboard_bearing__20__1",
+     "RL_skateboard_bearing__16__1",
+     "RL_skateboard_bearing__13__1",
+     "RL_skateboard_bearing__14__1",
+     "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+     "RL_calf_motor_driver_ext_1",
+     "RL_calf_motor_driver_ext_2",
+     "RL_290mm_tie_rod_v1_1",
+     "RL_210mm_tie_rod_v1_1"
+    ],
+    "triangles": 2512
+   },
+   "mesh_right_ankle_pitch_link": {
+    "usd_bodies": [
+     "RL_basis_left_1"
+    ],
+    "triangles": 288
+   },
+   "mesh_right_ankle_roll_link": {
+    "usd_bodies": [
+     "RL_skateboard_bearing_left_2"
+    ],
+    "triangles": 304
+   },
+   "mesh_left_shoulder_pitch_link": {
+    "usd_bodies": [
+     "torso_RMD_X10__1_Rotor_1"
+    ],
+    "triangles": 316
+   },
+   "mesh_left_shoulder_roll_link": {
+    "usd_bodies": [
+     "LH_RMD_X8_Pro_MIR8_MIR1__1__1"
+    ],
+    "triangles": 316
+   },
+   "mesh_left_shoulder_yaw_link": {
+    "usd_bodies": [
+     "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+     "LH_bicep_motor_mate_1",
+     "LH_6mm_bearing__9__1",
+     "LH_bicep_1"
+    ],
+    "triangles": 1220
+   },
+   "mesh_left_elbow_link": {
+    "usd_bodies": [
+     "LH_elbow_rear_hanger__1__1",
+     "LH_elbow_rear_hanger_1",
+     "LH_6mm_bearing__4__1"
+    ],
+    "triangles": 946
+   },
+   "mesh_left_wrist_roll_link": {
+    "usd_bodies": [
+     "LH_shoulder_ex_al_interface_1"
+    ],
+    "triangles": 282
+   },
+   "mesh_right_shoulder_pitch_link": {
+    "usd_bodies": [
+     "torso_RMD_X10Rotot_1"
+    ],
+    "triangles": 316
+   },
+   "mesh_right_shoulder_roll_link": {
+    "usd_bodies": [
+     "RH_RMD_X8_Pro_MIR8_MIR1__1__1"
+    ],
+    "triangles": 316
+   },
+   "mesh_right_shoulder_yaw_link": {
+    "usd_bodies": [
+     "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+     "RH_bicep_motor_mate_1",
+     "RH_6mm_bearing__9__1",
+     "RH_bicep_1"
+    ],
+    "triangles": 1220
+   },
+   "mesh_right_elbow_link": {
+    "usd_bodies": [
+     "RH_elbow_rear_hanger__1__1",
+     "RH_elbow_rear_hanger_1",
+     "RH_6mm_bearing__4__1"
+    ],
+    "triangles": 946
+   },
+   "mesh_right_wrist_roll_link": {
+    "usd_bodies": [
+     "RH_shoulder_ex_al_interface_1"
+    ],
+    "triangles": 282
+   }
+  }
+ },
+ "files": {
+  "xml": "H:/dropbear/dropbear-wbc/data/robot/dropbear_serial.xml",
+  "motionlib_xml": "H:/dropbear/dropbear-wbc/data/robot/dropbear_serial_motionlib.xml",
+  "scene": "H:/dropbear/dropbear-wbc/data/robot/dropbear_serial_scene.xml"
+ },
+ "sites": {
+  "usd_world": {
+   "body": "pelvis",
+   "usd_body": "world",
+   "label": "pelvis"
+  },
+  "usd_head_5mm_ujoint_base__5__1": {
+   "body": "torso_link",
+   "usd_body": "head_5mm_ujoint_base__5__1",
+   "label": "torso"
+  },
+  "usd_head_u_joint_center__8__1": {
+   "body": "head_link",
+   "usd_body": "head_u_joint_center__8__1",
+   "label": "head"
+  },
+  "usd_LL_RMD_X10_S2_MIR4__3_Stator_1": {
+   "body": "left_hip_yaw_link",
+   "usd_body": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "label": "left_thigh"
+  },
+  "usd_LL_double_bracket_10deg_MIR_MIR_MIR_1": {
+   "body": "left_knee_link",
+   "usd_body": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "label": "left_shank"
+  },
+  "usd_LL_skateboard_bearing_left_2": {
+   "body": "left_ankle_roll_link",
+   "usd_body": "LL_skateboard_bearing_left_2",
+   "label": "left_foot"
+  },
+  "usd_LH_RMD_X8_Pro_MIR8_MIR1__3__1": {
+   "body": "left_shoulder_yaw_link",
+   "usd_body": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "label": "left_upper_arm"
+  },
+  "usd_LH_6mm_bearing__4__1": {
+   "body": "left_elbow_link",
+   "usd_body": "LH_6mm_bearing__4__1",
+   "label": "left_forearm"
+  },
+  "usd_LH_shoulder_ex_al_interface_1": {
+   "body": "left_wrist_roll_link",
+   "usd_body": "LH_shoulder_ex_al_interface_1",
+   "label": "left_hand"
+  },
+  "usd_RL_RMD_X10_S2_MIR4__3_Stator_1": {
+   "body": "right_hip_yaw_link",
+   "usd_body": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "label": "right_thigh"
+  },
+  "usd_RL_double_bracket_10deg_MIR_MIR_MIR_1": {
+   "body": "right_knee_link",
+   "usd_body": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "label": "right_shank"
+  },
+  "usd_RL_skateboard_bearing_left_2": {
+   "body": "right_ankle_roll_link",
+   "usd_body": "RL_skateboard_bearing_left_2",
+   "label": "right_foot"
+  },
+  "usd_RH_RMD_X8_Pro_MIR8_MIR1__3__1": {
+   "body": "right_shoulder_yaw_link",
+   "usd_body": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "label": "right_upper_arm"
+  },
+  "usd_RH_6mm_bearing__4__1": {
+   "body": "right_elbow_link",
+   "usd_body": "RH_6mm_bearing__4__1",
+   "label": "right_forearm"
+  },
+  "usd_RH_shoulder_ex_al_interface_1": {
+   "body": "right_wrist_roll_link",
+   "usd_body": "RH_shoulder_ex_al_interface_1",
+   "label": "right_hand"
+  },
+  "left_sole": {
+   "body": "left_ankle_roll_link",
+   "usd_body": null,
+   "label": "left sole centre (bottom plane)"
+  },
+  "right_sole": {
+   "body": "right_ankle_roll_link",
+   "usd_body": null,
+   "label": "right sole centre (bottom plane)"
+  }
+ },
+ "bodies": {
+  "pelvis": {
+   "parent": null,
+   "joint": null,
+   "physical_segment": "world",
+   "origin_world0": [
+    0.041357119654633734,
+    -0.06972201315601213,
+    1.1123563873405982
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 25.614368268791587,
+   "usd_members": [
+    "world",
+    "PG_RMD_X10_S2_MIR4__2_Rotor_1",
+    "PG_RMD_X10_S2_MIR4__1_Rotor_1",
+    "head_5mm_ujoint_base__5__1",
+    "head_5mm_ujoint_base__2__1",
+    "head_5mm_ujoint_base__1__1",
+    "head_5mm_ujoint_base_1",
+    "head_5mm_ujoint_base__3__1",
+    "head_5mm_ujoint_base__4__1",
+    "head_u_joint_center__6__1",
+    "head_u_joint_center__1__1",
+    "head_u_joint_center__3__1",
+    "head_u_joint_center__2__1",
+    "head_u_joint_center__4__1",
+    "head_u_joint_center__5__1",
+    "head_8mm_ujoint_base__1__1",
+    "head_8mm_ujoint_base__4__1",
+    "head_8mm_ujoint_base__5__1",
+    "head_8mm_ujoint_base__6__1",
+    "head_8mm_ujoint_base__3__1",
+    "head_8mm_ujoint_base__2__1",
+    "head_screw_reciever_1",
+    "head_screw_reciever__4__1",
+    "head_screw_reciever__1__1",
+    "head_screw_reciever__2__1",
+    "head_screw_reciever__3__1",
+    "head_screw_reciever__5__1",
+    "head_u_joint_center__8__1",
+    "head_u_joint_center__11__1",
+    "head_u_joint_center__7__1",
+    "head_u_joint_center__9__1",
+    "head_u_joint_center_1",
+    "head_u_joint_center__10__1",
+    "head_10mm_ujoint_base__4__1",
+    "head_10mm_ujoint_base__2__1",
+    "head_10mm_ujoint_base__1__1",
+    "head_10mm_ujoint_base_1",
+    "head_10mm_ujoint_base__5__1"
+   ]
+  },
+  "left_hip_pitch_link": {
+   "parent": "pelvis",
+   "joint": "left_hip_pitch",
+   "physical_segment": null,
+   "origin_world0": [
+    0.04094782701405838,
+    0.006188124736118902,
+    1.1184269818245705
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.01,
+   "usd_members": []
+  },
+  "left_hip_roll_link": {
+   "parent": "left_hip_pitch_link",
+   "joint": "left_hip_roll",
+   "physical_segment": null,
+   "origin_world0": [
+    0.041357165035736956,
+    -0.008105330175704306,
+    1.18814952549844
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.01,
+   "usd_members": []
+  },
+  "left_hip_yaw_link": {
+   "parent": "left_hip_roll_link",
+   "joint": "left_hip_yaw",
+   "physical_segment": "LL_RMD_X10_S2_MIR4__3_Stator_1",
+   "origin_world0": [
+    0.04070041616375302,
+    -0.014740592999143768,
+    1.1123559582174956
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 5.768054872751236,
+   "usd_members": [
+    "PG_RMD_X10_V3Rotor_1",
+    "LL_RMD_X10_S2_MIR4__3_Stator_1",
+    "LL_bearingstrap_1",
+    "LL_bearingstrap_inner_thigh_1",
+    "LL_RMD_X10_S2_MIR4Rotor_1"
+   ]
+  },
+  "left_knee_link": {
+   "parent": "left_hip_yaw_link",
+   "joint": "left_knee",
+   "physical_segment": "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "origin_world0": [
+    0.12344933913072154,
+    -0.013836039864371694,
+    0.5324750531463998
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9998036076552878,
+     -0.019744485947692146,
+     -0.0017033479188782686
+    ],
+    [
+     0.019744485947692146,
+     0.9850301492651526,
+     0.17124765783312898
+    ],
+    [
+     -0.0017033479188782686,
+     -0.17124765783312898,
+     0.9852265416098649
+    ]
+   ],
+   "welded": false,
+   "mass": 3.4979365170001984,
+   "usd_members": [
+    "LL_skateboard_bearing__20__1",
+    "LL_skateboard_bearing__16__1",
+    "LL_skateboard_bearing__13__1",
+    "LL_skateboard_bearing__14__1",
+    "LL_double_bracket_10deg_MIR_MIR_MIR_1",
+    "LL_calf_motor_driver_ext_1",
+    "LL_calf_motor_driver_ext_2",
+    "LL_210mm_tie_rod_v1_1",
+    "LL_290mm_tie_rod_v1_1"
+   ]
+  },
+  "left_ankle_pitch_link": {
+   "parent": "left_knee_link",
+   "joint": "left_ankle_pitch",
+   "physical_segment": "LL_basis_left_1",
+   "origin_world0": [
+    0.04697447463140072,
+    0.005416453716171769,
+    0.1968553696264338
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.1042453721165657,
+   "usd_members": [
+    "LL_basis_left_1"
+   ]
+  },
+  "left_ankle_roll_link": {
+   "parent": "left_ankle_pitch_link",
+   "joint": "left_ankle_roll",
+   "physical_segment": "LL_skateboard_bearing_left_2",
+   "origin_world0": [
+    0.04698403918758233,
+    0.01532442679486317,
+    0.15660276437619766
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.9352174401283264,
+   "usd_members": [
+    "LL_skateboard_bearing_left_2"
+   ]
+  },
+  "right_hip_pitch_link": {
+   "parent": "pelvis",
+   "joint": "right_hip_pitch",
+   "physical_segment": null,
+   "origin_world0": [
+    0.04104370579017241,
+    -0.14563215104814317,
+    1.1182696269974646
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.01,
+   "usd_members": []
+  },
+  "right_hip_roll_link": {
+   "parent": "right_hip_pitch_link",
+   "joint": "right_hip_roll",
+   "physical_segment": null,
+   "origin_world0": [
+    0.04135707427353054,
+    -0.13145816974515984,
+    1.187459470640829
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.01,
+   "usd_members": []
+  },
+  "right_hip_yaw_link": {
+   "parent": "right_hip_roll_link",
+   "joint": "right_hip_yaw",
+   "physical_segment": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+   "origin_world0": [
+    0.041892287056635225,
+    -0.12444194393674533,
+    1.1123568164637005
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 5.776350289583206,
+   "usd_members": [
+    "PG_RMD_X10_V3__1_Rotor_1",
+    "RL_RMD_X10_S2_MIR4__3_Stator_1",
+    "RL_bearingstrap_1",
+    "RL_bearingstrap_inner_thigh_1",
+    "RL_RMD_X10_S2_MIR4Rotor_1"
+   ]
+  },
+  "right_knee_link": {
+   "parent": "right_hip_yaw_link",
+   "joint": "right_knee",
+   "physical_segment": "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+   "origin_world0": [
+    0.12370019231463737,
+    -0.12607287526583844,
+    0.5351025249269893
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9998019314831813,
+     0.019828550442905647,
+     -0.0017106694108507505
+    ],
+    [
+     -0.019828550442905647,
+     0.9850272975321487,
+     -0.1712543479852262
+    ],
+    [
+     -0.0017106694108507505,
+     0.1712543479852262,
+     0.9852253660489674
+    ]
+   ],
+   "welded": false,
+   "mass": 3.4979365170001984,
+   "usd_members": [
+    "RL_skateboard_bearing__20__1",
+    "RL_skateboard_bearing__16__1",
+    "RL_skateboard_bearing__13__1",
+    "RL_skateboard_bearing__14__1",
+    "RL_double_bracket_10deg_MIR_MIR_MIR_1",
+    "RL_calf_motor_driver_ext_1",
+    "RL_calf_motor_driver_ext_2",
+    "RL_290mm_tie_rod_v1_1",
+    "RL_210mm_tie_rod_v1_1"
+   ]
+  },
+  "right_ankle_pitch_link": {
+   "parent": "right_knee_link",
+   "joint": "right_ankle_pitch",
+   "physical_segment": "RL_basis_left_1",
+   "origin_world0": [
+    0.047105471749472216,
+    -0.1448568286944635,
+    0.19685553209525172
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.1042453721165657,
+   "usd_members": [
+    "RL_basis_left_1"
+   ]
+  },
+  "right_ankle_roll_link": {
+   "parent": "right_ankle_pitch_link",
+   "joint": "right_ankle_roll",
+   "physical_segment": "RL_skateboard_bearing_left_2",
+   "origin_world0": [
+    0.047104221595420104,
+    -0.15473350247759174,
+    0.1565676232766738
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.9352174401283264,
+   "usd_members": [
+    "RL_skateboard_bearing_left_2"
+   ]
+  },
+  "left_shoulder_pitch_link": {
+   "parent": "pelvis",
+   "joint": "left_shoulder_pitch",
+   "physical_segment": "torso_RMD_X10__1_Rotor_1",
+   "origin_world0": [
+    -0.03493019243749339,
+    0.10477995872497559,
+    1.621456621376172
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.34392252564430237,
+   "usd_members": [
+    "torso_RMD_X10__1_Rotor_1"
+   ]
+  },
+  "left_shoulder_roll_link": {
+   "parent": "left_shoulder_pitch_link",
+   "joint": "left_shoulder_roll",
+   "physical_segment": "LH_RMD_X8_Pro_MIR8_MIR1__1__1",
+   "origin_world0": [
+    -0.03493022918701172,
+    0.15478044663752244,
+    1.6214567583269397
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 1.2004154920578003,
+   "usd_members": [
+    "LH_RMD_X8_Pro_MIR8_MIR1__1__1"
+   ]
+  },
+  "left_shoulder_yaw_link": {
+   "parent": "left_shoulder_roll_link",
+   "joint": "left_shoulder_yaw",
+   "physical_segment": "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "origin_world0": [
+    -0.03492913886528992,
+    0.16877999658462217,
+    1.6214566230773926
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 1.8379352749325335,
+   "usd_members": [
+    "LH_RMD_X8_Pro_MIR8_MIR1__3__1",
+    "LH_bicep_motor_mate_1",
+    "LH_6mm_bearing__9__1",
+    "LH_bicep_1"
+   ]
+  },
+  "left_elbow_link": {
+   "parent": "left_shoulder_yaw_link",
+   "joint": "left_elbow",
+   "physical_segment": "LH_6mm_bearing__4__1",
+   "origin_world0": [
+    -0.011683110680704415,
+    0.1597800274754501,
+    1.3239091721663687
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9999999999999769,
+     -2.1497109506805505e-07,
+     7.185902566634877e-15
+    ],
+    [
+     2.1497109506805505e-07,
+     0.9999999999999747,
+     -6.694431602600538e-08
+    ],
+    [
+     7.185902566634877e-15,
+     6.694431602600538e-08,
+     0.9999999999999978
+    ]
+   ],
+   "welded": false,
+   "mass": 0.9156600125133991,
+   "usd_members": [
+    "LH_elbow_rear_hanger__1__1",
+    "LH_elbow_rear_hanger_1",
+    "LH_6mm_bearing__4__1"
+   ]
+  },
+  "left_wrist_roll_link": {
+   "parent": "left_elbow_link",
+   "joint": "left_wrist_roll",
+   "physical_segment": "LH_shoulder_ex_al_interface_1",
+   "origin_world0": [
+    0.08764371471472746,
+    0.16877965790009858,
+    1.302745611148179
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9999999998431625,
+     -2.1012287707246148e-07,
+     1.7709631188249785e-05
+    ],
+    [
+     2.1012287707246148e-07,
+     0.9999999999999779,
+     1.8605987203462827e-12
+    ],
+    [
+     -1.7709631188249785e-05,
+     1.8605987203462827e-12,
+     0.9999999998431846
+    ]
+   ],
+   "welded": false,
+   "mass": 0.6525801420211792,
+   "usd_members": [
+    "LH_shoulder_ex_al_interface_1"
+   ]
+  },
+  "right_shoulder_pitch_link": {
+   "parent": "pelvis",
+   "joint": "right_shoulder_pitch",
+   "physical_segment": "torso_RMD_X10Rotot_1",
+   "origin_world0": [
+    -0.03492907027481648,
+    -0.2442200481891632,
+    1.6214565451439074
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 0.34392252564430237,
+   "usd_members": [
+    "torso_RMD_X10Rotot_1"
+   ]
+  },
+  "right_shoulder_roll_link": {
+   "parent": "right_shoulder_pitch_link",
+   "joint": "right_shoulder_roll",
+   "physical_segment": "RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+   "origin_world0": [
+    -0.03493022918701172,
+    -0.2942202920881419,
+    1.6214565976874642
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 1.2004154920578003,
+   "usd_members": [
+    "RH_RMD_X8_Pro_MIR8_MIR1__1__1"
+   ]
+  },
+  "right_shoulder_yaw_link": {
+   "parent": "right_shoulder_roll_link",
+   "joint": "right_shoulder_yaw",
+   "physical_segment": "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+   "origin_world0": [
+    -0.03492904803677259,
+    -0.3082203098441014,
+    1.6214567422866821
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": false,
+   "mass": 1.8379352749325335,
+   "usd_members": [
+    "RH_RMD_X8_Pro_MIR8_MIR1__3__1",
+    "RH_bicep_motor_mate_1",
+    "RH_6mm_bearing__9__1",
+    "RH_bicep_1"
+   ]
+  },
+  "right_elbow_link": {
+   "parent": "right_shoulder_yaw_link",
+   "joint": "right_elbow",
+   "physical_segment": "RH_6mm_bearing__4__1",
+   "origin_world0": [
+    -0.011536391956652807,
+    -0.2992201070185645,
+    1.3228532587539221
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9999999999999932,
+     -1.1660816870161096e-07,
+     -2.1711549775337853e-14
+    ],
+    [
+     1.1660816870161096e-07,
+     0.9999999999999238,
+     3.7254774173336133e-07
+    ],
+    [
+     -2.1711549775337853e-14,
+     -3.7254774173336133e-07,
+     0.9999999999999306
+    ]
+   ],
+   "welded": false,
+   "mass": 0.9156600125133991,
+   "usd_members": [
+    "RH_elbow_rear_hanger__1__1",
+    "RH_elbow_rear_hanger_1",
+    "RH_6mm_bearing__4__1"
+   ]
+  },
+  "right_wrist_roll_link": {
+   "parent": "right_elbow_link",
+   "joint": "right_wrist_roll",
+   "physical_segment": "RH_shoulder_ex_al_interface_1",
+   "origin_world0": [
+    0.08620518692107032,
+    -0.3082201292287197,
+    1.3018936196235378
+   ],
+   "frame_rotation_world0": [
+    [
+     0.9999999998619155,
+     -1.281773425342276e-07,
+     -1.6617842268607263e-05
+    ],
+    [
+     1.281773425342276e-07,
+     0.9999999999999918,
+     -1.065015339708275e-12
+    ],
+    [
+     1.6617842268607263e-05,
+     -1.065015339708275e-12,
+     0.9999999998619237
+    ]
+   ],
+   "welded": false,
+   "mass": 0.6525801420211792,
+   "usd_members": [
+    "RH_shoulder_ex_al_interface_1"
+   ]
+  },
+  "torso_link": {
+   "parent": "pelvis",
+   "joint": null,
+   "physical_segment": null,
+   "origin_world0": [
+    0.10099983215332031,
+    -0.04474710673093796,
+    1.6388007402420044
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": true,
+   "mass": 0.0,
+   "usd_members": []
+  },
+  "head_link": {
+   "parent": "pelvis",
+   "joint": null,
+   "physical_segment": null,
+   "origin_world0": [
+    0.04379081726074219,
+    -0.009508874267339706,
+    1.7775168418884277
+   ],
+   "frame_rotation_world0": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "welded": true,
+   "mass": 0.0,
+   "usd_members": []
+  }
+ },
+ "motionlib_extend_config": [
+  {
+   "joint_name": "usd_pelvis",
+   "parent_name": "pelvis",
+   "pos": [
+    -0.041357119654633734,
+    0.06972201315601213,
+    -1.1123563873405982
+   ],
+   "rot": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "usd_body": "world"
+  },
+  {
+   "joint_name": "usd_torso",
+   "parent_name": "pelvis",
+   "pos": [
+    0.05964271471200093,
+    0.024975614089994526,
+    0.52644435276117
+   ],
+   "rot": [
+    0.49999984353781335,
+    0.5000000528482826,
+    0.4999999329447682,
+    0.5000001706690751
+   ],
+   "usd_body": "head_5mm_ujoint_base__5__1"
+  },
+  {
+   "joint_name": "usd_head",
+   "parent_name": "pelvis",
+   "pos": [
+    0.0024317927123218355,
+    0.06021388016064175,
+    0.6651600968591609
+   ],
+   "rot": [
+    0.4999997615806196,
+    0.49999940464703313,
+    0.4999992847435169,
+    0.5000015490255082
+   ],
+   "usd_body": "head_u_joint_center__8__1"
+  },
+  {
+   "joint_name": "usd_left_thigh",
+   "parent_name": "left_hip_yaw_link",
+   "pos": [
+    0.0006567488719839351,
+    0.02092871773526267,
+    0.0
+   ],
+   "rot": [
+    0.765258317736506,
+    0.6435566341726232,
+    0.014520727592035912,
+    -0.001927230576540057
+   ],
+   "usd_body": "LL_RMD_X10_S2_MIR4__3_Stator_1"
+  },
+  {
+   "joint_name": "usd_left_shank",
+   "parent_name": "left_knee_link",
+   "pos": [
+    -0.035346634885477006,
+    0.02204176723655303,
+    0.11875719841040772
+   ],
+   "rot": [
+    0.7059541348032462,
+    0.7059542059304043,
+    0.04035691097275438,
+    -0.040357631497771045
+   ],
+   "usd_body": "LL_double_bracket_10deg_MIR_MIR_MIR_1"
+  },
+  {
+   "joint_name": "usd_left_foot",
+   "parent_name": "left_ankle_roll_link",
+   "pos": [
+    0.019992992890875735,
+    0.00023586489523426749,
+    0.0002313942659356305
+   ],
+   "rot": [
+    0.7654909042585414,
+    0.642791536628242,
+    0.022231053368180754,
+    -0.01866805299664197
+   ],
+   "usd_body": "LL_skateboard_bearing_left_2"
+  },
+  {
+   "joint_name": "usd_left_upper_arm",
+   "parent_name": "left_shoulder_yaw_link",
+   "pos": [
+    -1.0903217217972383e-06,
+    2.4330932824057072e-09,
+    -0.10699987411499023
+   ],
+   "rot": [
+    0.7071067215819027,
+    0.7071068407911845,
+    -2.1423821276622352e-08,
+    5.9604640771186316e-08
+   ],
+   "usd_body": "LH_RMD_X8_Pro_MIR8_MIR1__3__1"
+  },
+  {
+   "joint_name": "usd_left_forearm",
+   "parent_name": "left_elbow_link",
+   "pos": [
+    0.013859491682122851,
+    0.036499466660234056,
+    -0.040321857952267844
+   ],
+   "rot": [
+    0.5000043120979366,
+    0.5000044708737896,
+    -0.49999562851024515,
+    0.49999558844087416
+   ],
+   "usd_body": "LH_6mm_bearing__4__1"
+  },
+  {
+   "joint_name": "usd_left_hand",
+   "parent_name": "left_wrist_roll_link",
+   "pos": [
+    -1.1740569327104061e-07,
+    -1.232106632883341e-07,
+    5.984077280519413e-08
+   ],
+   "rot": [
+    0.4999999151682538,
+    0.5000000192876413,
+    -0.5000001073466539,
+    0.49999995819743026
+   ],
+   "usd_body": "LH_shoulder_ex_al_interface_1"
+  },
+  {
+   "joint_name": "usd_right_thigh",
+   "parent_name": "right_hip_yaw_link",
+   "pos": [
+    -0.0005352127831046855,
+    -0.021190207111397838,
+    0.0
+   ],
+   "rot": [
+    0.6435574901159233,
+    0.765260887094684,
+    0.0016889946654372178,
+    -0.014376331095610725
+   ],
+   "usd_body": "RL_RMD_X10_S2_MIR4__3_Stator_1"
+  },
+  {
+   "joint_name": "usd_right_shank",
+   "parent_name": "right_knee_link",
+   "pos": [
+    -0.035255974891915,
+    -0.022042082465930934,
+    0.11606618443145036
+   ],
+   "rot": [
+    0.7059441149357142,
+    0.7059441148350404,
+    0.04053250080677829,
+    -0.04053306916273892
+   ],
+   "usd_body": "RL_double_bracket_10deg_MIR_MIR_MIR_1"
+  },
+  {
+   "joint_name": "usd_right_foot",
+   "parent_name": "right_ankle_roll_link",
+   "pos": [
+    0.019999412428471156,
+    -0.00026647255693754146,
+    0.00026814075859385444
+   ],
+   "rot": [
+    0.6429757039079623,
+    0.7653396769042241,
+    0.018614033751989823,
+    -0.022157185915141722
+   ],
+   "usd_body": "RL_skateboard_bearing_left_2"
+  },
+  {
+   "joint_name": "usd_right_upper_arm",
+   "parent_name": "right_shoulder_yaw_link",
+   "pos": [
+    -1.1811502391295692e-06,
+    2.51164520737035e-07,
+    -0.10699999332427979
+   ],
+   "rot": [
+    0.7071068407911779,
+    0.7071067215818863,
+    6.7918834386564e-08,
+    -1.788139373864305e-07
+   ],
+   "usd_body": "RH_RMD_X8_Pro_MIR8_MIR1__3__1"
+  },
+  {
+   "joint_name": "usd_right_forearm",
+   "parent_name": "right_elbow_link",
+   "pos": [
+    0.012274907705480113,
+    -0.03649999093591532,
+    -0.04012093286526462
+   ],
+   "rot": [
+    0.49999568679718653,
+    0.49999593549913063,
+    -0.5000042282457247,
+    0.500004149387739
+   ],
+   "usd_body": "RH_6mm_bearing__4__1"
+  },
+  {
+   "joint_name": "usd_right_hand",
+   "parent_name": "right_wrist_roll_link",
+   "pos": [
+    6.297454765549883e-08,
+    6.22266590249047e-08,
+    -5.8152039862996725e-08
+   ],
+   "rot": [
+    0.4999999778678494,
+    0.49999995180120677,
+    -0.5000000272867411,
+    0.5000000430441974
+   ],
+   "usd_body": "RH_shoulder_ex_al_interface_1"
+  }
+ ],
+ "xml_sha256": "1564a82c6fcc7f105bddcc10c8b20cb232562aaf7ebe6c9553121dc028ca56fb",
+ "motionlib_xml_sha256": "50cde9df0cce14e11f16e999d93f5e3287d2c9da9cea1de079058dec6ec771d0",
+ "self_check_vs_calibration_fk": {
+  "pelvis": {
+   "zero_mm": 4.141510403316552e-06,
+   "p50_mm": 4.141510403316552e-06,
+   "p95_mm": 4.141510403316552e-06,
+   "max_mm": 4.141510403316552e-06
+  },
+  "torso": {
+   "zero_mm": 0.0007135851990925522,
+   "p50_mm": 0.0007135851990925522,
+   "p95_mm": 0.0007135851990925522,
+   "max_mm": 0.0007135851990925522
+  },
+  "head": {
+   "zero_mm": 0.002069553107036547,
+   "p50_mm": 0.002069553107036547,
+   "p95_mm": 0.002069553107036547,
+   "max_mm": 0.002069553107036547
+  },
+  "left_thigh": {
+   "zero_mm": 1.6918676069506476e-05,
+   "p50_mm": 7.778885328185478,
+   "p95_mm": 22.48522995146285,
+   "max_mm": 34.755282278484835
+  },
+  "left_shank": {
+   "zero_mm": 7.624365181582694,
+   "p50_mm": 11.444459584618329,
+   "p95_mm": 23.77836887436717,
+   "max_mm": 44.966341677945444
+  },
+  "left_foot": {
+   "zero_mm": 7.624368874903357,
+   "p50_mm": 11.49211529516813,
+   "p95_mm": 23.957115817182196,
+   "max_mm": 44.964368798365626
+  },
+  "left_upper_arm": {
+   "zero_mm": 2.9490888703837863e-06,
+   "p50_mm": 0.0008655546182398004,
+   "p95_mm": 0.005514691237655285,
+   "max_mm": 0.02781890096868096
+  },
+  "left_forearm": {
+   "zero_mm": 1.1220429880406761,
+   "p50_mm": 2.5457789594900815,
+   "p95_mm": 5.740363344707068,
+   "max_mm": 7.219623997228991
+  },
+  "left_hand": {
+   "zero_mm": 1.12204143930181,
+   "p50_mm": 2.545785825990652,
+   "p95_mm": 5.7403651598205565,
+   "max_mm": 7.219642432437183
+  },
+  "right_thigh": {
+   "zero_mm": 5.845368450132856e-06,
+   "p50_mm": 7.5219842297495205,
+   "p95_mm": 22.96869237840502,
+   "max_mm": 35.34849209526914
+  },
+  "right_shank": {
+   "zero_mm": 7.73897256446585,
+   "p50_mm": 12.203840391401513,
+   "p95_mm": 24.23591989173973,
+   "max_mm": 36.845539392347504
+  },
+  "right_foot": {
+   "zero_mm": 7.738979573776021,
+   "p50_mm": 12.010154627310317,
+   "p95_mm": 24.327612660908958,
+   "max_mm": 36.840194453157714
+  },
+  "right_upper_arm": {
+   "zero_mm": 4.900048293980782e-06,
+   "p50_mm": 0.0008305846848109198,
+   "p95_mm": 0.005756015991773962,
+   "max_mm": 0.09074859181587012
+  },
+  "right_forearm": {
+   "zero_mm": 1.6112773147575614,
+   "p50_mm": 2.6744676028202163,
+   "p95_mm": 6.734412242908917,
+   "max_mm": 7.810404228447585
+  },
+  "right_hand": {
+   "zero_mm": 1.6112770806432546,
+   "p50_mm": 2.674467015628637,
+   "p95_mm": 6.734427275178733,
+   "max_mm": 7.810428341987562
+  }
+ }
+}

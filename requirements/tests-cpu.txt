@@ -1,0 +1,16 @@
+# CPU-only unit tests (no Isaac Sim, no GPU): what .github/workflows/tests.yml installs.
+# torch==2.5.1 (the version Isaac Sim 5.0 ships) comes from the PyTorch CPU index (see the workflow). Tests needing Isaac, pxr, warp/newton, GMR or the
+# teleop stack skip themselves when those are absent.
+numpy
+scipy
+pytest
+onnx
+onnxruntime
+pyzmq
+msgpack
+mujoco
+pyarrow
+pillow
+pyyaml
+av
+gitpython

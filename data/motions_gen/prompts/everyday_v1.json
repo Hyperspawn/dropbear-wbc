@@ -1,0 +1,302 @@
+[
+ {
+  "name": "walk_normal",
+  "prompt": "a person walks forward at a normal pace",
+  "duration": 6
+ },
+ {
+  "name": "walk_slow",
+  "prompt": "a person walks forward slowly",
+  "duration": 6
+ },
+ {
+  "name": "walk_brisk",
+  "prompt": "a person walks forward briskly",
+  "duration": 6
+ },
+ {
+  "name": "walk_back",
+  "prompt": "a person walks backward carefully",
+  "duration": 5
+ },
+ {
+  "name": "side_left",
+  "prompt": "a person side steps to the left",
+  "duration": 5
+ },
+ {
+  "name": "side_right",
+  "prompt": "a person side steps to the right",
+  "duration": 5
+ },
+ {
+  "name": "walk_turn_left",
+  "prompt": "a person walks forward and turns left",
+  "duration": 6
+ },
+ {
+  "name": "walk_turn_right",
+  "prompt": "a person walks forward and turns right",
+  "duration": 6
+ },
+ {
+  "name": "turn_around",
+  "prompt": "a person turns around in place",
+  "duration": 5
+ },
+ {
+  "name": "walk_circle",
+  "prompt": "a person walks in a small circle",
+  "duration": 7
+ },
+ {
+  "name": "march",
+  "prompt": "a person marches in place",
+  "duration": 5
+ },
+ {
+  "name": "walk_stop",
+  "prompt": "a person walks forward and then stops",
+  "duration": 6
+ },
+ {
+  "name": "walk_wave",
+  "prompt": "a person walks forward while waving",
+  "duration": 6
+ },
+ {
+  "name": "walk_look",
+  "prompt": "a person walks forward looking around",
+  "duration": 6
+ },
+ {
+  "name": "wave_right",
+  "prompt": "a person waves with the right hand",
+  "duration": 4
+ },
+ {
+  "name": "wave_left",
+  "prompt": "a person waves with the left hand",
+  "duration": 4
+ },
+ {
+  "name": "wave_both",
+  "prompt": "a person waves with both hands",
+  "duration": 4
+ },
+ {
+  "name": "point_forward",
+  "prompt": "a person points forward with the right hand",
+  "duration": 4
+ },
+ {
+  "name": "clap",
+  "prompt": "a person claps their hands",
+  "duration": 4
+ },
+ {
+  "name": "shrug",
+  "prompt": "a person shrugs their shoulders",
+  "duration": 4
+ },
+ {
+  "name": "bow",
+  "prompt": "a person bows politely",
+  "duration": 4
+ },
+ {
+  "name": "arms_up",
+  "prompt": "a person raises both arms above the head",
+  "duration": 4
+ },
+ {
+  "name": "stretch_up",
+  "prompt": "a person stretches their arms overhead",
+  "duration": 5
+ },
+ {
+  "name": "hands_hips",
+  "prompt": "a person puts their hands on their hips",
+  "duration": 4
+ },
+ {
+  "name": "salute",
+  "prompt": "a person salutes",
+  "duration": 4
+ },
+ {
+  "name": "thumbs_up",
+  "prompt": "a person gives a thumbs up",
+  "duration": 4
+ },
+ {
+  "name": "beckon",
+  "prompt": "a person beckons someone to come closer",
+  "duration": 4
+ },
+ {
+  "name": "stop_sign",
+  "prompt": "a person holds up a hand to signal stop",
+  "duration": 4
+ },
+ {
+  "name": "scratch_head",
+  "prompt": "a person scratches their head",
+  "duration": 4
+ },
+ {
+  "name": "check_watch",
+  "prompt": "a person looks at their wrist watch",
+  "duration": 4
+ },
+ {
+  "name": "arms_crossed",
+  "prompt": "a person crosses their arms",
+  "duration": 4
+ },
+ {
+  "name": "reach_forward",
+  "prompt": "a person reaches forward with the right hand",
+  "duration": 4
+ },
+ {
+  "name": "reach_down",
+  "prompt": "a person bends down and reaches toward the floor",
+  "duration": 5
+ },
+ {
+  "name": "pick_up",
+  "prompt": "a person picks up a small object from a table",
+  "duration": 5
+ },
+ {
+  "name": "push_forward",
+  "prompt": "a person pushes something forward with both hands",
+  "duration": 4
+ },
+ {
+  "name": "squat",
+  "prompt": "a person squats down and stands up",
+  "duration": 5
+ },
+ {
+  "name": "half_squat",
+  "prompt": "a person does a shallow squat",
+  "duration": 4
+ },
+ {
+  "name": "lunge",
+  "prompt": "a person steps into a lunge and returns",
+  "duration": 5
+ },
+ {
+  "name": "weight_shift",
+  "prompt": "a person shifts weight from side to side",
+  "duration": 5
+ },
+ {
+  "name": "one_leg",
+  "prompt": "a person balances on one leg briefly",
+  "duration": 5
+ },
+ {
+  "name": "tap_foot",
+  "prompt": "a person taps their foot",
+  "duration": 4
+ },
+ {
+  "name": "kick_light",
+  "prompt": "a person does a light kick forward",
+  "duration": 4
+ },
+ {
+  "name": "step_fwd_back",
+  "prompt": "a person steps forward and then back",
+  "duration": 5
+ },
+ {
+  "name": "knee_raise",
+  "prompt": "a person raises each knee alternately",
+  "duration": 5
+ },
+ {
+  "name": "calf_raise",
+  "prompt": "a person rises onto their toes and back down",
+  "duration": 4
+ },
+ {
+  "name": "sway",
+  "prompt": "a person sways gently to music",
+  "duration": 5
+ },
+ {
+  "name": "dance_arms",
+  "prompt": "a person dances with simple arm movements",
+  "duration": 5
+ },
+ {
+  "name": "dance_step",
+  "prompt": "a person does a simple side step dance",
+  "duration": 6
+ },
+ {
+  "name": "disco",
+  "prompt": "a person does a disco point dance",
+  "duration": 5
+ },
+ {
+  "name": "bounce",
+  "prompt": "a person bounces to a beat",
+  "duration": 5
+ },
+ {
+  "name": "twist",
+  "prompt": "a person twists their torso left and right",
+  "duration": 5
+ },
+ {
+  "name": "arm_circles",
+  "prompt": "a person does arm circles",
+  "duration": 5
+ },
+ {
+  "name": "jumping_jacks_slow",
+  "prompt": "a person does slow jumping jacks",
+  "duration": 5
+ },
+ {
+  "name": "boxing",
+  "prompt": "a person throws a few punches",
+  "duration": 4
+ },
+ {
+  "name": "celebrate",
+  "prompt": "a person celebrates with a fist pump",
+  "duration": 4
+ },
+ {
+  "name": "cheer",
+  "prompt": "a person cheers with both arms raised",
+  "duration": 4
+ },
+ {
+  "name": "think",
+  "prompt": "a person puts a hand on their chin and thinks",
+  "duration": 4
+ },
+ {
+  "name": "look_around",
+  "prompt": "a person looks around curiously",
+  "duration": 5
+ },
+ {
+  "name": "idle_shift",
+  "prompt": "a person stands idle and shifts slightly",
+  "duration": 5
+ },
+ {
+  "name": "tired",
+  "prompt": "a person walks forward tiredly",
+  "duration": 6
+ }
+]

@@ -1,0 +1,23 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  cpu-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/tests-cpu.txt
+      - name: Install CPU test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements/tests-cpu.txt
+      - name: Unitree G1 model (retarget tests)
+        run: git clone --depth 1 https://github.com/unitreerobotics/unitree_mujoco ../upstream/unitree_mujoco
+      - name: Unit tests (no Isaac Sim)
+        run: python -m pytest -q tests -k "not isaac" -p no:cacheprovider

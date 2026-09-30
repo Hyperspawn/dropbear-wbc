@@ -1,0 +1,5 @@
+# dropbear_hg SDK / bridge / runner extras on top of newton-windows-lock.txt
+pyzmq
+msgpack
+onnxruntime-gpu
+pytest
