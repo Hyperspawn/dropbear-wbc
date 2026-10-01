@@ -1,0 +1,6 @@
+{
+  "skills": {
+    "velocity_walker_flat": {"kind": "locomotion", "summary_glob": "logs/rsl_rl/dropbear_velocity/*/play_*.json"},
+    "motion_library_tracker": {"kind": "tracking", "summary_glob": "logs/rsl_rl/dropbear_tracking/*/play_*.json"}
+  }
+}
