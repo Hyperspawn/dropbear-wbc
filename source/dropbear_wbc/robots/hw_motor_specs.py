@@ -110,6 +110,57 @@ MOTOR_MODELS: dict[str, MotorModel] = {
 MOTION_MODE_LIMITS: dict[str, float] = {"kp_max": 500.0, "kd_max": 5.0}
 """RMD motion mode (PROTO_V39 p89-90) and CEM protocol V4.4 p153: kp 0..500, kd 0..5 (12-bit fields)."""
 
+DEFAULT_KD_SIDE: str = "output"
+"""Which speed the motion-mode kd field acts on (notes/13 T5). ``"output"`` = today's twin (sim damping = field kd);
+``"motor"`` = setup-software reading (sim output damping = field kd x gear_ratio). E6/B1 picks the real value; until
+then DR across both is not physically meaningful. Profiles may override via ``HW_PROFILE_OPTIONS[...]["kd_side"]``."""
+KD_SIDES: tuple[str, ...] = ("output", "motor")
+
+
+def normalize_kd_side(kd_side: str | None = None) -> str:
+    """Return a valid kd_side; None/empty -> :data:`DEFAULT_KD_SIDE`."""
+    side = DEFAULT_KD_SIDE if kd_side is None or kd_side == "" else str(kd_side)
+    if side not in KD_SIDES:
+        raise ValueError(f"kd_side must be one of {KD_SIDES}, got {kd_side!r}")
+    return side
+
+
+def kd_sim_from_field(kd_field: float, gear_ratio: float, kd_side: str | None = None) -> float:
+    """IdealPD / joint-output damping from a motion-mode field kd (notes/13 T5).
+
+    Motion-mode torque at the output: if kd acts on motor speed, tau_out = kd_field * omega_m * N
+    = kd_field * N * omega_out, so sim damping at the joint is ``kd_field * gear_ratio``. If kd acts on output
+    speed, sim damping is ``kd_field`` unchanged (default).
+    """
+    side = normalize_kd_side(kd_side)
+    kd = float(kd_field)
+    if side == "output":
+        return kd
+    return kd * float(gear_ratio)
+
+
+def _check_motion_mode_gains(name: str, kp: float, kd: float, *, kd_side: str | None = None) -> None:
+    """Field gains must stay inside MOTION_MODE_LIMITS. Under kd_side=motor, HW_GAINS/overrides are still FIELD
+    values (0..5 for kd); putting an already-output-referred (kd*N) number here is rejected by the same cap."""
+    if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
+        side = normalize_kd_side(kd_side)
+        hint = ""
+        if side == "motor" and kd > MOTION_MODE_LIMITS["kd_max"]:
+            hint = (" under kd_side='motor' HW_GAINS/overrides must still be motion-mode FIELD kd (<=5), not "
+                    "output-referred (field x N) values; the sim multiplies by gear_ratio itself")
+        raise ValueError(
+            f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}{hint}"
+        )
+
+
+def _with_gains(entry: dict, kp: float, kd: float, kd_side: str) -> dict:
+    """Copy ``entry`` with field kp/kd and recomputed kd_sim / kd_output."""
+    out = {**entry, "kp": float(kp), "kd": float(kd), "kd_side": kd_side}
+    out["kd_sim"] = kd_sim_from_field(kd, out["gear_ratio"], kd_side)
+    out["kd_output"] = out["kd_sim"]  # alias: IdealPD damping at the joint/output
+    return out
+
+
 JOINT_MOTOR_MAPS: dict[str, dict[str, str]] = {
     # the user's map of 2026-09-25 (AttemptToExplainActuators.md): hip roll ("Hip Spreader") and hip yaw ("Leg
     # Rotator") X10 1:7, hip pitch ("Waist Pivot") X10-S2 1:35, knee ("Knee Bender") CEM-60, calf X8 Pro 1:9,
@@ -164,7 +215,9 @@ JOINT_MOTOR_MAPS["cad_usd"] = {
 }
 
 HW_GAINS: dict[str, tuple[float, float]] = {
-    # joint regex role -> (kp [N*m/rad], kd [N*m*s/rad]) at the motor output, inside MOTION_MODE_LIMITS
+    # role -> (kp, kd) MOTION-MODE FIELD values (PROTO_V39 / CEM V4.4: kp<=500, kd<=5). Always field units, never
+    # already-converted sim damping. Sim IdealPD damping = field kd when kd_side="output" (default, today's twin),
+    # or field kd * gear_ratio when kd_side="motor" (notes/13 T5 / item 60). Do NOT put kd*N into this table.
     "hip_roll": (150.0, 5.0),
     "hip_yaw": (150.0, 5.0),
     "hip_pitch": (200.0, 5.0),
@@ -335,8 +388,14 @@ VELOCITY_LIMIT_SIM_FACTOR: float = 2.0
 """PhysX joint velocity cap = factor x no-load speed (safety net only; the torque-speed line does the physics)."""
 
 
-def joint_hw_params(map_name: str = "user_2026_09_25") -> dict[str, dict]:
-    """Per-motor parameters for ``map_name``: model fields + armature + role gains, in MOTOR_NAMES order."""
+def joint_hw_params(map_name: str = "user_2026_09_25", *, kd_side: str | None = None) -> dict[str, dict]:
+    """Per-motor parameters for ``map_name``: model fields + armature + role gains, in MOTOR_NAMES order.
+
+    Each entry exposes ``kp`` / ``kd`` (motion-mode FIELD values from :data:`HW_GAINS`), ``kd_side``, and
+    ``kd_sim`` / ``kd_output`` (what IdealPD damping gets after the notes/13 T5 conversion). Default
+    ``kd_side="output"`` keeps ``kd_sim == kd`` (bit-match with pre-item-60 twins).
+    """
+    side = normalize_kd_side(kd_side)
     if map_name not in JOINT_MOTOR_MAPS:
         raise ValueError(f"unknown motor map {map_name!r}; known: {sorted(JOINT_MOTOR_MAPS)}")
     jm = JOINT_MOTOR_MAPS[map_name]
@@ -347,10 +406,10 @@ def joint_hw_params(map_name: str = "user_2026_09_25") -> dict[str, dict]:
     for name in MOTOR_NAMES:
         m = MOTOR_MODELS[jm[name]]
         kp, kd = HW_GAINS[JOINT_ROLES[name]]
-        if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
-            raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
-        out[name] = {**asdict(m), "model": m.name, "armature": m.armature, "armature_alt": m.armature_alt,
-                     "role": JOINT_ROLES[name], "kp": kp, "kd": kd}
+        _check_motion_mode_gains(name, kp, kd, kd_side=side)
+        base = {**asdict(m), "model": m.name, "armature": m.armature, "armature_alt": m.armature_alt,
+                "role": JOINT_ROLES[name]}
+        out[name] = _with_gains(base, kp, kd, side)
     return out
 
 
@@ -410,9 +469,11 @@ def explicit_pd_spectral_radius(kp: float, kd: float, inertia: float, dt: float 
 
 
 def joints_unstable_at_alt(map_name: str = "user_2026_09_25", dt: float = ARMATURE_DR_PHYSICS_DT,
-                           joints: tuple[str, ...] | list[str] | None = None) -> list[str]:
-    """Joints in ``joints`` (default critical set) whose explicit PD at ``dt`` has rho>1 at the alt armature."""
-    params = joint_hw_params(map_name)
+                           joints: tuple[str, ...] | list[str] | None = None,
+                           *, kd_side: str | None = None) -> list[str]:
+    """Joints in ``joints`` (default critical set) whose explicit PD at ``dt`` has rho>1 at the alt armature.
+    Uses ``kd_sim`` (IdealPD damping after kd_side conversion), not the raw field kd."""
+    params = joint_hw_params(map_name, kd_side=kd_side)
     want = list(joints) if joints is not None else list(ARMATURE_DR_CRITICAL_JOINTS)
     bad: list[str] = []
     for name in want:
@@ -420,7 +481,7 @@ def joints_unstable_at_alt(map_name: str = "user_2026_09_25", dt: float = ARMATU
         if alt is None:
             continue
         J = link_inertia_at_rest(name) + float(alt)
-        if explicit_pd_spectral_radius(params[name]["kp"], params[name]["kd"], J, dt) > 1.0:
+        if explicit_pd_spectral_radius(params[name]["kp"], params[name]["kd_sim"], J, dt) > 1.0:
             bad.append(name)
     return bad
 
@@ -460,21 +521,23 @@ def sample_armature_log_uniform(ranges: dict[str, tuple[float, float]], n_envs: 
 def armature_dr_group_plan(map_name: str = "user_2026_09_25", *,
                            gain_overrides: dict[str, tuple[float, float]] | None = None,
                            critical: tuple[str, ...] | list[str] | None = None,
-                           implicit: tuple[str, ...] | list[str] | None = None) -> dict:
+                           implicit: tuple[str, ...] | list[str] | None = None,
+                           kd_side: str | None = None) -> dict:
     """Isaac-free plan for an armature-DR hw profile (notes/13 T2-T3).
 
     Returns ``explicit`` (model -> joint list for DatasheetMotor), ``implicit`` (joint -> cfg dict for ImplicitActuator),
     ``ranges`` (joint -> (alt, datasheet)), ``spawn_armature`` (geometric mean for the ImplicitActuator default).
+    ImplicitActuator ``kd`` is ``kd_sim`` (IdealPD damping after kd_side conversion).
     """
     import math
 
-    params = joint_hw_params(map_name)
+    side = normalize_kd_side(kd_side)
+    params = joint_hw_params(map_name, kd_side=side)
     for name, (kp, kd) in (gain_overrides or {}).items():
         if name not in params:
             raise ValueError(f"gain override for unknown motor {name!r}")
-        if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
-            raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
-        params[name] = {**params[name], "kp": float(kp), "kd": float(kd)}
+        _check_motion_mode_gains(name, float(kp), float(kd), kd_side=side)
+        params[name] = _with_gains(params[name], float(kp), float(kd), side)
     crit = set(critical if critical is not None else ARMATURE_DR_CRITICAL_JOINTS)
     imp = set(implicit if implicit is not None else ARMATURE_DR_IMPLICIT_JOINTS)
     if not imp.issubset(crit):
@@ -489,13 +552,14 @@ def armature_dr_group_plan(map_name: str = "user_2026_09_25", *,
             spawn_a = math.exp(0.5 * (math.log(lo) + math.log(hi)))  # geometric mean
             spawn[joint] = spawn_a
             implicit_cfg[joint] = {
-                "kp": float(p["kp"]), "kd": float(p["kd"]), "effort": float(p["peak_torque"]),
+                "kp": float(p["kp"]), "kd": float(p["kd_sim"]), "effort": float(p["peak_torque"]),
                 "armature": spawn_a, "armature_range": (lo, hi), "model": p["model"],
+                "kd_field": float(p["kd"]), "kd_side": side,
             }
         else:
             explicit.setdefault(p["model"], []).append(joint)
     return {"explicit": explicit, "implicit": implicit_cfg, "ranges": ranges, "spawn_armature": spawn,
-            "critical": sorted(crit), "implicit_joints": sorted(imp)}
+            "critical": sorted(crit), "implicit_joints": sorted(imp), "kd_side": side}
 
 
 def hw_motor_torque(tau_pd, dq, peak, saturation, no_load_speed, coulomb, viscous, friction_vel_eps: float = 0.05):

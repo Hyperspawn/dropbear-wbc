@@ -185,24 +185,35 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
                          gain_overrides: dict[str, tuple[float, float]] | None = None,
                          stop_model: bool = False,
                          knee_band: tuple[float, float] | None = None,
-                         armature_dr: bool = False) -> dict:
+                         armature_dr: bool = False,
+                         kd_side: str | None = None) -> dict:
     """One :class:`DatasheetMotorCfg` group per motor model of ``map_name`` (group name ``hw_<model>``).
-    ``gain_overrides``: motor name -> (kp, kd) replacing the role gains (checked against the motion-mode limits).
+    ``gain_overrides``: motor name -> (kp, kd_FIELD) replacing the role gains (checked against the motion-mode limits).
+    ``kd_side``: ``"output"`` (default) or ``"motor"`` — IdealPD ``damping`` uses ``kd_sim`` after the notes/13 T5
+    conversion (field kd, or field kd x gear_ratio). Pass via ``HW_PROFILE_OPTIONS[...]["kd_side"]``.
     ``armature_dr``: put :data:`ARMATURE_DR_IMPLICIT_JOINTS` on ImplicitActuator (stable at the alt armature under
     explicit 5 ms PD) and leave the rest on DatasheetMotor; callers must also install the armature DR EventTerm
     (``DropbearFlatEnvCfg.enable_armature_dr``). The explicit stop model and the knee band act on the DatasheetMotor
     groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits."""
-    from .hw_motor_specs import MOTION_MODE_LIMITS, STOP_MODEL, armature_dr_group_plan, motor_stop_limits
+    from .hw_motor_specs import (
+        STOP_MODEL,
+        _check_motion_mode_gains,
+        _with_gains,
+        armature_dr_group_plan,
+        motor_stop_limits,
+        normalize_kd_side,
+    )
 
-    params = joint_hw_params(map_name)
+    side = normalize_kd_side(kd_side)
+    params = joint_hw_params(map_name, kd_side=side)
     for name, (kp, kd) in (gain_overrides or {}).items():
         if name not in params:
             raise ValueError(f"gain override for unknown motor {name!r}")
-        if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
-            raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
-        params[name] = {**params[name], "kp": float(kp), "kd": float(kd)}
+        _check_motion_mode_gains(name, float(kp), float(kd), kd_side=side)
+        params[name] = _with_gains(params[name], float(kp), float(kd), side)
 
-    plan = armature_dr_group_plan(map_name, gain_overrides=gain_overrides) if armature_dr else None
+    plan = (armature_dr_group_plan(map_name, gain_overrides=gain_overrides, kd_side=side)
+            if armature_dr else None)
     by_model: dict[str, list[str]] = {}
     if plan is None:
         for joint, p in params.items():
@@ -224,7 +235,8 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             velocity_limit_sim=per_joint("no_load_speed", VELOCITY_LIMIT_SIM_FACTOR),
             saturation_effort=per_joint("saturation_effort"),
             stiffness=per_joint("kp"),
-            damping=per_joint("kd"),
+            # IdealPD damping = kd_sim (field kd, or field*N when kd_side="motor"); notes/13 T5 / item 60
+            damping=per_joint("kd_sim"),
             armature=per_joint("armature"),
             friction=0.0,
             coulomb_friction=per_joint("coulomb_friction"),
@@ -267,7 +279,7 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             joint_names_expr=joints,
             effort_limit_sim={j: plan["implicit"][j]["effort"] for j in joints},
             stiffness={j: plan["implicit"][j]["kp"] for j in joints},
-            damping={j: plan["implicit"][j]["kd"] for j in joints},
+            damping={j: plan["implicit"][j]["kd"] for j in joints},  # already kd_sim from the plan
             armature={j: plan["implicit"][j]["armature"] for j in joints},
         )
     return groups
