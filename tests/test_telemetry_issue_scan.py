@@ -23,7 +23,7 @@ def _gait(t: np.ndarray, phase: float) -> np.ndarray:
     return ((t / 1.0 + phase) % 1.0) < 0.6
 
 
-def _write(path, *, knee_on_stop=False, knee_resting=False, skid=False, scuff=False):
+def _write(path, *, knee_on_stop=False, knee_resting=False, skid=False, scuff=False, elbow_hold=False, T=T):
     t = np.arange(T) * DT
     contact = np.stack([_gait(t, 0.0), _gait(t, 0.5)], axis=1)
     lim = np.tile(np.radians([-60.0, 60.0]), (N, 1))
@@ -39,6 +39,8 @@ def _write(path, *, knee_on_stop=False, knee_resting=False, skid=False, scuff=Fa
         tau[st, KNEE] = -60.0
     if knee_resting:  # right stance: knee on its flexion stop, motor idle (the stop carries the weight)
         q[contact[:, 1], KNEE] = lim[KNEE, 1]
+    if elbow_hold:  # right elbow held at 1.6x rated (straight arm raised) for 5 s inside the rollout, idle otherwise
+        tau[100:350, MOTOR_NAMES.index("RH_elbow_joint")] = 1.6 * 12.5
     sole = np.zeros((T, 2, 3))
     for k in range(2):  # the planted foot stays put; the swing foot moves 1.2 m/s forward
         x = 0.0
@@ -104,3 +106,22 @@ def test_knee_resting_on_its_stop_with_an_idle_motor_fails_the_gate(tmp_path):
     assert ("stop_rest", "RL_knee_actuator_joint") in _checks(r)
     assert ("stop_load", "RL_knee_actuator_joint") not in _checks(r)
     assert not r["hw_gate"]["pass"] and "stop_rest:RL_knee_actuator_joint" in r["hw_gate"]["fails"]
+
+
+ELBOW = "RH_elbow_joint"
+
+
+def test_held_raised_arm_is_sustained_not_thermal(tmp_path):
+    """A 5 s hold at 1.6x rated in a 20 s rollout: whole-rollout RMS is 0.8x (no thermal finding), the 5 s window
+    sees 1.6x -> sustained HIGH. Not an HW_GATE check (quality warning until a thermal model sets the window)."""
+    r = scan(_write(tmp_path / "hold.npz", elbow_hold=True, T=1000))
+    assert ("sustained", ELBOW) in _checks(r)
+    v = [f["value"] for f in r["findings"] if f["check"] == "sustained" and f["motor"] == ELBOW][0]
+    assert abs(v - 1.6) < 1e-6, v
+    assert not any(f["check"] == "thermal" and f["motor"] == ELBOW for f in r["findings"])
+    assert r["hw_gate"]["pass"], r["hw_gate"]
+
+
+def test_sustained_skipped_on_short_rollouts(tmp_path):
+    r = scan(_write(tmp_path / "short.npz", elbow_hold=True, T=360))  # 7.2 s < 1.5 x 5 s window
+    assert not any(f["check"] == "sustained" for f in r["findings"])
