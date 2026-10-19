@@ -38,9 +38,9 @@ parser.add_argument("--experiment_name", default=None)
 parser.add_argument("--log_root", type=Path, default=_REPO / "logs" / "rsl_rl")
 parser.add_argument("--save_interval", type=int, default=None)
 parser.add_argument("--solver_iters", type=int, nargs=2, default=None, metavar=("POS", "VEL"))
-parser.add_argument("--hw_regularizers", action="store_true",
+parser.add_argument("--hw_regularizers", action="store_true", default=None,
                     help="hw_* profiles: over-rated-torque (thermal) + torque-rate penalties (enable_hw_regularizers)")
-parser.add_argument("--knee_stop_penalty", type=float, default=0.0,
+parser.add_argument("--knee_stop_penalty", type=float, default=None,
                     help="with --hw_regularizers: weight (< 0) on the knee cranks sitting within 3 deg of a hard stop "
                          "(docs/ISSUES.md #19); pass as --knee_stop_penalty=-10")
 parser.add_argument("--target_clamp_margin_deg", type=float, default=None,
@@ -52,29 +52,34 @@ parser.add_argument("--action_rate_weight", type=float, default=None,
 parser.add_argument("--thermal_penalty", type=float, default=None,
                     help="with --hw_regularizers: motor_over_rated weight (< 0; default -2e-4). Stronger keeps the 10 N*m "
                          "ankle and elbow motors under their rated torque; pass as --thermal_penalty=-2e-3")
-parser.add_argument("--feet_slide_penalty", type=float, default=0.0,
+parser.add_argument("--feet_slide_penalty", type=float, default=None,
                     help="with --hw_regularizers: weight (< 0) on sole planar speed while in ground contact (touchdown "
                          "skid, toe scuff; docs/ISSUES.md #20); pass as --feet_slide_penalty=-1")
-parser.add_argument("--anchor_height_weight", type=float, default=0.0,
+parser.add_argument("--anchor_height_weight", type=float, default=None,
                     help="reward on matching the reference head height (squat depth, jump height); 0 = off, try 1")
-parser.add_argument("--feet_height_weight", type=float, default=0.0,
+parser.add_argument("--feet_height_weight", type=float, default=None,
                     help="reward on matching the reference foot heights (foot lift, one-leg stance, flight); 0 = off, try 1")
 parser.add_argument("--body_pos_std", type=float, default=None,
                     help="tolerance [m] of the body-position tracking term (default 0.3); smaller = stricter")
-parser.add_argument("--joint_pos_weight", type=float, default=0.0,
+parser.add_argument("--joint_pos_weight", type=float, default=None,
                     help="reward on matching the reference motor angles; 0 = off, try 1")
 parser.add_argument("--end_threshold_m", type=float, default=None,
                     help="end the episode when the head / a foot / a hand height is this far off [m] (default 0.25)")
-parser.add_argument("--stop_model", action="store_true",
+parser.add_argument("--stop_model", action="store_true", default=None,
                     help="model the motor joints' end stops explicitly (stop loads measured, needed by --stop_load_penalty)")
-parser.add_argument("--stop_load_penalty", type=float, default=0.0,
+parser.add_argument("--stop_load_penalty", type=float, default=None,
                     help="weight (< 0) on end-stop torque above a safe value (knee 40 N*m); pass as --stop_load_penalty=-5")
-parser.add_argument("--impact_penalty", type=float, default=0.0,
+parser.add_argument("--impact_penalty", type=float, default=None,
                     help="weight (< 0) on foot contact force above 900 N per foot body; pass as --impact_penalty=-0.005")
 parser.add_argument("--knee_band", default=None,
                     help="'stiffness,engage_deg': an elastic beside each knee motor (N*m/rad on the crank, crank angle)")
 parser.add_argument("--actuator_profile", default=None,
-                    help="legacy (default) or a real-actuator twin profile hw_v1 / hw_v1_cad (docs/archive/ACTUATORS_HISTORY.md 11)")
+                    help="legacy / legacy_hwarm or a real-actuator twin profile hw_v1 / hw_v1ie / hw_v1_cad "
+                    "(docs/ACTUATORS.md). Default: the task's (legacy; hw_v1ie for the NoState tasks). With "
+                    "--continue_run every unset run setting (profile, hw regularizers + penalties, target clamp, action "
+                    "rate, stop model, knee band, safety penalties, tracking strictness, height rewards) is inherited from the run's latest run_info")
+parser.add_argument("--allow_settings_change", action="store_true",
+                    help="with --continue_run: allow a run setting that differs from the run's recorded one")
 parser.add_argument("--logger", choices=("tensorboard", "wandb", "neptune"), default=None)
 parser.add_argument("--resume", action="store_true", help="resume from --load_run/--checkpoint")
 parser.add_argument("--load_run", default=None, help="run dir name under <log_root>/<experiment>")
@@ -138,29 +143,40 @@ def main() -> int:
         env_cfg.set_num_envs(args.num_envs)
     if args.solver_iters is not None:
         env_cfg.set_solver_iterations(*args.solver_iters)
-    if args.actuator_profile is not None:
-        env_cfg.set_actuator_profile(args.actuator_profile)
-    if args.stop_model or args.stop_load_penalty:
+    # run-defining settings: a --continue_run chunk inherits what its command line leaves out (run_settings.py)
+    from dropbear_wbc.tasks.tracking.run_settings import latest_run_info, resolve_run_settings
+
+    exp_name = args.experiment_name or agent_cfg.experiment_name
+    prev_info = (latest_run_info((args.log_root / exp_name / args.load_run).resolve())
+                 if args.continue_run and args.load_run else None)
+    rs, rs_notes = resolve_run_settings(vars(args), prev_info, continue_run=args.continue_run,
+                                        allow_change=args.allow_settings_change)
+    for note in rs_notes:
+        print(f"[INFO] run setting {note}", flush=True)
+    if rs["actuator_profile"] is not None:
+        env_cfg.set_actuator_profile(rs["actuator_profile"])
+    print(f"[INFO] actuator profile: {getattr(env_cfg, 'actuator_profile', 'legacy')}", flush=True)
+    if rs["stop_model"] or rs["stop_load_penalty"]:
         env_cfg.enable_stop_model()
-    if args.knee_band:
-        k, q0 = (float(x) for x in args.knee_band.split(","))
+    if rs["knee_band"]:
+        k, q0 = (float(x) for x in str(rs["knee_band"]).split(","))
         env_cfg.enable_knee_band(k, q0)
-    if args.stop_load_penalty or args.impact_penalty:
-        env_cfg.enable_safety_penalties(stop_load=float(args.stop_load_penalty), impact=float(args.impact_penalty))
-    if args.target_clamp_margin_deg is not None:
-        env_cfg.clamp_targets_to_limits(args.target_clamp_margin_deg)
-    if args.action_rate_weight is not None:
-        env_cfg.rewards.action_rate_l2.weight = float(args.action_rate_weight)
-    if args.hw_regularizers:
-        env_cfg.enable_hw_regularizers(knee_stop=float(args.knee_stop_penalty), feet_slide=float(args.feet_slide_penalty),
-                                       **({} if args.thermal_penalty is None else {"thermal": float(args.thermal_penalty)}))
-    elif args.knee_stop_penalty or args.feet_slide_penalty or args.thermal_penalty is not None:
+    if rs["stop_load_penalty"] or rs["impact_penalty"]:
+        env_cfg.enable_safety_penalties(stop_load=float(rs["stop_load_penalty"]), impact=float(rs["impact_penalty"]))
+    if rs["target_clamp_margin_deg"] is not None:
+        env_cfg.clamp_targets_to_limits(rs["target_clamp_margin_deg"])
+    if rs["action_rate_weight"] is not None:
+        env_cfg.rewards.action_rate_l2.weight = float(rs["action_rate_weight"])
+    if rs["hw_regularizers"]:
+        env_cfg.enable_hw_regularizers(knee_stop=float(rs["knee_stop_penalty"]), feet_slide=float(rs["feet_slide_penalty"]),
+                                       **({} if rs["thermal_penalty"] is None else {"thermal": float(rs["thermal_penalty"])}))
+    elif rs["knee_stop_penalty"] or rs["feet_slide_penalty"] or rs["thermal_penalty"] is not None:
         raise SystemExit("--knee_stop_penalty / --feet_slide_penalty / --thermal_penalty need --hw_regularizers")
-    if args.body_pos_std is not None or args.joint_pos_weight or args.end_threshold_m is not None:
-        env_cfg.set_tracking_strictness(body_pos_std=args.body_pos_std, joint_pos=float(args.joint_pos_weight),
-                                        end_threshold_m=args.end_threshold_m)
-    if args.anchor_height_weight or args.feet_height_weight:
-        env_cfg.enable_height_tracking(anchor=float(args.anchor_height_weight), feet=float(args.feet_height_weight))
+    if rs["body_pos_std"] is not None or rs["joint_pos_weight"] or rs["end_threshold_m"] is not None:
+        env_cfg.set_tracking_strictness(body_pos_std=rs["body_pos_std"], joint_pos=float(rs["joint_pos_weight"]),
+                                        end_threshold_m=rs["end_threshold_m"])
+    if rs["anchor_height_weight"] or rs["feet_height_weight"]:
+        env_cfg.enable_height_tracking(anchor=float(rs["anchor_height_weight"]), feet=float(rs["feet_height_weight"]))
     if args.max_iterations is not None:
         agent_cfg.max_iterations = args.max_iterations
     if args.seed is not None:
@@ -259,19 +275,20 @@ def main() -> int:
         "usd_path": env_cfg.scene.robot.spawn.usd_path,
         "default_pose_source": env_cfg.default_pose_source,
         "actuator_profile": getattr(env_cfg, "actuator_profile", "legacy"),
-        "hw_regularizers": bool(args.hw_regularizers),
-        "knee_stop_penalty": float(args.knee_stop_penalty),
-        "feet_slide_penalty": float(args.feet_slide_penalty),
-        "thermal_penalty": args.thermal_penalty,
-        "stop_model": bool(args.stop_model or args.stop_load_penalty), "stop_load_penalty": float(args.stop_load_penalty),
-        "impact_penalty": float(args.impact_penalty), "knee_band": args.knee_band,
-        "body_pos_std": args.body_pos_std,
-        "joint_pos_weight": float(args.joint_pos_weight),
-        "end_threshold_m": args.end_threshold_m,
-        "anchor_height_weight": float(args.anchor_height_weight),
-        "feet_height_weight": float(args.feet_height_weight),
-        "target_clamp_margin_deg": args.target_clamp_margin_deg,
-        "action_rate_weight": args.action_rate_weight,
+        "hw_regularizers": bool(rs["hw_regularizers"]),
+        "knee_stop_penalty": float(rs["knee_stop_penalty"]),
+        "feet_slide_penalty": float(rs["feet_slide_penalty"]),
+        "thermal_penalty": rs["thermal_penalty"],
+        "stop_model": bool(rs["stop_model"] or rs["stop_load_penalty"]), "stop_load_penalty": float(rs["stop_load_penalty"]),
+        "impact_penalty": float(rs["impact_penalty"]), "knee_band": rs["knee_band"],
+        "body_pos_std": rs["body_pos_std"],
+        "joint_pos_weight": float(rs["joint_pos_weight"]),
+        "end_threshold_m": rs["end_threshold_m"],
+        "anchor_height_weight": float(rs["anchor_height_weight"]),
+        "feet_height_weight": float(rs["feet_height_weight"]),
+        "target_clamp_margin_deg": rs["target_clamp_margin_deg"],
+        "action_rate_weight": rs["action_rate_weight"],
+        "run_settings_notes": rs_notes,
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         "num_envs": env_cfg.scene.num_envs,

@@ -9,6 +9,12 @@ from dropbear_wbc.robots.dropbear import make_dropbear_cfg
 from ...tracking_env_cfg import TrackingEnvCfg
 
 
+DEPLOYABLE_TRACKING_PROFILE: str = "hw_v1ie"
+"""Default actuator profile of the NoState (deployable) tracking tasks: the profile of every deployable walk that
+passed the hardware gate (docs/OVERNIGHT_BREV_2026-09-25.md). ``legacy`` puts armature 0.01 on every body motor,
+2.1-2.4x under the datasheet calf/ankle inertia, with gains no motor can run (notes/13 T1)."""
+
+
 @configclass
 class DropbearFlatEnvCfg(TrackingEnvCfg):
     """Training config: 4096 envs by default, solver 32/4, calibration default pose if present."""
@@ -28,8 +34,9 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
         self.scene.robot = make_dropbear_cfg(prim_path="{ENV_REGEX_NS}/Robot", default_pose=pose)
 
     actuator_profile: str = "legacy"
-    """``legacy`` (the implicit groups every tracking policy so far was trained with) or a real-actuator twin profile
-    of ``robots.hw_motor_specs.HW_PROFILE_MAPS`` (docs/archive/ACTUATORS_HISTORY.md section 11)."""
+    """``legacy`` (the implicit groups of the state-observing tracking tasks), ``legacy_hwarm`` (legacy gains + the
+    datasheet armature, an A/B control) or a real-actuator twin profile of ``robots.hw_motor_specs.HW_PROFILE_MAPS``
+    (docs/archive/ACTUATORS_HISTORY.md section 11). The NoState (deployable) tasks default to :data:`DEPLOYABLE_TRACKING_PROFILE`."""
 
     target_clamp_margin_deg: float | None = None
     """Motor position targets clipped to the hard limits +- this [deg] (None = unclipped, every run through 2026-09-26)."""
@@ -214,14 +221,17 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
     def set_actuator_profile(self, name: str) -> None:
         """Switch the body-motor groups to ``legacy`` or an ``hw_*`` twin profile (neck and passive groups unchanged)."""
         from dropbear_wbc.robots.hw_actuators import legacy_motor_groups, make_hw_profile_groups, set_motor_groups
-        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, LEGACY_HW_ARMATURE_PROFILES
 
         if name == "legacy":
             set_motor_groups(self.scene.robot.actuators, legacy_motor_groups())
+        elif name in LEGACY_HW_ARMATURE_PROFILES:
+            set_motor_groups(self.scene.robot.actuators, legacy_motor_groups(LEGACY_HW_ARMATURE_PROFILES[name]))
         elif name in HW_PROFILE_MAPS:
             set_motor_groups(self.scene.robot.actuators, make_hw_profile_groups(name))
         else:
-            raise ValueError(f"unknown tracking actuator profile {name!r}; known: legacy, {sorted(HW_PROFILE_MAPS)}")
+            raise ValueError(f"unknown tracking actuator profile {name!r}; known: legacy, "
+                             f"{sorted(LEGACY_HW_ARMATURE_PROFILES)}, {sorted(HW_PROFILE_MAPS)}")
         self.actuator_profile = name
         self._set_motor_mass_offsets(name)
 

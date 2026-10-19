@@ -273,6 +273,22 @@ def motor_stop_limits() -> dict[str, tuple[float, float]]:
     return {m: (float(lo), float(hi)) for m, (lo, hi) in zip(cal["motor_names"], cal["motor_limits_rad"])}
 
 
+LEGACY_HW_ARMATURE_PROFILES: dict[str, str] = {
+    "legacy_hwarm": "user_2026_09_25",
+}
+"""Tracking profiles that keep the LEGACY implicit groups (gains, effort limits) but put each motor's datasheet armature
+(rotor x ratio^2 of this motor map) on it instead of 0.01 kg*m^2 (notes/13 T1). Not a hardware twin: no envelope,
+friction or delay, and no motor map for the scoreboard; it isolates the armature effect for an A/B against ``legacy``."""
+
+
+def legacy_group_armature(map_name: str = "user_2026_09_25") -> dict[str, dict[str, float]]:
+    """Legacy group name -> {motor: armature of ``map_name``} for the four body-motor groups."""
+    from .dropbear_names import ACTUATOR_GROUP_MOTORS
+
+    params = joint_hw_params(map_name)
+    return {g: {m: float(params[m]["armature"]) for m in motors} for g, motors in ACTUATOR_GROUP_MOTORS.items()}
+
+
 LATENCY_STEPS: tuple[int, int] = (0, 2)
 """Position-target delay range in physics steps (dt 5 ms -> 0-10 ms: ESP32 + CAN round trip, unmeasured)."""
 FRICTION_SCALE_RANGE: tuple[float, float] = (0.5, 1.5)

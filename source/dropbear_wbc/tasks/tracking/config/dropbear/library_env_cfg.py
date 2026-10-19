@@ -16,7 +16,7 @@ from __future__ import annotations
 from isaaclab.utils import configclass
 
 from ...mdp.library_commands import library_command_from
-from .flat_env_cfg import DropbearFlatEnvCfg, DropbearFlatPlayEnvCfg
+from .flat_env_cfg import DEPLOYABLE_TRACKING_PROFILE, DropbearFlatEnvCfg, DropbearFlatPlayEnvCfg
 
 FUTURE_STEPS: tuple[int, ...] = (5, 10)
 """Future reference frames of the ``-Future`` tasks (policy-rate frames: +0.1 s, +0.2 s)."""
@@ -80,6 +80,8 @@ class DropbearLibraryNoStateEnvCfg(DropbearLibraryEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         drop_privileged_policy_obs(self)
+        # deployable: train on the real-actuator twin unless train.py --actuator_profile says otherwise (notes/13 T1)
+        self.set_actuator_profile(DEPLOYABLE_TRACKING_PROFILE)
 
 
 @configclass
@@ -97,6 +99,8 @@ class DropbearFlatNoStateEnvCfg(DropbearFlatEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         drop_privileged_policy_obs(self)
+        # deployable: train on the real-actuator twin unless train.py --actuator_profile says otherwise (notes/13 T1)
+        self.set_actuator_profile(DEPLOYABLE_TRACKING_PROFILE)
 
 
 @configclass

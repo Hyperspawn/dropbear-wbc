@@ -251,13 +251,19 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
     return groups
 
 
-def legacy_motor_groups() -> dict[str, ImplicitActuatorCfg]:
-    """The legacy implicit motor groups (``arms``/``hips``/``knees``/``ankles``) exactly as ``make_dropbear_cfg``."""
+def legacy_motor_groups(armature_map: str | None = None) -> dict[str, ImplicitActuatorCfg]:
+    """The legacy implicit motor groups (``arms``/``hips``/``knees``/``ankles``) exactly as ``make_dropbear_cfg``.
+    ``armature_map``: a motor map name; each motor then gets that map's datasheet armature instead of the legacy 0.01
+    (``hw_motor_specs.LEGACY_HW_ARMATURE_PROFILES``, notes/13 T1). Gains and effort limits stay legacy."""
+    from .hw_motor_specs import legacy_group_armature
+
+    per_motor = legacy_group_armature(armature_map) if armature_map else {}
     groups: dict[str, ImplicitActuatorCfg] = {}
     for group, motors in ACTUATOR_GROUP_MOTORS.items():
         effort, kp, kd, armature = ACTUATOR_PARAMS[group]
         groups[group] = ImplicitActuatorCfg(
-            joint_names_expr=list(motors), effort_limit_sim=effort, stiffness=kp, damping=kd, armature=armature
+            joint_names_expr=list(motors), effort_limit_sim=effort, stiffness=kp, damping=kd,
+            armature=dict(per_motor[group]) if armature_map else armature,
         )
     return groups
 
