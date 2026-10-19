@@ -263,6 +263,8 @@ def main() -> int:  # noqa: C901
         _mterm._update_metrics = _sampled_metrics
 
     summary: dict = {"checkpoint": str(ckpt), "motion_file": str(motion), "task": args.task, "num_envs": env.num_envs,
+                     "actuator_profile": profile,
+                     "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
                      "default_pose_source": env_cfg.default_pose_source, "default_pose_note": pose_note}
     cmd_term = env.unwrapped.command_manager.get_term("motion")
     if is_library:  # per-env clip (env i -> play clip i % N); T per env
@@ -277,6 +279,7 @@ def main() -> int:  # noqa: C901
         wrap_jump = float((cmd_term.motion.joint_pos[-1] - cmd_term.motion.joint_pos[0]).abs().max())
     summary["eval_design"] = {
         "policy": "deterministic (inference policy, mean action)",
+        "perturbed": bool(args.perturbed),
         "randomization": randomization,
         "seed": env_cfg.seed,
         "start": "frame 0 (start_at_zero), no RSI noise",
