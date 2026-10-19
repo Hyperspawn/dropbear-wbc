@@ -25,6 +25,13 @@ Example (hanging bench test, headless, 10 s of simulated time)::
 
     .venv-newton/Scripts/python.exe tools/newton_bridge.py --fixed-base --duration 10 \
         --report logs/sdk_bridge/bridge_fixed.json --trace logs/sdk_bridge/bridge_fixed_trace.npz
+
+Measured-sensor sim2sim (ages at policy rate; see ``--sensor-profile``)::
+
+    .venv-newton/Scripts/python.exe tools/newton_bridge.py --fixed-base --duration 10 \
+        --sensor-profile motion_mode --sensor-seed 0 \
+        --report logs/sdk_bridge/bridge_motion_mode.json
+    # or --sensor-profile center_0010 for the Dropbear-0010 FS/LSB set
 """
 from __future__ import annotations
 
@@ -106,6 +113,21 @@ def parse_args(argv=None) -> argparse.Namespace:
                     help="only for pure-CPU runs: --device cpu --mujoco-cpu with CUDA_VISIBLE_DEVICES=-1")
     ap.add_argument("--gpu-lock-held", action="store_true",
                     help="the caller (tools/gpu_lock_run.py) already holds .locks/gpu.lock; do not acquire it again")
+    from dropbear_wbc.newton_sim.sensor_model import PROFILES as _SENSOR_PROFILES
+    _profiles = sorted(_SENSOR_PROFILES)
+    ap.add_argument("--sensor-profile", default=None, choices=_profiles, metavar="NAME",
+                    help="apply SensorErrorModel profile to published LowState (measured sensors). "
+                         f"Choices: {', '.join(_profiles)}. Default: perfect sensors (no model). "
+                         "CRITICAL: SensorErrorModel ages are in POLICY ticks (see --sensor-policy-hz); "
+                         "the bridge advances the model once per policy step and holds measured "
+                         "quat/gyro/accel/motor q/dq between those steps. Calling the model every "
+                         "bridge tick (500 Hz) would shrink ages 10x (notes/39).")
+    ap.add_argument("--sensor-seed", type=int, default=None,
+                    help="RNG seed for SensorErrorModel episode sampling (default: nondeterministic)")
+    ap.add_argument("--sensor-policy-hz", type=float, default=50.0,
+                    help="rate at which SensorErrorModel is advanced [Hz] (default 50). "
+                         "Model tick_dt = 1/this; ages (e.g. IMU 0.35-1.7 steps) are in these ticks. "
+                         "Between advances the last measured sensors are reused for LowState")
     args = ap.parse_args(argv)
     if args.no_gpu_lock and not (args.device == "cpu" and args.mujoco_cpu
                                  and os.environ.get("CUDA_VISIBLE_DEVICES") == "-1"):
@@ -193,7 +215,22 @@ def main(argv=None) -> int:
         report["build_s"] = time.perf_counter() - t_build
         report["plant"] = plant.report
         tick_dt = cfg.tick_dt
-        asm = LowStateAssembler(tick_dt, publish_sim=not args.no_sim_block, body_names=bodies)
+        sensor_model = None
+        if args.sensor_profile is not None:
+            from dropbear_wbc.newton_sim.sensor_gate import PolicyGatedSensorModel, make_sensor_model, policy_steps_per_bridge
+            raw = make_sensor_model(args.sensor_profile, seed=args.sensor_seed, policy_hz=args.sensor_policy_hz)
+            spp = policy_steps_per_bridge(tick_dt, args.sensor_policy_hz)
+            sensor_model = PolicyGatedSensorModel(raw, spp)
+            report["sensor_profile"] = args.sensor_profile
+            report["sensor_seed"] = args.sensor_seed
+            report["sensor_policy_hz"] = args.sensor_policy_hz
+            report["sensor_steps_per_policy"] = spp
+            report["sensor_episode"] = {"imu_lag": raw.ep.imu_lag, "joint_lag": raw.ep.joint_lag}
+            print(f"[bridge] sensor-profile={args.sensor_profile} seed={args.sensor_seed} "
+                  f"policy_hz={args.sensor_policy_hz} steps/policy={spp} "
+                  f"imu_lag={raw.ep.imu_lag:.3f} joint_lag={raw.ep.joint_lag:.3f} policy-ticks", flush=True)
+        asm = LowStateAssembler(tick_dt, publish_sim=not args.no_sim_block, body_names=bodies,
+                                sensor_model=sensor_model)
 
         if args.viewer == "gl":
             import newton
@@ -232,7 +269,9 @@ def main(argv=None) -> int:
                 if time.perf_counter() - t_wait > args.wait_timeout_s:
                     raise TimeoutError(f"no LowCmd within {args.wait_timeout_s} s")
             report["waited_for_first_cmd_s"] = time.perf_counter() - t_wait
-            asm = LowStateAssembler(tick_dt, publish_sim=not args.no_sim_block, body_names=bodies)
+            # Same sensor_model instance: recreating the assembler must not reset the episode.
+            asm = LowStateAssembler(tick_dt, publish_sim=not args.no_sim_block, body_names=bodies,
+                                    sensor_model=sensor_model)
 
         # ---------------------------------------------------------------- main loop
         tick_wall, step_ms, cmd_lat_ticks, cmd_lat_ms, watchdog_events = [], [], [], [], []
