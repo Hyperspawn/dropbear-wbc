@@ -58,6 +58,7 @@ from dropbear_wbc.robots.dropbear_names import (
     ROOT_BODY,
     motor_param,
 )
+from dropbear_wbc.robots.mass_dr import LIMB_MASS_SCALE, ROOT_MASS_ADD_LOCOMOTION
 from dropbear_wbc.tasks.tracking.tracking_env_cfg import size_physx_buffers
 
 from . import mdp
@@ -196,9 +197,14 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=ROOT_BODY),
-            "mass_distribution_params": (-1.0, 2.0),
+            "mass_distribution_params": ROOT_MASS_ADD_LOCOMOTION,  # (-1, +6) kg; was (-1, +2) (notes/13 T4, item 59)
             "operation": "add",
         },
+    )
+    scale_limb_mass = EventTerm(
+        func=mdp.randomize_limb_mass_scale,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "scale_range": LIMB_MASS_SCALE},
     )
     # reset
     reset_robot = EventTerm(

@@ -111,6 +111,16 @@ def main() -> int:
     ap.add_argument("--hw_regularizers", action="store_true", help="scripts/train.py --hw_regularizers")
     ap.add_argument("--knee_stop_penalty", type=float, default=0.0, help="scripts/train.py --knee_stop_penalty (< 0)")
     ap.add_argument("--feet_slide_penalty", type=float, default=0.0, help="scripts/train.py --feet_slide_penalty (< 0)")
+    ap.add_argument("--thermal_penalty", type=float, default=None, help="scripts/train.py --thermal_penalty (< 0)")
+    ap.add_argument("--stop_model", action="store_true", help="train script --stop_model")
+    ap.add_argument("--stop_load_penalty", type=float, default=0.0, help="train script --stop_load_penalty (< 0)")
+    ap.add_argument("--impact_penalty", type=float, default=0.0, help="train script --impact_penalty (< 0)")
+    ap.add_argument("--knee_band", default=None, help="train script --knee_band 'stiffness,engage_deg'")
+    ap.add_argument("--body_pos_std", type=float, default=None, help="scripts/train.py --body_pos_std")
+    ap.add_argument("--joint_pos_weight", type=float, default=0.0, help="scripts/train.py --joint_pos_weight")
+    ap.add_argument("--end_threshold_m", type=float, default=None, help="scripts/train.py --end_threshold_m")
+    ap.add_argument("--anchor_height_weight", type=float, default=0.0, help="scripts/train.py --anchor_height_weight")
+    ap.add_argument("--feet_height_weight", type=float, default=0.0, help="scripts/train.py --feet_height_weight")
     ap.add_argument("--target_clamp_margin_deg", type=float, default=None, help="scripts/train.py --target_clamp_margin_deg")
     ap.add_argument("--action_rate_weight", type=float, default=None, help="scripts/train.py --action_rate_weight")
     ap.add_argument("--isaac_python", default=_paths.isaac_python(),
@@ -179,6 +189,26 @@ def main() -> int:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--knee_stop_penalty={args.knee_stop_penalty}"]
         if args.feet_slide_penalty:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--feet_slide_penalty={args.feet_slide_penalty}"]
+        if args.thermal_penalty is not None:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--thermal_penalty={args.thermal_penalty}"]
+        if args.stop_model:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--stop_model"]
+        if args.stop_load_penalty:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--stop_load_penalty={args.stop_load_penalty}"]
+        if args.impact_penalty:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--impact_penalty={args.impact_penalty}"]
+        if args.knee_band:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--knee_band", args.knee_band]
+        if args.body_pos_std is not None:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--body_pos_std={args.body_pos_std}"]
+        if args.joint_pos_weight:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--joint_pos_weight={args.joint_pos_weight}"]
+        if args.end_threshold_m is not None:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--end_threshold_m={args.end_threshold_m}"]
+        if args.anchor_height_weight:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--anchor_height_weight={args.anchor_height_weight}"]
+        if args.feet_height_weight:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--feet_height_weight={args.feet_height_weight}"]
         if args.target_clamp_margin_deg is not None:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--target_clamp_margin_deg={args.target_clamp_margin_deg}"]
         if args.action_rate_weight is not None:

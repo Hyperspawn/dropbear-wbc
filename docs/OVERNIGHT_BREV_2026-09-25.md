@@ -114,7 +114,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
   - Nominal eval at 32/4: **0 falls, body 5.6 cm, anchor 2.4 cm.**
   - The earlier laptop version, trained at 8/4, terminated at 3.64 s in every episode at 32/4. Training at the stricter
     solver fixed it, which confirms the solver-dependence lesson.
-- **12:00 IST: GPU2 and GPU3 moved to real-actuator walking** (`tools/brev/swap_to_hw_twin.sh`; docs/ACTUATORS.md
+- **12:00 IST: GPU2 and GPU3 moved to real-actuator walking** (`tools/brev/swap_to_hw_twin.sh`; docs/archive/ACTUATORS_HISTORY.md
   section 11).
   - **Why:** in a local zero-shot test the walker falls on the datasheet motors (18/18 within 1.2 s), so a better
     idealized walker has no hardware value.
@@ -129,7 +129,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
   - `vel_hw_v1_ft` `model_2600`: 0/18 falls; forward 0.3/0.5 m/s gives 0.24/0.45; turning ±0.5 gives +0.41/-0.46.
   - `vel_hw_v1_cad_ft` `model_2700`: 0/18 falls.
   - Both keep some motors above their RATED torque: the knee is pinned at peak, plus the left hip roll, right calf B and
-    left elbow run at 2-2.5x rated RMS. See ACTUATORS.md section 11.
+    left elbow run at 2-2.5x rated RMS. See archive/ACTUATORS_HISTORY.md section 11.
 - **12:51 IST: GPU3 switched to `vel_hw_v1_thermal_ft`** (`tools/brev/swap_gpu3_thermal.sh`).
   - This is `hw_v1` plus an over-rated-torque penalty of -2e-4, warm-started from `vel_hw_v1_ft/model_2786`.
   - The CAD A/B was stopped because it had answered its question: the CAD motors walk too and show the same pinned knee.
@@ -142,7 +142,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
     plateaued. Tracking stayed at 0.92 and episode length at about 995. The penalty reduced the over-rated torque but
     did not remove it.
   - The episode-length dips at iterations 2985/3184 (to about 13) are the known chunk-start logging artifact.
-- **13:55 IST: GPU2 and GPU3 switched to the gait fix** (docs/ACTUATORS.md section 12).
+- **13:55 IST: GPU2 and GPU3 switched to the gait fix** (docs/archive/ACTUATORS_HISTORY.md section 12).
   - **Why:** the user spotted a locked right knee. Telemetry shows the policy hops on its left leg, with the right knee
     crank commanded to -300 deg into its stop.
   - GPU2 `vel_hw_v1_gait_ft`: warm-started from `vel_hw_v1_thermal_ft/model_3500`.
@@ -215,7 +215,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
   - Crossing, v2 -> v5: clips with any crossed frame 20 -> 5; mean crossed frames 2.72 % -> 0.50 %; clips with more
     than 20 % narrow frames 6 -> 1.
 - **17:44 IST: GPU3 switched to `lafan_walk1_kneeX10S2`**, the knee-motor A/B against GPU1's `lafan_walk1_hw`
-  (ACTUATORS.md section 13). It replaces `kimodo_walk_w10_hw`, which was at iteration about 3200 with episode length
+  (archive/ACTUATORS_HISTORY.md section 13). It replaces `kimodo_walk_w10_hw`, which was at iteration about 3200 with episode length
   389 and body error 15 cm.
   - The first real-motor bent-knee walk (`lafan_walk_hw_3300`) had 0 falls, bent knees and uncrossed feet, but the
     CEM-60 knees were clipped 82-85 % of the time.
@@ -236,7 +236,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
 | 1 | `lafan_walk1_hw` (the knee A/B baseline, CEM-60) |
 | 2 | `lib_nostate_hw_v5` |
 | 3 | `lafan_walk1_kneeX10S2` (knee A/B) |
-- **18:55 IST: the knee A/B gave a clear result** (ACTUATORS.md section 13; DECISIONS 2026-09-25 18:55).
+- **18:55 IST: the knee A/B gave a clear result** (archive/ACTUATORS_HISTORY.md section 13; DECISIONS 2026-09-25 18:55).
   - CEM-60 knee: clipped 82-85 % of the time, 1.65x rated.
   - X10-S2 knee: clipped 14 %, 1.03-1.15x rated, body error 5.1 vs 10.0 cm.
   - Dashboard: `logs/brev/media/lafan_walk_kneeX10S2_3100_dashboard.mp4`.
@@ -262,7 +262,7 @@ driver works through the Linux launcher. Warp prints a harmless `cuDeviceGetUuid
 | 3 | `lafan_walk1_hw_reg` |
 - **20:50 IST: `lafan_walk_hw_reg_4700`** (LAFAN walk, CEM-60, regularizers).
   - The knees are still over rating: 1.30 / 1.57x, clipped 41 / 72 %.
-  - The crouched gait needs more knee torque than the CEM-60 has. The upright ASAP gait fits (ACTUATORS.md section 13).
+  - The crouched gait needs more knee torque than the CEM-60 has. The upright ASAP gait fits (archive/ACTUATORS_HISTORY.md section 13).
 - **20:53 IST: GPU3 switched to `asap_walk_nostate_hw_reg`, trained from scratch.**
   - This is the ASAP walk on the new single-clip no-state task `Dropbear-Tracking-Flat-NoState-v0`. The policy obs
     are 119, without `motion_anchor_pos_b` and `base_lin_vel`; the critic keeps 251.

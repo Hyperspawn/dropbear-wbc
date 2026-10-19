@@ -1,0 +1,433 @@
+<title>Dropbear Actuator Map</title>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hubot+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working screen. 3D robot on the left, inspector rail on the right; stacked on phones.
+   Single dark look on purpose: a 3D viewport reads best on a dark ground. */
+:root {
+  color-scheme: dark;
+  --bg: #0c0e11;
+  --panel: #13161b;
+  --raise: #1a1e25;
+  --line: #262b34;
+  --fg: #e7e9ec;
+  --muted: #8d95a3;
+  --faint: #5d6573;
+  --cem: #ff6a57;
+  --x8v4: #6fd39a;
+  --x10v4: #f0a33c;
+  --x10: #3cc4e4;
+  --x8: #a98dff;
+  --none: #5d6573;
+  --neck: #9db59e;
+  --warn: #f5c84b;
+  --warn-bg: rgba(245, 200, 75, 0.08);
+  --font: "Hubot Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); margin: 0; }
+.app { display: flex; height: 100%; min-height: 0; }
+.stage { position: relative; flex: 1; min-width: 0; }
+#view { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tag { position: absolute; white-space: nowrap; font-size: 11.5px; font-weight: 500; padding: 1px 6px; border-radius: 3px;
+  background: rgba(12, 14, 17, 0.8); color: var(--fg); border-left: 2px solid var(--c); pointer-events: auto; cursor: pointer; }
+.tag.sel { font-size: 13px; font-weight: 600; background: rgba(12, 14, 17, 0.95); }
+.tag.dim { opacity: 0.35; }
+.tag.none { color: var(--muted); border-left-style: dashed; }
+.tag.target { border-left-style: dashed; color: var(--muted); font-weight: 400; pointer-events: none; }
+.hud { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  right: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: 500 12px var(--font); color: var(--fg); background: rgba(19, 22, 27, 0.9); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--fg); }
+button:focus-visible, .row:focus-visible, .tag:focus-visible { outline: 2px solid var(--x10); outline-offset: 1px; }
+.status { position: absolute; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  color: var(--faint); font: 11px var(--mono); }
+aside { width: 420px; flex: none; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto;
+  padding-block: 18px 28px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+.mono, code { font-family: var(--mono); font-size: 11.5px; }
+h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--raise); padding: 4px; border-radius: 8px; }
+.seg button { background: transparent; border: 1px solid transparent; padding: 7px 6px; font-size: 12px; line-height: 1.25; }
+.seg button[aria-pressed="true"] { background: var(--panel); border-color: var(--line); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); font-size: 12.5px; vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+th.cur, td.cur { background: rgba(255, 255, 255, 0.035); }
+td.k { color: var(--muted); white-space: nowrap; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: 0; }
+.dot.hollow { background: transparent; border: 1.5px dashed var(--c); }
+.qs { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; }
+.qs li::marker { color: var(--warn); }
+.group { margin-top: 12px; }
+.group h3 { font-size: 12.5px; font-weight: 600; margin: 0 0 4px; color: var(--muted); }
+.row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 5px; cursor: pointer; }
+.row:hover { background: var(--raise); }
+.row.sel { background: var(--raise); box-shadow: inset 2px 0 0 var(--c); }
+.row .nm { min-width: 0; }
+.row .nm small { color: var(--faint); font-family: var(--mono); font-size: 10.5px; display: block; overflow: hidden; text-overflow: ellipsis; }
+.row .spec { color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.row .spec b { color: var(--fg); font-weight: 500; }
+.card { background: var(--raise); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-top: 8px; }
+.card h3 { font-size: 17px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.card .who { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.cmp { margin-top: 10px; }
+.note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
+.notes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.notes li { font-size: 12.5px; padding: 6px 8px; border-radius: 5px; background: var(--warn-bg); border-left: 2px solid var(--warn); }
+.empty { color: var(--muted); font-size: 13px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; }
+@media (max-width: 860px) {
+  .app { flex-direction: column; height: auto; }
+  .stage { height: 58vh; min-height: 340px; flex: none; }
+  aside { width: auto; border-left: 0; border-top: 1px solid var(--line); overflow: visible;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <div class="stage">
+    <canvas id="view" aria-label="3D view of the robot with its motors marked"></canvas>
+    <div class="labels" id="labels"></div>
+    <div class="hud">
+      <button id="bLabels" aria-pressed="true">Labels</button>
+      <button id="bAxes" aria-pressed="true">Rotation axes</button>
+      <button id="bXray" aria-pressed="true">See-through body</button>
+      <button id="bFront">Front</button>
+      <button id="bSide">Side</button>
+      <button id="bBack">Back</button>
+    </div>
+    <div class="status" id="status">loading the robot mesh…</div>
+  </div>
+  <aside>
+    <h1>Dropbear actuator map</h1>
+    <p class="sub" id="sub"></p>
+
+    <div class="seg" id="seg" role="group" aria-label="Which motors to show"></div>
+
+    <h2>The two builds</h2>
+    <div class="tablewrap"><table id="builds"></table></div>
+
+    <h2>Selected motor</h2>
+    <div id="detail"><p class="empty">Click a dot on the robot or a row below.</p></div>
+
+    <h2>All motors</h2>
+    <div class="legend" id="legend"></div>
+    <div id="list"></div>
+
+    <h2>Still to confirm</h2>
+    <ol class="qs">
+      <li><b>CEM-60 at 48 V:</b> its torque-speed curve. The sheet says 24 V, 4 A, 96 W, which can't give 60 N·m at 60 rpm.</li>
+      <li><b>CEM-60 gear ratio</b> (30:1 assumed, the drawing says 50:1), rotor inertia and back-drive torque.</li>
+      <li><b>X10-200:</b> price, and whether a CAN version exists (our bus is CAN).</li>
+      <li><b>V4 "Moment of Inertia":</b> rotor-side or not? It changes the simulated leg inertia.</li>
+      <li><b>On the robot:</b> where the shoulders and wrists stop, and the robot's weight.</li>
+    </ol>
+  </aside>
+</div>
+
+<script>window.DATA = /*__DATA__*/null;
+window.GLB_B64 = /*__GLB__*/"";</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const D = window.DATA;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const COLOR = { "CEM-60": "--cem", "X8-120": "--x8v4", "X10-200": "--x10v4", "X10 1:7": "--x10", "X8 Pro 1:9": "--x8" };
+const colorOfEntry = (e) => css(e ? COLOR[e.short] || "--fg" : "--none");
+const usd = (v) => (v == null ? "?" : "$" + v.toLocaleString("en-US"));
+let build = "robot";
+try { build = localStorage.getItem("dropbear-actuator-build") || "robot"; } catch (e) { /* storage blocked */ }
+if (!D.builds.some(([id]) => id === build)) build = "robot";
+
+document.getElementById("sub").innerHTML =
+  `Every motor at its real joint in the simulated robot (plant <span class="mono">${D.usd_sha256.slice(0, 8)}</span>). ` +
+  `Torque and speed are at the motor's output shaft. Switch views to compare the robot today with the two builds for the hips and knees.`;
+
+// ---------- build switch + summary ----------
+const seg = document.getElementById("seg");
+for (const [id, title] of D.builds) {
+  const b = document.createElement("button"); b.dataset.id = id; b.textContent = title;
+  b.onclick = () => setBuild(id); seg.appendChild(b);
+}
+function summaryTable() {
+  const ids = D.builds.map(([id]) => id);
+  const S = D.summary;
+  const head = `<tr><th></th>${ids.map((id) => `<th class="${id === build ? "cur" : ""}">${S[id].title.replace("Build ", "").replace(" · ", "<br>")}</th>`).join("")}</tr>`;
+  const cell = (id, html) => `<td class="${id === build ? "cur" : ""}">${html}</td>`;
+  const row = (k, f) => `<tr><td class="k">${k}</td>${ids.map((id) => cell(id, f(S[id], id))).join("")}</tr>`;
+  const dotted = (s) => `<span class="dot${s === "not installed" ? " hollow" : ""}" style="--c:${css(COLOR[s] || "--none")}"></span>${s}`;
+  const list = (o) => Object.entries(o).map(([k, n]) => `${n} × ${k}`).join("<br>") || "–";
+  let t = head;
+  for (const slot of ["Hip roll", "Hip pitch", "Knee"]) t += row(slot, (s) => dotted(s.slots[slot]));
+  t += row("To buy", (s) => list(s.buy));
+  t += row("Market price", (s) => (Object.keys(s.buy).length ? usd(s.market.usd) + (s.market.complete ? "" : " +") : "–"));
+  if (D.has_quotes) t += row("Your price", (s) => (Object.keys(s.buy).length ? usd(s.quote.usd) + (s.quote.complete ? "" : " + X10-200") : "–"));
+  t += row("Left over", (s) => list(s.spare));
+  t += row("Hip + knee motors", (s) => s.heavy_mass_kg + " kg");
+  t += row("Robot mass in sim", (s) => (s.plant_mass_kg ? s.plant_mass_kg + " kg" : "not simulated"));
+  document.getElementById("builds").innerHTML = t;
+}
+
+// ---------- list ----------
+const list = document.getElementById("list");
+function renderList() {
+  list.innerHTML = "";
+  for (const g of ["Left leg", "Right leg", "Left arm", "Right arm"]) {
+    const div = document.createElement("div"); div.className = "group"; div.innerHTML = `<h3>${g}</h3>`;
+    for (const m of D.motors.filter((x) => x.group === g)) {
+      const e = m.builds[build];
+      const r = document.createElement("div"); r.className = "row" + (m.id === selected ? " sel" : ""); r.tabIndex = 0; r.dataset.id = m.id;
+      r.style.setProperty("--c", colorOfEntry(e));
+      r.innerHTML = `<span class="dot${e ? "" : " hollow"}"></span><span class="nm">${m.label.replace(/^(Left|Right) /, "")}<small>${m.id}</small></span>` +
+        (e ? `<span class="spec"><b>${e.short}</b><br>${e.peak_nm} / ${e.rated_nm} N·m · ${e.rated_rpm} rpm</span>` : `<span class="spec"><b>not installed</b></span>`);
+      r.addEventListener("click", () => select(m.id, true));
+      r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(m.id, true); } });
+      div.appendChild(r);
+    }
+    list.appendChild(div);
+  }
+  const nd = document.createElement("div"); nd.className = "group";
+  nd.innerHTML = `<h3>Neck</h3><p class="note" style="margin:0">6 lead screws on NEMA 17 steppers (not MyActuator), held still in the sim.</p>`;
+  list.appendChild(nd);
+  const types = [...new Set(D.motors.map((m) => m.builds[build]?.short).filter(Boolean))];
+  document.getElementById("legend").innerHTML = types.map((ty) => `<span><span class="dot" style="--c:${css(COLOR[ty])}"></span>${ty}</span>`).join("") +
+    (D.motors.some((m) => !m.builds[build]) ? `<span><span class="dot hollow" style="--c:${css("--none")}"></span>not installed</span>` : "");
+}
+
+// ---------- detail ----------
+function detail(m) {
+  const e = m.builds[build];
+  const moves = m.moves.map((s) => `${s.name} (${s.range_deg[0]}° to ${s.range_deg[1]}°)`).join(", ");
+  const others = D.builds.filter(([id]) => id !== "robot").map(([id, title]) => {
+    const x = m.builds[id];
+    return `<tr><td>${title.split(" · ")[0]}</td><td><span class="dot" style="--c:${colorOfEntry(x)}"></span>${x.short}</td><td>${x.peak_nm} / ${x.rated_nm}</td><td>${x.rated_rpm}</td><td>${x.mass_kg} kg</td></tr>`;
+  }).join("");
+  const differs = m.heavy;
+  return `<div class="card" style="--c:${colorOfEntry(e)}">
+    <h3><span class="dot${e ? "" : " hollow"}"></span>${m.label}</h3>
+    <p class="who">“${m.user_name}” on your actuator sheet · USD joint <span class="mono">${m.id}</span></p>
+    ${e ? `<dl class="kv">
+      <dt>Motor</dt><dd>${e.model}</dd>
+      <dt>Gear ratio</dt><dd>${e.ratio}:1</dd>
+      <dt>Peak / rated torque</dt><dd>${e.peak_nm} / ${e.rated_nm} N·m</dd>
+      <dt>Rated / no-load speed</dt><dd>${e.rated_rpm} / ${e.no_load_rpm} rpm</dd>
+      ${e.joint_peak_nm ? `<dt>At the joint</dt><dd>${e.joint_peak_nm} peak / ${e.joint_rated_nm} rated N·m (through the linkage)</dd>` : ""}
+      <dt>Weight</dt><dd>${e.mass_kg} kg</dd>
+      <dt>Price</dt><dd>${usd(e.market_usd)} market${e.quote_usd ? ` · ${usd(e.quote_usd)} yours` : ""}</dd>
+      <dt>Rotor inertia</dt><dd>${e.armature} kg·m² at the output</dd>
+      <dt>Sim gains</dt><dd>kp ${e.kp} · kd ${e.kd}</dd>
+    </dl>` : `<p class="note" style="margin-top:0">Not installed yet. The butt is designed for a CEM-60. Build A puts a CEM-60 here, Build B an X8-120.</p>`}
+    <dl class="kv" style="margin-top:10px">
+      <dt>Moves</dt><dd>${moves || "–"}</dd>
+      <dt>Motor travel</dt><dd>${m.range_deg[0]}° to ${m.range_deg[1]}°</dd>
+      <dt>Turns about</dt><dd>body ${m.axis_class} axis${m.axis_off_deg > 0.5 ? `, tilted ${m.axis_off_deg}°` : ""}</dd>
+      <dt>Position</dt><dd class="mono">x ${m.pos[0].toFixed(3)} · y ${m.pos[1].toFixed(3)} · z ${m.pos[2].toFixed(3)} m</dd>
+      <dt>CAN id</dt><dd>${m.can_id ?? "–"}${m.can_id ? ` (frame 0x${(0x140 + m.can_id).toString(16)})` : ""}</dd>
+    </dl>
+    ${differs ? `<div class="tablewrap cmp"><table><tr><th>Build</th><th>Motor</th><th>Peak / rated N·m</th><th>rpm</th><th>Weight</th></tr>${others}</table></div>` : ""}
+    ${m.linkage ? `<p class="note"><b>${m.linkage.kind}.</b> ${m.linkage.note}</p>` : ""}
+    ${m.notes.length ? `<ul class="notes">${m.notes.map((f) => `<li>${f}</li>`).join("")}</ul>` : ""}
+  </div>`;
+}
+
+// ---------- 3D ----------
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(new THREE.Color(css("--bg")));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.02, 50);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xdfe6ef, 0x20242b, 1.15));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(2, 4, 3); scene.add(sun);
+const fill = new THREE.DirectionalLight(0x9fb4ff, 0.5); fill.position.set(-3, 2, -2); scene.add(fill);
+const world = new THREE.Group(); world.rotation.x = -Math.PI / 2; scene.add(world); // plant is Z-up, three.js Y-up
+const robot = new THREE.Group(); world.add(robot);
+const marks = new THREE.Group(); world.add(marks);
+const axesG = new THREE.Group(); world.add(axesG);
+const V = (p) => new THREE.Vector3(p[0], p[1], p[2]);
+
+const markerById = {};
+const sphereGeo = new THREE.SphereGeometry(0.019, 20, 14);
+for (const m of D.motors) {
+  const mat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true });
+  const s = new THREE.Mesh(sphereGeo, mat()); s.position.copy(V(m.pos)); s.renderOrder = 10; s.userData.id = m.id; marks.add(s);
+  const ax = V(m.axis).normalize();
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.16, 8), mat());
+  rod.material.opacity = 0.9; rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax); rod.position.copy(V(m.pos)); rod.renderOrder = 9; axesG.add(rod);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.003, 6, 40), mat());
+  ring.material.opacity = 0.75; ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax); ring.position.copy(V(m.pos)); ring.renderOrder = 9; axesG.add(ring);
+  markerById[m.id] = { sphere: s, rod, ring, lines: [] };
+}
+const driveOf = (m) => (m.id.includes("knee") ? `${m.side} knee` : m.id.includes("Revolute") ? `${m.side} ankle` : m.id.includes("elbow") ? `${m.side} elbow` : null);
+for (const [name, p] of Object.entries(D.targets)) {
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(css("--muted")), wireframe: true, depthTest: false, transparent: true }));
+  s.position.copy(V(p)); s.renderOrder = 8; marks.add(s);
+}
+for (const m of D.motors) {
+  const tgt = driveOf(m); if (!tgt) continue;
+  const g = new THREE.BufferGeometry().setFromPoints([V(m.pos), V(D.targets[tgt])]);
+  const l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.02, gapSize: 0.014, depthTest: false, transparent: true, opacity: 0.8 }));
+  l.computeLineDistances(); l.renderOrder = 8; axesG.add(l); markerById[m.id].lines.push(l);
+}
+for (const n of D.neck) {
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(css("--neck")), depthTest: false, transparent: true }));
+  s.position.copy(V(n.pos)); s.renderOrder = 10; marks.add(s);
+}
+function recolor() {
+  for (const m of D.motors) {
+    const e = m.builds[build], c = new THREE.Color(colorOfEntry(e)), mk = markerById[m.id];
+    for (const o of [mk.sphere, mk.rod, mk.ring, ...mk.lines]) o.material.color.copy(c);
+    mk.sphere.material.opacity = e ? 1 : 0.55; mk.sphere.material.wireframe = !e;
+  }
+}
+
+const labelsEl = document.getElementById("labels");
+const tags = D.motors.map((m) => {
+  const el = document.createElement("div"); el.className = "tag";
+  el.textContent = m.label.replace("Left", "L").replace("Right", "R");
+  el.addEventListener("click", () => select(m.id, false));
+  labelsEl.appendChild(el); return { m, el, pos: V(m.pos) };
+});
+const ttags = Object.entries(D.targets).map(([name, p]) => {
+  const el = document.createElement("div"); el.className = "tag target"; el.style.setProperty("--c", css("--muted"));
+  el.textContent = name + " (driven)"; labelsEl.appendChild(el); return { el, pos: V(p) };
+});
+function retag() {
+  for (const t of tags) {
+    const e = t.m.builds[build];
+    t.el.style.setProperty("--c", colorOfEntry(e)); t.el.classList.toggle("none", !e);
+  }
+}
+
+const loader = new GLTFLoader();
+const onGlb = (g) => {
+  let placed = 0;
+  g.scene.traverse((o) => {
+    const b = D.bodies[o.name];
+    if (b && o !== g.scene) { o.position.set(b.p[0], b.p[1], b.p[2]); o.quaternion.set(b.q[1], b.q[2], b.q[3], b.q[0]); placed++; }
+    if (o.isMesh) {
+      if (o.geometry.attributes.color) o.geometry.deleteAttribute("color");
+      if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      o.material = new THREE.MeshStandardMaterial({ color: 0xd9dde3, roughness: 0.7, metalness: 0, transparent: true, opacity: 0.28, depthWrite: false });
+    }
+  });
+  robot.add(g.scene);
+  const box = new THREE.Box3().setFromObject(robot);
+  const grid = new THREE.GridHelper(4, 40, new THREE.Color(css("--line")), new THREE.Color(css("--line")));
+  grid.position.y = box.min.y; scene.add(grid);
+  resize();
+  document.getElementById("status").textContent = `${placed} bodies · drag to orbit, scroll to zoom`;
+  view("front");
+};
+const onErr = () => { document.getElementById("status").textContent = "Could not load the robot mesh; the motors are still shown."; view("front"); };
+if (window.GLB_B64) loader.parse(Uint8Array.from(atob(window.GLB_B64), (ch) => ch.charCodeAt(0)).buffer, "", onGlb, onErr);
+else loader.load("dropbear.glb", onGlb, undefined, onErr);
+
+function view(which) {
+  const c = new THREE.Vector3(0.0, 0.93, 0.07);
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
+  const d = 1.08 * Math.max(0.95 / Math.tan(vf), 0.55 / Math.tan(hf));
+  const dir = { front: [1, 0.12, 0], side: [0, 0.12, -1], back: [-1, 0.12, 0] }[which];
+  camera.position.set(c.x + d * dir[0], c.y + d * dir[1], c.z + d * dir[2]);
+  controls.target.copy(c); controls.update();
+}
+document.getElementById("bFront").onclick = () => view("front");
+document.getElementById("bSide").onclick = () => view("side");
+document.getElementById("bBack").onclick = () => view("back");
+const toggle = (id, fn) => { const b = document.getElementById(id); b.onclick = () => { const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", on); fn(on); }; };
+toggle("bXray", (on) => robot.traverse((o) => { if (o.isMesh) { o.material.opacity = on ? 0.28 : 1; o.material.transparent = on; o.material.depthWrite = !on; o.material.needsUpdate = true; } }));
+let showLabels = true; toggle("bLabels", (on) => { showLabels = on; });
+toggle("bAxes", (on) => { axesG.visible = on; });
+
+let selected = null;
+const byId = Object.fromEntries(D.motors.map((m) => [m.id, m]));
+function select(id, focus) {
+  selected = id;
+  document.getElementById("detail").innerHTML = detail(byId[id]);
+  document.querySelectorAll(".row").forEach((r) => r.classList.toggle("sel", r.dataset.id === id));
+  for (const [k, mk] of Object.entries(markerById)) mk.sphere.scale.setScalar(k === id ? 1.7 : 1);
+  if (focus) {
+    const p = V(byId[id].pos).applyMatrix4(world.matrixWorld);
+    const off = camera.position.clone().sub(controls.target); off.setLength(Math.min(off.length(), 1.5));
+    controls.target.copy(p); camera.position.copy(p).add(off); controls.update();
+  }
+}
+function setBuild(id) {
+  build = id;
+  try { localStorage.setItem("dropbear-actuator-build", id); } catch (e) { /* storage blocked */ }
+  seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.id === id));
+  summaryTable(); renderList(); recolor(); retag();
+  if (selected) document.getElementById("detail").innerHTML = detail(byId[selected]);
+}
+const ray = new THREE.Raycaster(); const ptr = new THREE.Vector2(); let down = null;
+canvas.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", (e) => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+  const r = canvas.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(Object.values(markerById).map((m) => m.sphere))[0];
+  if (hit) select(hit.object.userData.id, false);
+});
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+}
+const tmp = new THREE.Vector3();
+function layout(items) { // labels left of centre go left, right of centre go right; overlapping ones are pushed apart
+  const W = canvas.clientWidth, H = canvas.clientHeight, GAP = 15, shown = [];
+  for (const it of items) {
+    if (!it.visible) { it.el.style.display = "none"; continue; }
+    tmp.copy(it.pos).applyMatrix4(world.matrixWorld).project(camera);
+    if (tmp.z > 1) { it.el.style.display = "none"; continue; }
+    it.x = ((tmp.x + 1) / 2) * W; it.y = ((1 - tmp.y) / 2) * H; it.left = it.x < W / 2; shown.push(it);
+  }
+  for (const side of [true, false]) {
+    let last = -1e9;
+    for (const s of shown.filter((x) => x.left === side).sort((a, b) => a.y - b.y)) { s.ly = Math.max(s.y, last + GAP); last = s.ly; }
+  }
+  for (const s of shown) {
+    s.el.style.display = ""; s.el.style.left = s.x + "px"; s.el.style.top = s.ly + "px";
+    s.el.style.transform = s.left ? "translate(calc(-100% - 10px), -50%)" : "translate(10px, -50%)";
+  }
+}
+function frame() {
+  resize(); controls.update(); world.updateMatrixWorld();
+  const items = [];
+  for (const t of tags) {
+    const isSel = t.m.id === selected;
+    t.visible = showLabels || isSel; items.push(t);
+    t.el.classList.toggle("sel", isSel); t.el.classList.toggle("dim", !!selected && !isSel);
+  }
+  for (const t of ttags) { t.visible = showLabels; items.push(t); }
+  layout(items);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+setBuild(build);
+view("front");
+requestAnimationFrame(frame);
+</script>

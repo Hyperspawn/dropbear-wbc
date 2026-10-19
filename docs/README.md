@@ -17,7 +17,8 @@
 |---|---|
 | [CONTRACTS](CONTRACTS.md) | the binding interfaces: plant and fixes, motor contract, semantic joint space, motion CSV/NPZ schemas, tasks, SDK, policy sidecar |
 | [DECISIONS](DECISIONS.md) | dated architecture decisions and why |
-| [ACTUATORS](ACTUATORS.md) | the real motors: datasheets, the CAN protocol, the motor twin, gait shaping on real motors, the knee A/B |
+| [ROADMAP](ROADMAP.md) | the plan for a general-purpose Dropbear: the stack, the tracker's objective, the training recipe, next steps |
+| [ACTUATORS](ACTUATORS.md) | the motors on the robot, the two hip/knee builds being tested, motor data, how the sim models a motor, open questions |
 
 ## Topics
 

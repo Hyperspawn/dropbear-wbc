@@ -5,7 +5,11 @@ loop) with
 
 * a per-joint DC-motor torque-speed envelope (Isaac Lab ``DCMotor`` law, but with per-joint saturation effort),
 * Coulomb + viscous gearbox friction subtracted after the envelope (randomized per episode by a scale),
-* a per-episode random delay of the position/velocity/effort targets (``min_delay..max_delay`` physics steps).
+* a per-episode random delay of the position/velocity/effort targets (``min_delay..max_delay`` physics steps),
+* optionally an explicit end-stop spring past each joint's mechanical limit (``hw_motor_specs.STOP_MODEL``), whose torque
+  ``stop_effort`` is what the stop parts carry,
+* optionally a parallel elastic (an elastic band beside the motor, like a tendon): ``-k * max(0, q - engage)``, pushing
+  the joint back once it is past ``engage``; its torque ``spring_effort`` is not motor torque.
 
 ``applied_effort`` is the MOTOR torque (after the envelope, before friction), so ``robot.data.applied_torque`` shows
 what the motor delivers; ``friction_effort`` holds the friction torque of the last step.
@@ -55,6 +59,18 @@ class DatasheetMotor(IdealPDActuator):
         self._interp_n = int(cfg.target_interp_steps)
         self._last_tgt = None
         self._snap = torch.ones(self._num_envs, 1, dtype=torch.bool, device=self._device)
+        self.stop_effort = torch.zeros_like(self.computed_effort)
+        self.spring_effort = torch.zeros_like(self.computed_effort)
+        self._springs = cfg.spring_stiffness is not None
+        if self._springs:
+            self._spring_k = self._parse_joint_parameter(cfg.spring_stiffness, 0.0)
+            self._spring_q0 = self._parse_joint_parameter(cfg.spring_engage, 0.0)
+        self._stops = cfg.stop_stiffness is not None
+        if self._stops:
+            self._stop_lo = self._parse_joint_parameter(cfg.stop_lower, None)
+            self._stop_hi = self._parse_joint_parameter(cfg.stop_upper, None)
+            self._stop_k = self._parse_joint_parameter(cfg.stop_stiffness, None)
+            self._stop_d = self._parse_joint_parameter(cfg.stop_damping, 0.0)
 
     def reset(self, env_ids: Sequence[int]):
         super().reset(env_ids)
@@ -86,6 +102,15 @@ class DatasheetMotor(IdealPDActuator):
             self._coulomb * torch.tanh(joint_vel / self.cfg.friction_vel_eps) + self._viscous * joint_vel
         )
         out.joint_efforts = self.applied_effort - self.friction_effort
+        if self._stops:
+            below = torch.clamp(self._stop_lo - joint_pos, min=0.0)
+            above = torch.clamp(joint_pos - self._stop_hi, min=0.0)
+            touching = (below > 0) | (above > 0)
+            self.stop_effort[:] = self._stop_k * (below - above) - torch.where(touching, self._stop_d * joint_vel, 0.0)
+            out.joint_efforts = out.joint_efforts + self.stop_effort
+        if self._springs:
+            self.spring_effort[:] = -self._spring_k * torch.clamp(joint_pos - self._spring_q0, min=0.0)
+            out.joint_efforts = out.joint_efforts + self.spring_effort
         return out
 
     def _interpolate(self, tgt: torch.Tensor) -> torch.Tensor:
@@ -131,21 +156,37 @@ class DatasheetMotorCfg(IdealPDActuatorCfg):
     """Target delay range in physics steps (per episode, uniform integer)."""
     target_interp_steps: int = 0
     """> 1: a new position target is reached linearly over this many physics steps (0/1 = step change)."""
+    stop_lower: dict[str, float] | float | None = None
+    stop_upper: dict[str, float] | float | None = None
+    """Mechanical joint limits [rad] for the explicit stop model (with ``stop_stiffness``)."""
+    stop_stiffness: dict[str, float] | float | None = None
+    """End-stop spring [N*m/rad]; None = off (PhysX's rigid joint limit acts, its torque is not observable)."""
+    stop_damping: dict[str, float] | float = 0.0
+    """End-stop damping [N*m*s/rad], only while the joint is past a stop."""
+    spring_stiffness: dict[str, float] | float | None = None
+    """Parallel elastic stiffness [N*m/rad] (e.g. a knee band); None = off."""
+    spring_engage: dict[str, float] | float = 0.0
+    """Joint angle [rad] where the elastic starts to pull (slack below it)."""
 
 
-def make_hw_profile_groups(profile: str) -> dict[str, DatasheetMotorCfg]:
-    """Motor groups of an ``hw_*`` actuator profile: its motor map plus its options (``HW_PROFILE_OPTIONS``)."""
+def make_hw_profile_groups(profile: str, stop_model: bool = False,
+                           knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
+    """Motor groups of an ``hw_*`` actuator profile: its motor map plus its options (``HW_PROFILE_OPTIONS``).
+    ``knee_band``: (stiffness N*m/rad, engage deg) of an elastic on each knee crank (see ``make_hw_motor_groups``)."""
     from .hw_motor_specs import HW_PROFILE_MAPS, HW_PROFILE_OPTIONS
 
-    return make_hw_motor_groups(HW_PROFILE_MAPS[profile], **HW_PROFILE_OPTIONS.get(profile, {}))
+    return make_hw_motor_groups(HW_PROFILE_MAPS[profile], stop_model=stop_model, knee_band=knee_band,
+                                **HW_PROFILE_OPTIONS.get(profile, {}))
 
 
 def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool = True,
                          target_interp_steps: int = 0,
-                         gain_overrides: dict[str, tuple[float, float]] | None = None) -> dict[str, DatasheetMotorCfg]:
+                         gain_overrides: dict[str, tuple[float, float]] | None = None,
+                         stop_model: bool = False,
+                         knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
     """One :class:`DatasheetMotorCfg` group per motor model of ``map_name`` (group name ``hw_<model>``).
     ``gain_overrides``: motor name -> (kp, kd) replacing the role gains (checked against the motion-mode limits)."""
-    from .hw_motor_specs import MOTION_MODE_LIMITS
+    from .hw_motor_specs import MOTION_MODE_LIMITS, STOP_MODEL, motor_stop_limits
 
     params = joint_hw_params(map_name)
     for name, (kp, kd) in (gain_overrides or {}).items():
@@ -181,6 +222,32 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             max_delay=LATENCY_STEPS[1] if randomize else 0,
             target_interp_steps=int(target_interp_steps),
         )
+        if stop_model:
+            import math
+
+            lim = motor_stop_limits()
+            stopped = [j for j in joints if math.degrees(lim[j][1] - lim[j][0]) < 350.0]  # rolls without a stop: off
+            k, d = {}, {}
+            for j in joints:
+                arm = float(params[j]["armature"])
+                if j not in stopped:
+                    k[j], d[j] = 0.0, 0.0
+                elif "knee" in j:
+                    k[j], d[j] = STOP_MODEL["knee_stiffness"], STOP_MODEL["knee_damping"]
+                else:
+                    k[j] = STOP_MODEL["omega"] ** 2 * arm
+                    d[j] = 2.0 * STOP_MODEL["zeta"] * math.sqrt(k[j] * arm)
+            groups[key].stop_lower = {j: lim[j][0] for j in joints}
+            groups[key].stop_upper = {j: lim[j][1] for j in joints}
+            groups[key].stop_stiffness = k
+            groups[key].stop_damping = d
+        if knee_band is not None:
+            import math
+
+            knees = [j for j in joints if "knee_actuator" in j]
+            if knees:  # an elastic beside each knee motor, pulling the crank back toward a straight knee
+                groups[key].spring_stiffness = {j: (float(knee_band[0]) if j in knees else 0.0) for j in joints}
+                groups[key].spring_engage = {j: (math.radians(float(knee_band[1])) if j in knees else 0.0) for j in joints}
     return groups
 
 

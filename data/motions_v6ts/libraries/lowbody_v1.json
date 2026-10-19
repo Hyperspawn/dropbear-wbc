@@ -1,0 +1,174 @@
+{
+ "schema": "dropbear-motion-library-v1",
+ "name": "lowbody_v1",
+ "description": "2026-10-14: squats, lunge, pick up, reach down + stand: what Dropbear can do low to the ground (vendor CEM-60 knee study)",
+ "created": "2026-10-14T19:06:15+05:30",
+ "created_by": "tools/build_motion_library_manifest.py",
+ "clips": [
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "3a9d11daea86149d74503918c3ca7d4f3d1dbe8eb70b6d43eecc9ff2318de762"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "53ade422f9f1655f5a94735bc0376a45c15a2f5b0bd150f63d53720b62afe069"
+  },
+  {
+   "name": "motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6",
+   "npz": "../asap_g1/motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "f86d46efffaa7903ec69ba10b6c2ff98ba9b7d8b8ff12e3205ee1f1765e84bc9"
+  },
+  {
+   "name": "squat_lite",
+   "npz": "../synthetic/squat_lite.npz",
+   "weight": 1.0,
+   "sha256": "6c0a88cda1562aee00ca3a513e8baade383bfbe79f3722c1aca170bfc86dfa79"
+  },
+  {
+   "name": "stand",
+   "npz": "../synthetic/stand.npz",
+   "weight": 1.0,
+   "sha256": "3ccdc058f634c2fe3094af7ab3dc64b39fc77a5815008c2801ec87177476cc54"
+  },
+  {
+   "name": "half_squat_ts1.19_v6",
+   "npz": "../kimodo_gen/half_squat_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "6436f1f14b39d49fcfa557de4830363acecb7264e4a7da507c39922ef57d032b"
+  },
+  {
+   "name": "lunge_ts1.19_v6",
+   "npz": "../kimodo_gen/lunge_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "ab64c59f61af07a6d2d21d58e44f58101122cca7e6e94843f40a0e2a2f56c9fc"
+  },
+  {
+   "name": "pick_up_ts1.19_v6",
+   "npz": "../kimodo_gen/pick_up_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "3aa58c06ddf5b48bc20be9ba5e4f1a1b20b773774a85575660c5f9429c296a15"
+  },
+  {
+   "name": "reach_down_ts1.19_v6",
+   "npz": "../kimodo_gen/reach_down_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "93c3fdf1fb5539f9960ed5872fb4e62df85ed2167c3b3d95c5497f50b96b51bb"
+  },
+  {
+   "name": "squat_ts1.19_v6",
+   "npz": "../kimodo_gen/squat_ts1.19_v6.npz",
+   "weight": 1.0,
+   "sha256": "d2f09a9d1d7e10554ee36f8c82e0cf7eced861190c1e7749a1fb77405f94413d"
+  }
+ ],
+ "selection": {
+  "root": "data/motions_v6ts",
+  "include": "kimodo_gen/squat_*,kimodo_gen/half_squat_*,kimodo_gen/lunge_*,kimodo_gen/pick_up_*,kimodo_gen/reach_down_*,asap_g1/*squat_level*,synthetic/squat_lite*,synthetic/stand*",
+  "exclude": "smoke/**,**/archive/**,libraries/**",
+  "authored_ankle_tierods": false,
+  "calibration_sha256_target": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+  "base_manifest": "accepted_v7gen.json",
+  "included": [
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6.npz",
+    "num_frames": 312,
+    "duration_s": 6.22,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T02:45:50"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level2_filter_amass_ts1.19_v6.npz",
+    "num_frames": 377,
+    "duration_s": 7.52,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T02:45:50"
+   },
+   {
+    "name": "motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6",
+    "npz": "asap_g1/motions_raw_tairantestbed_smpl_video_squat_level3_filter_amass_ts1.19_v6.npz",
+    "num_frames": 365,
+    "duration_s": 7.28,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T02:45:50"
+   },
+   {
+    "name": "squat_lite",
+    "npz": "synthetic/squat_lite.npz",
+    "num_frames": 901,
+    "duration_s": 18.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "stand",
+    "npz": "synthetic/stand.npz",
+    "num_frames": 501,
+    "duration_s": 10.0,
+    "calibration_sha256": null,
+    "verdict_created": "2026-09-24T12:50:07"
+   },
+   {
+    "name": "half_squat_ts1.19_v6",
+    "npz": "kimodo_gen/half_squat_ts1.19_v6.npz",
+    "num_frames": 237,
+    "duration_s": 4.72,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T13:20:35"
+   },
+   {
+    "name": "lunge_ts1.19_v6",
+    "npz": "kimodo_gen/lunge_ts1.19_v6.npz",
+    "num_frames": 296,
+    "duration_s": 5.9,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T13:20:35"
+   },
+   {
+    "name": "pick_up_ts1.19_v6",
+    "npz": "kimodo_gen/pick_up_ts1.19_v6.npz",
+    "num_frames": 296,
+    "duration_s": 5.9,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T13:20:35"
+   },
+   {
+    "name": "reach_down_ts1.19_v6",
+    "npz": "kimodo_gen/reach_down_ts1.19_v6.npz",
+    "num_frames": 296,
+    "duration_s": 5.9,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T13:20:35"
+   },
+   {
+    "name": "squat_ts1.19_v6",
+    "npz": "kimodo_gen/squat_ts1.19_v6.npz",
+    "num_frames": 296,
+    "duration_s": 5.9,
+    "calibration_sha256": "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513",
+    "verdict_created": "2026-09-26T13:20:35"
+   }
+  ],
+  "excluded": []
+ },
+ "library": {
+  "sha256": "53089b344f635e0d2d5c549acdb7577e6077817d4cfc800ba8b571abc8cb556c",
+  "num_clips": 10,
+  "num_frames_total": 3877,
+  "duration_s_total": 77.34,
+  "calibration_sha256": [
+   "e51033d4072a38b94f0e1da50ce09ecb151232bb356f834205a6a8f7651d4513"
+  ],
+  "calibration_unknown_clips": [
+   "squat_lite",
+   "stand"
+  ],
+  "all_accepted": true
+ }
+}

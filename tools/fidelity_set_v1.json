@@ -1,0 +1,75 @@
+{
+ "description": "14 library clips with visible leg features (jumps, kicks, one-leg balance, squat, lunge, walks) and arm gestures, used by tools/eval_fidelity_set.sh to score whether a tracker actually performs the motion (tools/motion_fidelity.py). The clips of the 2026-10-16 reel.",
+ "clips": [
+  {
+   "tag": "disco",
+   "npz": "data/motions_v6ts/kimodo_gen/disco_ts1.19_v6.npz",
+   "steps": 306
+  },
+  {
+   "tag": "jump_fwd",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_jump_forward_level2_filter_amass_ts1.19_v6.npz",
+   "steps": 221
+  },
+  {
+   "tag": "side_jump",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_side_jump_level3_filter_amass_ts1.19_v6.npz",
+   "steps": 227
+  },
+  {
+   "tag": "kick",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_kick_level1_filter_amass_ts1.19_v6.npz",
+   "steps": 245
+  },
+  {
+   "tag": "lunge",
+   "npz": "data/motions_v6ts/kimodo_gen/lunge_ts1.19_v6.npz",
+   "steps": 306
+  },
+  {
+   "tag": "walk_turn",
+   "npz": "data/motions_v6ts/kimodo_gen/walk_turn_left_ts1.19_v6.npz",
+   "steps": 366
+  },
+  {
+   "tag": "celebrate",
+   "npz": "data/motions_v6ts/kimodo_gen/celebrate_ts1.19_v6.npz",
+   "steps": 247
+  },
+  {
+   "tag": "one_foot",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_single_foot_balance_level1_filter_amass_ts1.19_v6.npz",
+   "steps": 441
+  },
+  {
+   "tag": "spiderman",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_SpiderMan_level2_amass_ts1.19_v6.npz",
+   "steps": 322
+  },
+  {
+   "tag": "jacks",
+   "npz": "data/motions_v6ts/kimodo_gen/jumping_jacks_slow_ts1.19_v6.npz",
+   "steps": 306
+  },
+  {
+   "tag": "squat",
+   "npz": "data/motions_v6ts/kimodo_gen/squat_ts1.19_v6.npz",
+   "steps": 306
+  },
+  {
+   "tag": "march",
+   "npz": "data/motions_v6ts/kimodo_gen/march_ts1.19_v6.npz",
+   "steps": 306
+  },
+  {
+   "tag": "shoot",
+   "npz": "data/motions_v6ts/asap_g1/motions_raw_tairantestbed_smpl_video_shoot_level3_filter_amass_ts1.19_v6.npz",
+   "steps": 256
+  },
+  {
+   "tag": "bow",
+   "npz": "data/motions_v6ts/kimodo_gen/bow_ts1.19_v6.npz",
+   "steps": 247
+  }
+ ]
+}

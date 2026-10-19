@@ -77,7 +77,7 @@ by `make_dropbear_cfg(...)`. Evidence (before and after each fix):
 
 ### 0.2 Over-constrained parallel ankle: spherical tie-rod closures, ADOPTED DEFAULT (added by the calibration/settle component; adopted by the GPU pipeline component on the lead's decision, 2026-09-24)
 
-**Status: adopted default, pending user hardware confirmation.** Every simulator retypes `LL/RL_Revolute111` and
+**Status: adopted default. 2026-10-19: the user confirmed the real tie-rod top ends are revolute (pins), as authored, so the spherical default models a proposed hardware change (rod-end ball joints at the cranks), not the current robot ([ROADMAP.md](ROADMAP.md), open hardware decisions).** Every simulator retypes `LL/RL_Revolute111` and
 `LL/RL_Revolute112` to `PhysicsSphericalJoint` **in memory at load time**, in the same mechanism as the 0.1 fixes.
 The USD file on P: stays untouched.
 

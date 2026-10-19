@@ -29,7 +29,7 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
 
     actuator_profile: str = "legacy"
     """``legacy`` (the implicit groups every tracking policy so far was trained with) or a real-actuator twin profile
-    of ``robots.hw_motor_specs.HW_PROFILE_MAPS`` (docs/ACTUATORS.md section 11)."""
+    of ``robots.hw_motor_specs.HW_PROFILE_MAPS`` (docs/archive/ACTUATORS_HISTORY.md section 11)."""
 
     target_clamp_margin_deg: float | None = None
     """Motor position targets clipped to the hard limits +- this [deg] (None = unclipped, every run through 2026-09-26)."""
@@ -57,7 +57,7 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
 
     def enable_hw_regularizers(self, thermal: float = -2.0e-4, torque_rate: float = -0.02, knee_stop: float = 0.0,
                                knee_stop_margin_deg: float = 3.0, feet_slide: float = 0.0) -> None:
-        """Real-hardware regularizers for an ``hw_*`` profile (docs/ACTUATORS.md sections 11-13): ``motor_over_rated``
+        """Real-hardware regularizers for an ``hw_*`` profile (docs/archive/ACTUATORS_HISTORY.md sections 11-13): ``motor_over_rated``
         (``thermal`` * sum relu(|tau| - rated)^2 with the profile's rated torques) and ``motor_torque_rate``
         (``torque_rate`` * sum ((tau_t - tau_{t-1}) / peak)^2 between policy steps). Same terms as the velocity task.
 
@@ -106,6 +106,111 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
                         "asset_cfg": SceneEntityCfg("robot", body_names=list(FOOT_EE_BODIES), preserve_order=True),
                         "bodies_per_foot": 2})
 
+    def enable_height_tracking(self, anchor: float = 1.0, feet: float = 1.0, anchor_std: float = 0.1,
+                               feet_std: float = 0.1) -> None:
+        """Reward matching the reference's HEIGHTS above the ground: the anchor (head) for squat depth and jump height,
+        the feet for foot lift, one-leg stance and flight (0 = off). Without them the library tracker kept both feet
+        planted through jumps, kicks, one-leg balance and squats while holding 99/138 clips without a fall
+        (tools/motion_fidelity.py, docs/RESULTS.md 2026-10-16)."""
+        from isaaclab.managers import RewardTermCfg as RewTerm
+
+        from dropbear_wbc.robots.dropbear_names import FOOT_EE_BODIES
+        from dropbear_wbc.tasks.tracking import mdp
+
+        if anchor:
+            self.rewards.motion_anchor_height = RewTerm(
+                func=mdp.motion_anchor_height_error_exp, weight=float(anchor),
+                params={"command_name": "motion", "std": float(anchor_std)})
+        if feet:
+            self.rewards.motion_feet_height = RewTerm(
+                func=mdp.motion_feet_height_error_exp, weight=float(feet),
+                params={"command_name": "motion", "std": float(feet_std), "body_names": list(FOOT_EE_BODIES)})
+
+    def set_tracking_strictness(self, body_pos_std: float | None = None, joint_pos: float = 0.0,
+                                joint_pos_std: float = 0.25, end_threshold_m: float | None = None) -> None:
+        """Make "follow the reference" harder to skip (docs/ROADMAP.md, the tracker's objective).
+
+        ``body_pos_std`` [m]: tolerance of the body-position term (default 0.3; the feet are 2 of its 14 points, so
+        missing a 21 cm foot lift cost ~3 %). ``joint_pos`` (> 0 = on): reward on the 22 motor angles with tolerance
+        ``joint_pos_std`` [rad]. ``end_threshold_m``: end the episode when the head or a foot/hand height is this far
+        from the reference (default 0.25 m, more than the hard motions ever missed by)."""
+        from isaaclab.managers import RewardTermCfg as RewTerm
+
+        from dropbear_wbc.tasks.tracking import mdp
+
+        if body_pos_std is not None:
+            self.rewards.motion_body_pos.params["std"] = float(body_pos_std)
+        if joint_pos:
+            self.rewards.motion_joint_pos = RewTerm(func=mdp.motion_joint_pos_error_exp, weight=float(joint_pos),
+                                                    params={"command_name": "motion", "std": float(joint_pos_std)})
+        if end_threshold_m is not None:
+            self.terminations.anchor_pos.params["threshold"] = float(end_threshold_m)
+            self.terminations.ee_body_pos.params["threshold"] = float(end_threshold_m)
+
+    def enable_knee_band(self, stiffness: float, engage_deg: float) -> None:
+        """An elastic beside each knee motor (a theraband or tendon): ``-stiffness * max(0, crank - engage)`` on the knee
+        crank, so it helps hold the robot up once the knee is bent past ``engage_deg`` of crank (0-30 deg = knee
+        0-47 deg). Logged as telemetry ``tau_spring``; not motor torque. Call after ``set_actuator_profile``."""
+        self._knee_band = (float(stiffness), float(engage_deg))
+        self._rebuild_hw_groups()
+
+    def enable_safety_penalties(self, stop_load: float = 0.0, impact: float = 0.0, impact_threshold_n: float = 900.0) -> None:
+        """``stop_load`` (< 0): penalty on end-stop torque above a safe value (``stop_load_l2``; needs the stop model).
+        ``impact`` (< 0): penalty on each foot's contact force above ``impact_threshold_n`` [N] (Isaac Lab
+        ``contact_forces``): landings drove 2-3 kN (4-5x body weight) through the ankle and knee pins
+        (``tools/joint_loads.py``, 2026-10-17)."""
+        from isaaclab.envs import mdp as il_mdp
+        from isaaclab.managers import RewardTermCfg as RewTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.tasks.locomotion.mdp.rewards import stop_load_l2
+
+        if stop_load:
+            self.rewards.stop_load = RewTerm(func=stop_load_l2, weight=float(stop_load),
+                                             params={"asset_cfg": SceneEntityCfg("robot")})
+        if impact:
+            self.rewards.foot_impact = RewTerm(
+                func=il_mdp.contact_forces, weight=float(impact),
+                params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=list(__import__('dropbear_wbc.robots.dropbear_names', fromlist=['x']).FOOT_BODIES), preserve_order=True),
+                        "threshold": float(impact_threshold_n)})
+
+    def _rebuild_hw_groups(self) -> None:
+        from dropbear_wbc.robots.hw_actuators import make_hw_profile_groups, set_motor_groups
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS
+
+        if self.actuator_profile not in HW_PROFILE_MAPS:
+            raise ValueError(f"needs an hw_* actuator profile, not {self.actuator_profile!r}")
+        set_motor_groups(self.scene.robot.actuators,
+                         make_hw_profile_groups(self.actuator_profile, stop_model=getattr(self, "_stop_model", False),
+                                                knee_band=getattr(self, "_knee_band", None)))
+
+    def enable_stop_model(self) -> None:
+        """Model the motor joints' end stops explicitly (``hw_motor_specs.STOP_MODEL``): the actuator's stop spring acts
+        past each mechanical limit and PhysX's rigid limit moves outward, so the torque the stop parts carry is known
+        (``DatasheetMotor.stop_effort``, telemetry ``tau_stop``). Needs an ``hw_*`` profile; call after
+        ``set_actuator_profile``."""
+        import math
+
+        from isaaclab.managers import EventTermCfg as EventTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.robots.dropbear_names import MOTOR_NAMES
+        from dropbear_wbc.robots.hw_actuators import make_hw_profile_groups, set_motor_groups
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, STOP_MODEL
+        from dropbear_wbc.tasks.joint_limit_events import widen_joint_limits
+
+        if self.actuator_profile not in HW_PROFILE_MAPS:
+            raise ValueError(f"the stop model needs an hw_* actuator profile, not {self.actuator_profile!r}")
+        from dropbear_wbc.robots.hw_motor_specs import motor_stop_limits
+
+        self._stop_model = True
+        self._rebuild_hw_groups()
+        stopped = [m for m, (lo, hi) in motor_stop_limits().items() if math.degrees(hi - lo) < 350.0 and m in MOTOR_NAMES]
+        self.events.widen_stop_limits = EventTerm(
+            func=widen_joint_limits, mode="startup",
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=stopped, preserve_order=True),
+                    "margin_rad": math.radians(STOP_MODEL["margin_deg"])})
+
     def set_actuator_profile(self, name: str) -> None:
         """Switch the body-motor groups to ``legacy`` or an ``hw_*`` twin profile (neck and passive groups unchanged)."""
         from dropbear_wbc.robots.hw_actuators import legacy_motor_groups, make_hw_profile_groups, set_motor_groups
@@ -118,6 +223,21 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
         else:
             raise ValueError(f"unknown tracking actuator profile {name!r}; known: legacy, {sorted(HW_PROFILE_MAPS)}")
         self.actuator_profile = name
+        self._set_motor_mass_offsets(name)
+
+    def _set_motor_mass_offsets(self, profile: str) -> None:
+        """Startup term ``motor_mass``: the plant mass change of the profile's motors vs the CAD (twin v3 profiles
+        only; ``hw_motor_specs.motor_mass_offsets``). Kept in play: it is the plant, not a randomization."""
+        from isaaclab.managers import EventTermCfg as EventTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.robots.hw_motor_specs import motor_mass_offsets
+        from dropbear_wbc.tasks.mass_events import apply_body_mass_offsets
+
+        offsets = motor_mass_offsets(profile)
+        self.events.motor_mass = (EventTerm(func=apply_body_mass_offsets, mode="startup",
+                                            params={"asset_cfg": SceneEntityCfg("robot"), "offsets": offsets})
+                                  if offsets else None)
 
 
 @configclass
@@ -135,6 +255,8 @@ class DropbearFlatPlayEnvCfg(DropbearFlatEnvCfg):
         self.events.physics_material = None
         self.events.add_joint_default_pos = None
         self.events.base_com = None
+        self.events.add_base_mass = None
+        self.events.scale_limb_mass = None
         motion = self.commands.motion
         motion.pose_range = {}
         motion.velocity_range = {}

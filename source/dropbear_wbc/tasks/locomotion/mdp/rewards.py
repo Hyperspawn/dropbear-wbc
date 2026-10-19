@@ -294,3 +294,20 @@ def joint_near_limit_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, margi
     q = asset.data.joint_pos[:, asset_cfg.joint_ids]
     lim = asset.data.joint_pos_limits[:, asset_cfg.joint_ids]
     return torch.sum(torch.clamp(lim[..., 0] + margin - q, min=0.0) + torch.clamp(q - (lim[..., 1] - margin), min=0.0), dim=1)
+
+
+def stop_load_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, knee_safe_nm: float = 40.0,
+                 other_safe_nm: float = 15.0) -> torch.Tensor:
+    """Sum over motor joints of ``(max(0, |stop torque| - safe) / safe)^2`` with the explicit stop model
+    (``enable_stop_model``): loading a printed end stop beyond a safe torque is expensive, slamming it is very expensive.
+    Knee safe torque 40 N*m = ~140 N on the knee-lock blocks (0.28 m arm). Zero without the stop model."""
+    asset = env.scene[asset_cfg.name]
+    out = torch.zeros(env.num_envs, device=env.device)
+    for act in asset.actuators.values():
+        stop = getattr(act, "stop_effort", None)
+        if stop is None:
+            continue
+        safe = torch.tensor([knee_safe_nm if "knee_actuator" in n else other_safe_nm for n in act.joint_names],
+                            device=stop.device)
+        out += torch.sum(torch.square(torch.clamp(torch.abs(stop) - safe, min=0.0) / safe), dim=1).to(env.device)
+    return out

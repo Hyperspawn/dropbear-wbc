@@ -49,6 +49,9 @@ parser.add_argument("--warmup_s", type=float, default=2.0)
 parser.add_argument("--scenarios", default=DEFAULT_SCENARIOS, help="'name:vx,vy,wz;...'")
 parser.add_argument("--solver_iters", type=int, nargs=2, default=None, metavar=("POS", "VEL"))
 parser.add_argument("--perturbed", action="store_true", help="keep the training randomization")
+parser.add_argument("--knee_band", default=None, help="'stiffness,engage_deg' knee elastic (see train.py)")
+parser.add_argument("--stop_model", action="store_true",
+                    help="model the motor joints' end stops explicitly so the stop loads are measured (hw_* profiles)")
 parser.add_argument("--actuator_profile", default=None,
                     help="ACTUATOR_PROFILES key; default: the loaded run's run_info.json value ('legacy' if absent)")
 parser.add_argument("--seed", type=int, default=None)
@@ -124,9 +127,13 @@ def main() -> int:  # noqa: C901
     if profile is None:
         infos = sorted(run_dir.glob("run_info*.json"))
         profile = "legacy"
-        if infos:
-            profile = json.loads(infos[0].read_text(encoding="utf-8")).get("actuator_profile") or "legacy"
+        if infos:  # the newest chunk's profile: a resumed run can change it (run_info_resume_<stamp>.json sort last)
+            profile = json.loads(infos[-1].read_text(encoding="utf-8")).get("actuator_profile") or "legacy"
     env_cfg.set_actuator_profile(profile)
+    if args.stop_model:
+        env_cfg.enable_stop_model()
+    if args.knee_band:
+        env_cfg.enable_knee_band(*(float(x) for x in args.knee_band.split(",")))
     print(f"[play_locomotion] actuator profile: {profile}", flush=True)
     # a run trained with gait shaping clamps the motor targets to the joint limits: evaluate with the same clamp
     infos = sorted(run_dir.glob("run_info*.json"))
@@ -153,6 +160,7 @@ def main() -> int:  # noqa: C901
         train_cfg = load_entry_point("Dropbear-Velocity-Flat-v0", "env_cfg_entry_point")
         env_cfg.events.physics_material = train_cfg.events.physics_material
         env_cfg.events.add_base_mass = train_cfg.events.add_base_mass
+        env_cfg.events.scale_limb_mass = train_cfg.events.scale_limb_mass
         env_cfg.events.reset_robot.params.update({k: train_cfg.events.reset_robot.params[k]
                                                   for k in ("frame_mode", "pose_range", "leg_serial_noise", "arm_serial_noise")})
         env_cfg.observations.policy.enable_corruption = True

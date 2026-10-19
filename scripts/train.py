@@ -49,11 +49,32 @@ parser.add_argument("--target_clamp_margin_deg", type=float, default=None,
 parser.add_argument("--action_rate_weight", type=float, default=None,
                     help="override the action_rate_l2 weight (default -0.1): smoother 50 Hz targets, less motor jitter "
                          "(docs/ISSUES.md #28)")
+parser.add_argument("--thermal_penalty", type=float, default=None,
+                    help="with --hw_regularizers: motor_over_rated weight (< 0; default -2e-4). Stronger keeps the 10 N*m "
+                         "ankle and elbow motors under their rated torque; pass as --thermal_penalty=-2e-3")
 parser.add_argument("--feet_slide_penalty", type=float, default=0.0,
                     help="with --hw_regularizers: weight (< 0) on sole planar speed while in ground contact (touchdown "
                          "skid, toe scuff; docs/ISSUES.md #20); pass as --feet_slide_penalty=-1")
+parser.add_argument("--anchor_height_weight", type=float, default=0.0,
+                    help="reward on matching the reference head height (squat depth, jump height); 0 = off, try 1")
+parser.add_argument("--feet_height_weight", type=float, default=0.0,
+                    help="reward on matching the reference foot heights (foot lift, one-leg stance, flight); 0 = off, try 1")
+parser.add_argument("--body_pos_std", type=float, default=None,
+                    help="tolerance [m] of the body-position tracking term (default 0.3); smaller = stricter")
+parser.add_argument("--joint_pos_weight", type=float, default=0.0,
+                    help="reward on matching the reference motor angles; 0 = off, try 1")
+parser.add_argument("--end_threshold_m", type=float, default=None,
+                    help="end the episode when the head / a foot / a hand height is this far off [m] (default 0.25)")
+parser.add_argument("--stop_model", action="store_true",
+                    help="model the motor joints' end stops explicitly (stop loads measured, needed by --stop_load_penalty)")
+parser.add_argument("--stop_load_penalty", type=float, default=0.0,
+                    help="weight (< 0) on end-stop torque above a safe value (knee 40 N*m); pass as --stop_load_penalty=-5")
+parser.add_argument("--impact_penalty", type=float, default=0.0,
+                    help="weight (< 0) on foot contact force above 900 N per foot body; pass as --impact_penalty=-0.005")
+parser.add_argument("--knee_band", default=None,
+                    help="'stiffness,engage_deg': an elastic beside each knee motor (N*m/rad on the crank, crank angle)")
 parser.add_argument("--actuator_profile", default=None,
-                    help="legacy (default) or a real-actuator twin profile hw_v1 / hw_v1_cad (docs/ACTUATORS.md 11)")
+                    help="legacy (default) or a real-actuator twin profile hw_v1 / hw_v1_cad (docs/archive/ACTUATORS_HISTORY.md 11)")
 parser.add_argument("--logger", choices=("tensorboard", "wandb", "neptune"), default=None)
 parser.add_argument("--resume", action="store_true", help="resume from --load_run/--checkpoint")
 parser.add_argument("--load_run", default=None, help="run dir name under <log_root>/<experiment>")
@@ -119,14 +140,27 @@ def main() -> int:
         env_cfg.set_solver_iterations(*args.solver_iters)
     if args.actuator_profile is not None:
         env_cfg.set_actuator_profile(args.actuator_profile)
+    if args.stop_model or args.stop_load_penalty:
+        env_cfg.enable_stop_model()
+    if args.knee_band:
+        k, q0 = (float(x) for x in args.knee_band.split(","))
+        env_cfg.enable_knee_band(k, q0)
+    if args.stop_load_penalty or args.impact_penalty:
+        env_cfg.enable_safety_penalties(stop_load=float(args.stop_load_penalty), impact=float(args.impact_penalty))
     if args.target_clamp_margin_deg is not None:
         env_cfg.clamp_targets_to_limits(args.target_clamp_margin_deg)
     if args.action_rate_weight is not None:
         env_cfg.rewards.action_rate_l2.weight = float(args.action_rate_weight)
     if args.hw_regularizers:
-        env_cfg.enable_hw_regularizers(knee_stop=float(args.knee_stop_penalty), feet_slide=float(args.feet_slide_penalty))
-    elif args.knee_stop_penalty or args.feet_slide_penalty:
-        raise SystemExit("--knee_stop_penalty / --feet_slide_penalty need --hw_regularizers")
+        env_cfg.enable_hw_regularizers(knee_stop=float(args.knee_stop_penalty), feet_slide=float(args.feet_slide_penalty),
+                                       **({} if args.thermal_penalty is None else {"thermal": float(args.thermal_penalty)}))
+    elif args.knee_stop_penalty or args.feet_slide_penalty or args.thermal_penalty is not None:
+        raise SystemExit("--knee_stop_penalty / --feet_slide_penalty / --thermal_penalty need --hw_regularizers")
+    if args.body_pos_std is not None or args.joint_pos_weight or args.end_threshold_m is not None:
+        env_cfg.set_tracking_strictness(body_pos_std=args.body_pos_std, joint_pos=float(args.joint_pos_weight),
+                                        end_threshold_m=args.end_threshold_m)
+    if args.anchor_height_weight or args.feet_height_weight:
+        env_cfg.enable_height_tracking(anchor=float(args.anchor_height_weight), feet=float(args.feet_height_weight))
     if args.max_iterations is not None:
         agent_cfg.max_iterations = args.max_iterations
     if args.seed is not None:
@@ -228,6 +262,14 @@ def main() -> int:
         "hw_regularizers": bool(args.hw_regularizers),
         "knee_stop_penalty": float(args.knee_stop_penalty),
         "feet_slide_penalty": float(args.feet_slide_penalty),
+        "thermal_penalty": args.thermal_penalty,
+        "stop_model": bool(args.stop_model or args.stop_load_penalty), "stop_load_penalty": float(args.stop_load_penalty),
+        "impact_penalty": float(args.impact_penalty), "knee_band": args.knee_band,
+        "body_pos_std": args.body_pos_std,
+        "joint_pos_weight": float(args.joint_pos_weight),
+        "end_threshold_m": args.end_threshold_m,
+        "anchor_height_weight": float(args.anchor_height_weight),
+        "feet_height_weight": float(args.feet_height_weight),
         "target_clamp_margin_deg": args.target_clamp_margin_deg,
         "action_rate_weight": args.action_rate_weight,
         "default_pose_info": dict(env_cfg.default_pose_info),

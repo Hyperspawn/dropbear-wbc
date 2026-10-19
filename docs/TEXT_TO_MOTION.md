@@ -114,7 +114,7 @@ quality on some generated motions.
   - 0 falls, anchor rotation error 0.09, **HW gate PASS**, 200 Hz jumps 2 %.
   - Video: `logs/brev/media/live_kimodo1_dashboard.mp4`.
 - **Run it:**
-  - Windows: `.venv-embed/Scripts/python.exe tools/kimodo_text_embed_server.py` (started by Claude on 2026-09-26).
+  - Windows: `.venv-embed/Scripts/python.exe tools/kimodo_text_embed_server.py` (started 2026-09-26).
   - WSL: `G1_MJCF=$DROPBEAR_UPSTREAM/unitree_mujoco/unitree_robots/g1/g1_29dof.xml HF_HOME=$DROPBEAR_HF_CACHE
     HF_HUB_OFFLINE=1 TEXT_ENCODER_MODE=file PYTHONPATH=source .venv-kimodo-wsl/bin/python tools/kimodo_live_service.py`.
   - Viewer: superseded by `tools/live_session.sh` (below).

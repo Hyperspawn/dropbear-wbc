@@ -69,6 +69,12 @@ def retarget_file(
             motion, fps=motion.fps / opts.time_scale, clip=f"{motion.clip}_ts{opts.time_scale:g}",
             notes=motion.notes + [f"time-stretched x{opts.time_scale:g}: source {motion.fps:g} fps read as "
                                   f"{motion.fps / opts.time_scale:g} fps (RetargetOptions.time_scale)"])
+    if opts.knee_max_deg is not None:
+        import dataclasses
+
+        motion = dataclasses.replace(
+            motion, clip=f"{motion.clip}_k{opts.knee_max_deg:g}",
+            notes=motion.notes + [f"knee flexion capped at {opts.knee_max_deg:g} deg (RetargetOptions.knee_max_deg)"])
     res = retarget_g1_motion(motion, cal, opts)
     sem = res.semantic
     if opts.foot_contact is not None:

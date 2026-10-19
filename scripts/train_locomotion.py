@@ -38,6 +38,11 @@ parser.add_argument("--log_root", type=Path, default=_REPO / "logs" / "rsl_rl")
 parser.add_argument("--save_interval", type=int, default=None)
 parser.add_argument("--solver_iters", type=int, nargs=2, default=None, metavar=("POS", "VEL"))
 parser.add_argument("--pushes", action="store_true", help="enable interval pushes (robustness stage)")
+parser.add_argument("--push_velocity", type=float, default=None,
+                    help="push strength: each push adds a uniform random velocity in +-this [m/s] per horizontal axis to "
+                         "the whole robot (implies --pushes; default 0.3)")
+parser.add_argument("--push_interval", type=float, nargs=2, default=None, metavar=("MIN_S", "MAX_S"),
+                    help="seconds between pushes (implies --pushes; default 8 12)")
 parser.add_argument("--actuator_profile", default=None,
                     help="flat_env_cfg.ACTUATOR_PROFILES key (default: the task default); recorded in run_info.json")
 parser.add_argument("--gait_v2", action="store_true", help="--gait_shaping + the stance-knee extension term (-1.0)")
@@ -49,13 +54,26 @@ parser.add_argument("--action_rate_weight", type=float, default=None,
                     help="override the action_rate_l2 weight (-0.01): target jitter (docs/ISSUES.md #29)")
 parser.add_argument("--terrain", choices=("flat", "rough"), default="flat",
                     help="rough: blind curriculum terrain sized for Dropbear (flat_env_cfg.enable_rough_terrain)")
+parser.add_argument("--stair_max_m", type=float, default=None, help="rough terrain: hardest step height [m] (default 0.10)")
+parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
 parser.add_argument("--target_clamp_margin_deg", type=float, default=3.0,
                     help="gait-shaped runs: motor targets clipped to the hard limits +- this [deg]; 3 pressed the knees "
                          "into their stops at 26 N*m (docs/ISSUES.md #23), use 0 for new runs")
 parser.add_argument("--gait_shaping", action="store_true",
                     help="knee flexion in swing + swing clearance + torque-rate terms (flat_env_cfg.enable_gait_shaping)")
+parser.add_argument("--stop_model", action="store_true",
+                    help="model the motor joints' end stops explicitly (stop loads measured, needed by --stop_load_penalty)")
+parser.add_argument("--stop_load_penalty", type=float, default=0.0,
+                    help="weight (< 0) on end-stop torque above a safe value (knee 40 N*m); pass as --stop_load_penalty=-5")
+parser.add_argument("--impact_penalty", type=float, default=0.0,
+                    help="weight (< 0) on foot contact force above 900 N per foot body; pass as --impact_penalty=-0.005")
+parser.add_argument("--knee_band", default=None,
+                    help="'stiffness,engage_deg': an elastic beside each knee motor (N*m/rad on the crank, crank angle)")
+parser.add_argument("--knee_stop_penalty", type=float, default=0.0,
+                    help="knee-crank hard-stop term (< 0, e.g. -10; pass as --knee_stop_penalty=-10): the terrain walkers "
+                    "rested the knee on its flexion stop (docs/RESULTS.md, session 3)")
 parser.add_argument("--thermal_penalty", type=float, default=None,
-                    help="hw_* profiles: weight of sum relu(|tau| - rated)^2 (e.g. -2e-4; docs/ACTUATORS.md 11)")
+                    help="hw_* profiles: weight of sum relu(|tau| - rated)^2 (e.g. -2e-4; docs/archive/ACTUATORS_HISTORY.md 11)")
 parser.add_argument("--logger", choices=("tensorboard", "wandb", "neptune"), default=None)
 parser.add_argument("--resume", action="store_true", help="resume from --load_run/--checkpoint")
 parser.add_argument("--load_run", default=None, help="run dir name under <log_root>/<experiment>")
@@ -98,8 +116,9 @@ def main() -> int:
         env_cfg.set_num_envs(args.num_envs)
     if args.solver_iters is not None:
         env_cfg.set_solver_iterations(*args.solver_iters)
-    if args.pushes:
-        env_cfg.enable_pushes()
+    if args.pushes or args.push_velocity is not None or args.push_interval is not None:
+        env_cfg.enable_pushes(**({} if args.push_velocity is None else {"velocity_xy": float(args.push_velocity)}),
+                              **({} if args.push_interval is None else {"interval_s": tuple(args.push_interval)}))
     if args.actuator_profile is not None:
         env_cfg.set_actuator_profile(args.actuator_profile)
     if args.thermal_penalty is not None:
@@ -112,7 +131,18 @@ def main() -> int:
     elif args.gait_shaping or args.gait_v2:
         env_cfg.enable_gait_shaping(knee_stance=-1.0 if args.gait_v2 else 0.0, clamp_margin_deg=args.target_clamp_margin_deg)
     if args.terrain == "rough":
-        env_cfg.enable_rough_terrain()  # after gait shaping: re-points the swing-height term to the ground scan
+        env_cfg.enable_rough_terrain(  # after gait shaping: re-points the swing-height term to the ground scan
+            **({} if args.stair_max_m is None else {"stair_max_m": float(args.stair_max_m)}),
+            **({} if args.slope_max is None else {"slope_max": float(args.slope_max)}))
+    if args.knee_stop_penalty:
+        env_cfg.enable_knee_stop_penalty(float(args.knee_stop_penalty))
+    if args.stop_model or args.stop_load_penalty:
+        env_cfg.enable_stop_model()
+    if args.knee_band:
+        k, q0 = (float(x) for x in args.knee_band.split(","))
+        env_cfg.enable_knee_band(k, q0)
+    if args.stop_load_penalty or args.impact_penalty:
+        env_cfg.enable_safety_penalties(stop_load=float(args.stop_load_penalty), impact=float(args.impact_penalty))
     if args.feet_width_weight is not None:
         if getattr(env_cfg.rewards, "feet_lateral", None) is None:
             raise SystemExit("--feet_width_weight needs --gait_v3 (the feet_lateral term)")
@@ -180,11 +210,14 @@ def main() -> int:
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         "actuator_profile": env_cfg.actuator_profile,
         "thermal_penalty": args.thermal_penalty,
+        "knee_stop_penalty": float(args.knee_stop_penalty),
+        "stop_model": bool(args.stop_model or args.stop_load_penalty), "stop_load_penalty": float(args.stop_load_penalty),
+        "impact_penalty": float(args.impact_penalty), "knee_band": args.knee_band,
         "gait_shaping": bool(args.gait_shaping or args.gait_v2 or args.gait_v3),
         "gait_v2": bool(args.gait_v2),
         "gait_v3": bool(args.gait_v3),
         "target_clamp_margin_deg": float(args.target_clamp_margin_deg),
-        "terrain": args.terrain,
+        "terrain": args.terrain, "stair_max_m": args.stair_max_m, "slope_max": args.slope_max,
         "feet_width_weight": args.feet_width_weight,
         "action_rate_weight": args.action_rate_weight,
         "actuator_gains_sim": {n: {"kp": float(uw.scene["robot"].data.joint_stiffness[0, j]),
@@ -199,6 +232,7 @@ def main() -> int:
             env_cfg.scene.robot.spawn.articulation_props.solver_velocity_iteration_count,
         ],
         "pushes": env_cfg.events.push_robot is not None,
+        "push_velocity": args.push_velocity, "push_interval": args.push_interval,
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

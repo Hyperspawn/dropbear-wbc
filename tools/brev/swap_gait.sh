@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs ON the Brev instance. Usage: bash swap_gait.sh <gpu> <run_name> <warm_from_run_suffix|none> [gait flags] [profile]
 # Stops GPU <gpu>'s queue, installs ~/hw_patch.tgz into ~/dbw<gpu>, and trains hw_v1 + thermal -5e-4 + gait shaping
-# (target clamp, knee flexion in swing, swing clearance, torque rate, one-leg-hopping penalty; ACTUATORS.md 12).
+# (target clamp, knee flexion in swing, swing clearance, torque rate, one-leg-hopping penalty; docs/archive/ACTUATORS_HISTORY.md 12).
 set -u
 source ~/runs/env.sh
 G=$1; name=$2; warm=$3; GAIT=${4:---gait_shaping}; PROF=${5:-hw_v1}

@@ -47,6 +47,9 @@ parser.add_argument("--solver_iters", type=int, nargs=2, default=None, metavar=(
 parser.add_argument("--telemetry", type=Path, default=None,
                     help="per-motor telemetry NPZ of env 0 (tools/render_actuator_dashboard.py); with --clean_video one "
                          "row per video frame")
+parser.add_argument("--knee_band", default=None, help="'stiffness,engage_deg' knee elastic (see train.py)")
+parser.add_argument("--stop_model", action="store_true",
+                    help="model the motor joints' end stops explicitly so the stop loads are measured (hw_* profiles)")
 parser.add_argument("--actuator_profile", default=None,
                     help="legacy / hw_v1 / hw_v1_cad; default: the run's run_info.json value (legacy if absent)")
 parser.add_argument("--export", action="store_true", help="write ONNX / TorchScript / JSON sidecar")
@@ -171,6 +174,10 @@ def main() -> int:  # noqa: C901
         profile = (json.loads(info_path.read_text(encoding="utf-8")).get("actuator_profile") if info_path.is_file()
                    else None) or "legacy"
     env_cfg.set_actuator_profile(profile)
+    if args.stop_model:
+        env_cfg.enable_stop_model()
+    if args.knee_band:
+        env_cfg.enable_knee_band(*(float(x) for x in args.knee_band.split(",")))
     print(f"[INFO] actuator profile: {profile}", flush=True)
     # replay with the target clamp the run was trained with (docs/ISSUES.md #25)
     info_path = run_dir / "run_info.json"
@@ -199,14 +206,16 @@ def main() -> int:  # noqa: C901
     env_cfg.commands.motion.continuous_loop = bool(args.continuous_loop)
     if args.seed is not None:
         env_cfg.seed = args.seed
-    randomization = "none (play config: no pushes, no friction/CoM/default-pose randomization, no obs noise)"
+    randomization = "none (play config: no pushes, no friction/CoM/mass/default-pose randomization, no obs noise)"
     if args.perturbed:
         train_cfg = load_entry_point(args.task.replace("-Play", ""), "env_cfg_entry_point")
-        for name in ("push_robot", "physics_material", "add_joint_default_pos", "base_com"):
+        perturb_events = ("push_robot", "physics_material", "add_joint_default_pos", "base_com",
+                          "add_base_mass", "scale_limb_mass")
+        for name in perturb_events:
             setattr(env_cfg.events, name, getattr(train_cfg.events, name))
         env_cfg.observations.policy.enable_corruption = train_cfg.observations.policy.enable_corruption
         randomization = ("training-level: " + ", ".join(
-            n for n in ("push_robot", "physics_material", "add_joint_default_pos", "base_com")
+            n for n in perturb_events
             if getattr(env_cfg.events, n) is not None) + f", obs corruption={env_cfg.observations.policy.enable_corruption}")
 
     if args.lean or args.realtime:

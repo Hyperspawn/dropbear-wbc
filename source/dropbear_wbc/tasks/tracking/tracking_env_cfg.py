@@ -48,6 +48,7 @@ from dropbear_wbc.robots.dropbear_names import (
     motor_param,
     undesired_contact_body_regex,
 )
+from dropbear_wbc.robots.mass_dr import LIMB_MASS_SCALE, ROOT_MASS_ADD_TRACKING
 
 from . import mdp
 
@@ -215,6 +216,21 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=ROOT_BODY),
             "com_range": {"x": (-0.025, 0.025), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
         },
+    )
+    # mass (notes/13 T4, item 59): interim ranges until the robot is weighed (item 61)
+    add_base_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=ROOT_BODY),
+            "mass_distribution_params": ROOT_MASS_ADD_TRACKING,
+            "operation": "add",
+        },
+    )
+    scale_limb_mass = EventTerm(
+        func=mdp.randomize_limb_mass_scale,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "scale_range": LIMB_MASS_SCALE},
     )
     # interval
     push_robot = EventTerm(

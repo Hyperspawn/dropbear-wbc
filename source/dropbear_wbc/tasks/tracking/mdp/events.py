@@ -5,6 +5,8 @@
   correct when the action covers all joints in articulation order. Here the offset is re-derived from
   ``default_joint_pos`` through the action term's own joint ids (22 motors, contract order).
 * ``randomize_rigid_body_com`` is unchanged (configure it on ``world``).
+* ``randomize_limb_mass_scale`` (one mass scale per limb per env, notes/13 T4) lives in
+  :mod:`dropbear_wbc.tasks.mass_events` (shared with the velocity task) and is re-exported here.
 """
 from __future__ import annotations
 
@@ -16,6 +18,8 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs.mdp.events import _randomize_prop_by_op
 from isaaclab.managers import SceneEntityCfg
+
+from dropbear_wbc.tasks.mass_events import randomize_limb_mass_scale  # noqa: F401  (re-export)
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv

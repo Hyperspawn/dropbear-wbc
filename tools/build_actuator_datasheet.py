@@ -2,7 +2,7 @@
 
 Phase 1a of making the simulated robot match the real one. PROPOSAL ONLY: no training code imports this file, and
 no training default changes. A later step may add an ``hw_datasheet_v1`` actuator profile once the user agrees
-(docs/ACTUATORS.md).
+(docs/archive/ACTUATORS_HISTORY.md).
 
 What it does (CPU only, numpy; the USD itself is NOT opened, the repo's read-only dumps of it are used):
 
@@ -287,7 +287,7 @@ MODELS: dict[str, dict] = {
         "no_load_speed_output": fact(160, "rpm", "SIMPLE_PROFILE", 1,
                                      "CONSERVATIVE choice. X8_25 p1 curve: 254.3 rpm at 48.14 V. Same weight (710 g) "
                                      "and rotor inertia (3400 g*cm^2), different winding (Kv 30 vs ~47 rpm/V). Which "
-                                     "generation is on the robot is an open question (docs/ACTUATORS.md Q3)"),
+                                     "generation is on the robot is an open question (docs/archive/ACTUATORS_HISTORY.md Q3)"),
         "no_load_speed_output_x8_25_curve": fact(254.3, "rpm", "X8_25", 1),
         "rated_current": fact(3.2, "A", "X8_25", 1,
                               "NOT the DC current (the curve draws ~6.5 A at 10 N*m); SIMPLE_PROFILE p1: 5 A"),
@@ -329,7 +329,7 @@ MODELS: dict[str, dict] = {
                            "back_drive_Nm": 0.4, "backlash_arcmin": 10, "pole_pairs": 20, "weight_g": 780,
                            "encoder": "dual 16/14 bit"},
                 "why_not": "it is the spec row of Actuators.csv/Actuators1.csv row 4, but the joint table (rows 9-18), "
-                           "the model folder X8-25 and DECISIONS all say 1:9 (docs/ACTUATORS.md Q2)"},
+                           "the model folder X8-25 and DECISIONS all say 1:9 (docs/archive/ACTUATORS_HISTORY.md Q2)"},
         },
     },
 }
@@ -898,7 +898,7 @@ def main() -> None:
                         "J_eff_kgm2": round(J_eff, 5),
                         "armature_share_of_J_eff": round(arm / J_eff, 3)},
             "isaac_lab_proposal": {
-                "status": "PROPOSAL (not applied; see docs/ACTUATORS.md section 6)",
+                "status": "PROPOSAL (not applied; see docs/archive/ACTUATORS_HISTORY.md section 6)",
                 "actuator_class": "DCMotorCfg (explicit) + Coulomb friction term (custom subclass, TODO)",
                 "effort_limit": peak, "saturation_effort": tsl["saturation_effort_Nm"],
                 "velocity_limit": tsl["no_load_speed_rad_s"],
@@ -927,7 +927,7 @@ def main() -> None:
                     "action_scale_rule_0.25_effort_over_kp_rad": round(0.25 * peak / kp_hw, 4),
                     "note": "kp capped at the motion-mode ceiling 500 (PROTO_V39 p90, PROTO_V42 p92). Whether the "
                             "protocol kd multiplies output or motor-side speed is unresolved (DBG_SW p5 says motor "
-                            "end): bench test B1 in docs/ACTUATORS.md"},
+                            "end): bench test B1 in docs/archive/ACTUATORS_HISTORY.md"},
                 "suggested_start": {
                     "kp": round(kp_start, 1), "kd_zeta1": round(kd_start, 2),
                     "natural_frequency_hz": round(math.sqrt(kp_start / J_eff) / (2 * math.pi), 2),
@@ -959,7 +959,7 @@ def main() -> None:
 
     doc = {
         "schema": "dropbear-actuators-datasheet-v1",
-        "status": "PROPOSAL - no training default uses this file (docs/ACTUATORS.md)",
+        "status": "PROPOSAL - no training default uses this file (docs/archive/ACTUATORS_HISTORY.md)",
         "created_by": "tools/build_actuator_datasheet.py",
         "usd_sha256": dn.USD_SHA256,
         "calibration_sha256": _sha256(SOURCES["CALIB"]["path"]),

@@ -20,10 +20,13 @@ WSL_DISTRO=${WSL_DISTRO:-Ubuntu}
 pathcfg() { PYTHONPATH=source python -c "from dropbear_wbc import paths as p; print($1)"; }
 ISAACPY=$(pathcfg "p.isaac_python()")
 HFC=$(pathcfg "p.hf_cache().as_posix()")
-# default tracker: lib_v7gen (library + 60 Kimodo everyday motions, hw_v1ie) at its newest pulled checkpoint; on the
-# five clips of the 17:01 session it was 0 falls / HW gate PASS with fewer warnings than lib_v6ts_v1i_fix (no elbow
-# lag, 0 % 200 Hz jumps; logs/hw_twin/live_checks). Fallback: lib_v6ts_v1i_fix/10492 on hw_v1i.
-# published policies (python tools/fetch_assets.py) live in assets/policies/; your own Brev pulls in logs/brev/remote
+# default tracker (2026-10-16): lib_v8_v2ie_kstop3/19800, the library tracker on the vendor CEM-60 knee (hw_v2ie) with
+# a light knee-stop term: 99/138 clips with 0 falls, and off the knee's hard stop in the half squat (docs/RESULTS.md,
+# cloud session 4). Then lib_v7gen (94/138, hw_v1ie; 0 falls / HW gate PASS on the 17:01 session's five clips), then
+# lib_v6ts_v1i_fix/10492 on hw_v1i.
+# published policies (python tools/fetch_assets.py) live in assets/policies/; your own Brev pulls in logs/brev/remote*
+V8=$(ls assets/policies/lib_v8_v2ie_kstop3/model_19800.pt logs/brev/remote_s4/dbw2/logs/rsl_rl/dropbear_tracking_library/*_lib_v8_nokstop_kstop3/model_19800.pt 2>/dev/null | head -1)
+if [ -z "$CKPT" ] && [ -n "$V8" ]; then CKPT=$V8; PROFILE=${PROFILE:-hw_v2ie}; fi
 V7DIR=$(ls -d assets/policies/lib_v7gen_v1ie_smooth logs/brev/remote/dbw3/logs/rsl_rl/dropbear_tracking_library/*_lib_v7gen_v1ie_smooth 2>/dev/null | head -1)
 V7=$([ -n "$V7DIR" ] && ls "$V7DIR"/model_*.pt 2>/dev/null | sed 's/.*model_\([0-9]*\)\.pt$/ &/' | sort -n | tail -1 | cut -d' ' -f2)
 if [ -z "$CKPT" ] && [ -n "$V7" ]; then CKPT=$V7; PROFILE=${PROFILE:-hw_v1ie}; fi

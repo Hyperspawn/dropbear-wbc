@@ -33,7 +33,7 @@ Decision + evidence: docs/DECISIONS.md, docs/LOCOMOTION.md section 5."""
 DEFAULT_ACTUATOR_PROFILE: str = "stiff_knee_hw"
 
 HW_ACTUATOR_PROFILES: dict[str, str] = dict(HW_PROFILE_MAPS)
-"""Real-actuator twin profiles (robots/hw_motor_specs.py; docs/ACTUATORS.md section 11): explicit PD at the physics rate,
+"""Real-actuator twin profiles (robots/hw_motor_specs.py; docs/archive/ACTUATORS_HISTORY.md section 11): explicit PD at the physics rate,
 per-joint datasheet torque-speed envelope, rotor armature, gearbox friction and 0-10 ms command delay, motion-mode
 gains (kp <= 500, kd <= 5). They REPLACE the legacy implicit motor groups (``hw_*`` groups)."""
 
@@ -63,6 +63,72 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         self.set_stand_npz(DEFAULT_STAND_NPZ)
         self.set_actuator_profile(DEFAULT_ACTUATOR_PROFILE)
 
+    def enable_knee_band(self, stiffness: float, engage_deg: float) -> None:
+        """An elastic beside each knee motor (a theraband or tendon): ``-stiffness * max(0, crank - engage)`` on the knee
+        crank, so it helps hold the robot up once the knee is bent past ``engage_deg`` of crank (0-30 deg = knee
+        0-47 deg). Logged as telemetry ``tau_spring``; not motor torque. Call after ``set_actuator_profile``."""
+        self._knee_band = (float(stiffness), float(engage_deg))
+        self._rebuild_hw_groups()
+
+    def enable_safety_penalties(self, stop_load: float = 0.0, impact: float = 0.0, impact_threshold_n: float = 900.0) -> None:
+        """``stop_load`` (< 0): penalty on end-stop torque above a safe value (``stop_load_l2``; needs the stop model).
+        ``impact`` (< 0): penalty on each foot's contact force above ``impact_threshold_n`` [N] (Isaac Lab
+        ``contact_forces``): landings drove 2-3 kN (4-5x body weight) through the ankle and knee pins
+        (``tools/joint_loads.py``, 2026-10-17)."""
+        from isaaclab.envs import mdp as il_mdp
+        from isaaclab.managers import RewardTermCfg as RewTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.tasks.locomotion.mdp.rewards import stop_load_l2
+
+        from ...velocity_env_cfg import FOOT_SENSOR_BODIES
+
+        if stop_load:
+            self.rewards.stop_load = RewTerm(func=stop_load_l2, weight=float(stop_load),
+                                             params={"asset_cfg": SceneEntityCfg("robot")})
+        if impact:
+            self.rewards.foot_impact = RewTerm(
+                func=il_mdp.contact_forces, weight=float(impact),
+                params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=list(FOOT_SENSOR_BODIES), preserve_order=True),
+                        "threshold": float(impact_threshold_n)})
+
+    def _rebuild_hw_groups(self) -> None:
+        from dropbear_wbc.robots.hw_actuators import make_hw_profile_groups, set_motor_groups
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS
+
+        if self.actuator_profile not in HW_PROFILE_MAPS:
+            raise ValueError(f"needs an hw_* actuator profile, not {self.actuator_profile!r}")
+        set_motor_groups(self.scene.robot.actuators,
+                         make_hw_profile_groups(self.actuator_profile, stop_model=getattr(self, "_stop_model", False),
+                                                knee_band=getattr(self, "_knee_band", None)))
+
+    def enable_stop_model(self) -> None:
+        """Model the motor joints' end stops explicitly (``hw_motor_specs.STOP_MODEL``): the actuator's stop spring acts
+        past each mechanical limit and PhysX's rigid limit moves outward, so the torque the stop parts carry is known
+        (``DatasheetMotor.stop_effort``, telemetry ``tau_stop``). Needs an ``hw_*`` profile; call after
+        ``set_actuator_profile``."""
+        import math
+
+        from isaaclab.managers import EventTermCfg as EventTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.robots.dropbear_names import MOTOR_NAMES
+        from dropbear_wbc.robots.hw_actuators import make_hw_profile_groups, set_motor_groups
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, STOP_MODEL
+        from dropbear_wbc.tasks.joint_limit_events import widen_joint_limits
+
+        if self.actuator_profile not in HW_PROFILE_MAPS:
+            raise ValueError(f"the stop model needs an hw_* actuator profile, not {self.actuator_profile!r}")
+        from dropbear_wbc.robots.hw_motor_specs import motor_stop_limits
+
+        self._stop_model = True
+        self._rebuild_hw_groups()
+        stopped = [m for m, (lo, hi) in motor_stop_limits().items() if math.degrees(hi - lo) < 350.0 and m in MOTOR_NAMES]
+        self.events.widen_stop_limits = EventTerm(
+            func=widen_joint_limits, mode="startup",
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=stopped, preserve_order=True),
+                    "margin_rad": math.radians(STOP_MODEL["margin_deg"])})
+
     def set_actuator_profile(self, name: str) -> None:
         """Apply ``ACTUATOR_PROFILES[name]`` on top of the legacy actuator groups (fresh legacy values first, so
         switching profiles never accumulates)."""
@@ -72,6 +138,7 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         if name in HW_ACTUATOR_PROFILES:
             set_motor_groups(self.scene.robot.actuators, make_hw_profile_groups(name))
             self.actuator_profile = name
+            self._set_motor_mass_offsets(name)
             return
         if name not in ACTUATOR_PROFILES:
             known = sorted(ACTUATOR_PROFILES) + sorted(HW_ACTUATOR_PROFILES)
@@ -87,6 +154,21 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
             for key, value in values.items():
                 setattr(act, key, float(value))
         self.actuator_profile = name
+        self._set_motor_mass_offsets(name)
+
+    def _set_motor_mass_offsets(self, profile: str) -> None:
+        """Startup term ``motor_mass``: the plant mass change of the profile's motors vs the CAD (twin v3 profiles
+        only; ``hw_motor_specs.motor_mass_offsets``). Kept in play: it is the plant, not a randomization."""
+        from isaaclab.managers import EventTermCfg as EventTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.robots.hw_motor_specs import motor_mass_offsets
+        from dropbear_wbc.tasks.mass_events import apply_body_mass_offsets
+
+        offsets = motor_mass_offsets(profile)
+        self.events.motor_mass = (EventTerm(func=apply_body_mass_offsets, mode="startup",
+                                            params={"asset_cfg": SceneEntityCfg("robot"), "offsets": offsets})
+                                  if offsets else None)
 
     terrain: str = "flat"
     """``flat`` (every run through 2026-09-26) or ``rough`` (:meth:`enable_rough_terrain`)."""
@@ -163,12 +245,30 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
                     "rated": [float(params[m]["rated_torque"]) for m in MOTOR_NAMES]},
         )
 
+    def enable_knee_stop_penalty(self, weight: float = -10.0, margin_deg: float = 3.0) -> None:
+        """Add ``knee_stop``: ``weight`` * how deep [rad] each knee crank sits inside the last ``margin_deg`` before a
+        hard stop (the tracking task's term, docs/ISSUES.md #19). The rough-terrain walkers rested the knee on its
+        flexion stop in 91-97 % of stance with the motor nearly idle (docs/RESULTS.md, session 3): the printed stop
+        carried the weight. Gait v3's all-motor ``joint_near_limit`` (-0.5, 5 deg) is about 20x too weak for that."""
+        import math
+
+        from isaaclab.managers import RewardTermCfg as RewTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from ... import mdp
+
+        self.rewards.knee_stop = RewTerm(
+            func=mdp.joint_near_limit_l1, weight=float(weight),
+            params={"margin": math.radians(float(margin_deg)),
+                    "asset_cfg": SceneEntityCfg("robot", joint_names=["LL_knee_actuator_joint", "RL_knee_actuator_joint"],
+                                                preserve_order=True)})
+
     def enable_gait_shaping(self, knee_flex: float = 0.5, swing_height: float = -20.0, torque_rate: float = -0.02,
                             mode_time: float = -2.0, air_standing: float = -0.5, knee_stance: float = 0.0,
                             feet_width: float = 0.0, near_limit: float = 0.0, hip_deviation: float | None = None,
                             target_flex: float = 0.15, clearance: float = 0.08, clamp_targets: bool = True,
                             clamp_margin_deg: float = 3.0) -> None:
-        """Gait terms against the stiff-leg gait and for smooth torques (docs/ACTUATORS.md section 12):
+        """Gait terms against the stiff-leg gait and for smooth torques (docs/archive/ACTUATORS_HISTORY.md section 12):
 
         * ``knee_flex_swing`` (+``knee_flex``): each swinging foot's knee crank flexed ``target_flex`` rad above the
           stand default (the H1 air-time reward alone is met by a straight leg swung from the hip);
@@ -286,6 +386,7 @@ class DropbearVelocityFlatPlayEnvCfg(DropbearVelocityFlatEnvCfg):
         self.observations.policy.enable_corruption = False
         self.events.physics_material = None
         self.events.add_base_mass = None
+        self.events.scale_limb_mass = None
         self.events.push_robot = None
         p = self.events.reset_robot.params
         p["frame_mode"] = "first"

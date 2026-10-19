@@ -95,7 +95,8 @@ bash tools/live_session.sh 10          # minutes; then open http://127.0.0.1:876
 python tools/live_prompt.py            # or type prompts in a terminal
 ```
 
-Environment overrides: `CKPT`, `PROFILE` (default: the newest `lib_v7gen` checkpoint on `hw_v1ie`), `FIRST` (start
+Environment overrides: `CKPT`, `PROFILE` (default: `lib_v8_v2ie_kstop3/model_19800` on `hw_v2ie`, the 99/138 tracker on
+the vendor knee; else the newest `lib_v7gen` checkpoint on `hw_v1ie`), `FIRST` (start
 clip), `VIEWER=gl` (Newton OpenGL window instead of the browser), `WSL_DISTRO`.
 
 **Linux** (one machine): run the four pieces yourself.

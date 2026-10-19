@@ -23,12 +23,13 @@ def _gait(t: np.ndarray, phase: float) -> np.ndarray:
     return ((t / 1.0 + phase) % 1.0) < 0.6
 
 
-def _write(path, *, knee_on_stop=False, skid=False, scuff=False):
+def _write(path, *, knee_on_stop=False, knee_resting=False, skid=False, scuff=False):
     t = np.arange(T) * DT
     contact = np.stack([_gait(t, 0.0), _gait(t, 0.5)], axis=1)
     lim = np.tile(np.radians([-60.0, 60.0]), (N, 1))
     lim[KNEE] = np.radians([0.0, 30.0])
     q = np.zeros((T, N))
+    q[:, KNEE] = np.radians(15.0)  # mid-range (the knee crank's range is 0..30 deg)
     tau = np.zeros((T, N))
     peak = np.full(N, 25.0)
     peak[KNEE] = 60.0
@@ -36,6 +37,8 @@ def _write(path, *, knee_on_stop=False, skid=False, scuff=False):
         st = contact[:, 1]
         q[st, KNEE] = lim[KNEE, 1]
         tau[st, KNEE] = -60.0
+    if knee_resting:  # right stance: knee on its flexion stop, motor idle (the stop carries the weight)
+        q[contact[:, 1], KNEE] = lim[KNEE, 1]
     sole = np.zeros((T, 2, 3))
     for k in range(2):  # the planted foot stays put; the swing foot moves 1.2 m/s forward
         x = 0.0
@@ -93,3 +96,11 @@ def test_mid_swing_touch_is_a_scuff(tmp_path):
     r = scan(_write(tmp_path / "scuff.npz", scuff=True))
     sc = [f for f in r["findings"] if f["check"] == "scuff" and f["motor"] == "left foot"]
     assert sc and sc[0]["value"] > 0.5, r["findings"]
+
+
+def test_knee_resting_on_its_stop_with_an_idle_motor_fails_the_gate(tmp_path):
+    # stop_load needs the motor to push away from the stop; stop_rest catches the stop carrying the weight on its own
+    r = scan(_write(tmp_path / "rest.npz", knee_resting=True))
+    assert ("stop_rest", "RL_knee_actuator_joint") in _checks(r)
+    assert ("stop_load", "RL_knee_actuator_joint") not in _checks(r)
+    assert not r["hw_gate"]["pass"] and "stop_rest:RL_knee_actuator_joint" in r["hw_gate"]["fails"]

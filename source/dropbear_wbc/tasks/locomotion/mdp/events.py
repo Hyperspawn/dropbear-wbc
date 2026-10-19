@@ -23,6 +23,7 @@ from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_from_euler_xyz, quat_mul, sample_uniform
 
 from dropbear_wbc.robots.dropbear_names import ARM_MOTORS, CLOSURE_MOTORS, MOTOR_NAMES, ROOT_BODY
+from dropbear_wbc.tasks.mass_events import randomize_limb_mass_scale  # noqa: F401  (re-export, notes/13 T4)
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv

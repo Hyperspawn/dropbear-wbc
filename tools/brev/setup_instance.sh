@@ -40,7 +40,7 @@ if ! python -c "import isaaclab" 2>/dev/null; then
   pip install --no-build-isolation flatdict==4.0.1
   pip install -e source/isaaclab
 fi
-pip install click==8.1.7 psutil==5.9.8 GitPython onnx onnxscript onnxruntime >/dev/null
+pip install click==8.1.7 psutil==5.9.8 GitPython onnx onnxscript onnxruntime h5py tensorboard >/dev/null  # h5py, tensorboard: imported by isaaclab.managers / rsl-rl logging (2026-10-14)
 python -c "import isaacsim, isaaclab, torch; print('isaac ok, torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.device_count())"
 
 # --- bundle + USD ------------------------------------------------------------------------------

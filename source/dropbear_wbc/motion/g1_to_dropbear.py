@@ -139,6 +139,11 @@ class RetargetOptions:
     # deployable trackers settle at 82 % of it (docs/ISSUES.md #27). Froude similarity (same v^2 / (g L)) says time
     # should stretch by sqrt(length scale) = sqrt(1.42) ~ 1.19; the policies' own speed matches that (1.29 m/s).
     time_scale: float = 1.0
+    # upper limit of the knee flexion [deg] (None = the plant's own stop, about 47-48 deg). Squats retargeted to the full
+    # range put the knee on its printed flexion stop at the bottom, and the trackers learned to rest on it
+    # (docs/RESULTS.md, cloud session 3); 44 deg keeps the reference about 3 deg clear. Applied to the semantic mapping
+    # and to the foot-contact stage's leg solve alike (:func:`cap_knee_flexion`).
+    knee_max_deg: float | None = None
 
 
 @dataclass
@@ -650,13 +655,52 @@ def apply_foot_stage(sem: SemanticTrajectory, cal: CalibrationView, params: Foot
                               source_foot_yaw=sem.source_foot_yaw, leg_motors=res.motor_q, q_pre_stage=sem.q.copy())
 
 
+def cap_knee_flexion(smap, knee_max_deg: float):
+    """Copy of a SemanticMap whose knee flexion stops at ``knee_max_deg``: the semantic knee limit and the matching
+    knee-crank motor limit (through the knee LUT) are both tightened, so every clip and solve respects it."""
+    import copy
+
+    out = copy.deepcopy(smap)
+    cap = float(np.radians(knee_max_deg))
+    lim_m = np.asarray(out.motor_limits, dtype=np.float64)
+    for side, motor in (("left", "LL_knee_actuator_joint"), ("right", "RL_knee_actuator_joint")):
+        si, mi = SEMANTIC_INDEX[f"{side}_knee"], MOTOR_NAMES.index(motor)
+        if cap >= out.semantic_limits[si, 1]:
+            continue
+        q = np.zeros(len(SEMANTIC_NAMES))
+        q[si] = cap
+        m = out.semantic_to_motor(q)
+        crank = float(np.asarray(m[0] if isinstance(m, tuple) else m)[mi])
+        ends = np.tile(np.zeros(len(MOTOR_NAMES)), (2, 1))
+        ends[:, mi] = lim_m[mi]
+        sem_ends = out.motor_to_semantic(ends)
+        sem_ends = np.asarray(sem_ends[0] if isinstance(sem_ends, tuple) else sem_ends)[:, si]
+        if sem_ends[1] >= sem_ends[0]:  # flexion grows with the crank angle
+            out.motor_limits[mi, 1] = min(out.motor_limits[mi, 1], crank)
+        else:
+            out.motor_limits[mi, 0] = max(out.motor_limits[mi, 0], crank)
+        out.semantic_limits[si, 1] = cap
+    return out
+
+
 def retarget_g1_motion(
     motion: G1Motion, cal: CalibrationView, opts: RetargetOptions = RetargetOptions()
 ) -> DropbearMotion:
     """Full G1 -> Dropbear retarget (semantic mapping, root mapping, contacts, [foot stage], motors)."""
+    cfk = None
+    if opts.knee_max_deg is not None:
+        import copy
+        import dataclasses
+
+        cal = dataclasses.replace(cal, semantic_map=cap_knee_flexion(cal.semantic_map, opts.knee_max_deg))
+        if opts.foot_contact is not None:
+            from .foot_contact import get_calibration_fk
+
+            cfk = copy.copy(get_calibration_fk(cal.path))  # shallow: never mutate the process-wide cached one
+            cfk.smap = cap_knee_flexion(cfk.smap, opts.knee_max_deg)
     sem = g1_to_semantic(motion, cal, opts)
     if opts.foot_contact is not None:
-        sem = apply_foot_stage(sem, cal, opts.foot_contact)
+        sem = apply_foot_stage(sem, cal, opts.foot_contact, cfk=cfk)
     return semantic_to_dropbear(sem, cal, serial_continuity=opts.serial_continuity,
                                 max_serial_speed_rad_s=opts.max_serial_speed_rad_s,
                                 max_motor_step_rad=opts.max_motor_step_rad)

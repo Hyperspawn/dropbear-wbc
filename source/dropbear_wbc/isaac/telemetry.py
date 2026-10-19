@@ -7,6 +7,17 @@ before clipping, and -- if ``substeps`` -- the motor torque of EVERY physics ste
 policy steps are visible. Base velocity / anchor height / feet contact + height ride along, plus the world positions of
 the two soles and the root and the projected gravity (for foot-slip / sway checks in ``tools/telemetry_issue_scan.py``).
 
+Joint loads (``tools/joint_loads.py``), from the PhysX articulation:
+
+* ``dof_proj`` / ``dof_act`` (22 motors): the torque each motor joint transmits along its axis, and the torque the
+  actuator applied. Their difference is what the joint's END STOP carries (zero unless the joint sits on a limit);
+* ``tau_stop`` (22 motors): the torque the joint's end stop carries, measured exactly with ``--stop_model`` (the
+  explicit stop spring); zero without it;
+* ``link_wrench`` (every link, 6): the full force + torque each link's incoming joint transmits, in that joint's child
+  frame: the load on the bearing / pin / motor output at that joint. ``link_names`` gives the order.
+
+The loop-closure joints (outside the articulation tree) are not in ``link_wrench``.
+
 Import only after the Isaac Sim app is running.
 """
 from __future__ import annotations
@@ -36,7 +47,9 @@ class MotorTelemetry:
         self.anchor = robot.body_names.index(anchor_body) if anchor_body else None
         self.rows: dict[str, list] = {k: [] for k in ("q", "qd", "q_target", "tau", "tau_pd", "tau_sub", "base_vel_b",
                                                       "yaw_rate", "anchor_z", "cmd", "contact", "feet_z",
-                                                      "feet_lateral", "sole_pos_w", "root_pos_w", "proj_grav")}
+                                                      "feet_lateral", "sole_pos_w", "root_pos_w", "proj_grav",
+                                                      "dof_proj", "dof_act", "link_wrench", "tau_stop", "tau_spring")}
+        self._loads_ok = True
         self._sub: list[np.ndarray] = []
         self._cur = np.zeros(len(self.names))
         if substeps:
@@ -68,9 +81,17 @@ class MotorTelemetry:
         r, e = self.robot, self.e
         tau = np.zeros(len(self.names))
         pd = np.zeros(len(self.names))
+        stop = np.zeros(len(self.names))
+        spring = np.zeros(len(self.names))
         for i, act, k in self.cols:
             tau[i] = float(act.applied_effort[e, k])
             pd[i] = float(act.computed_effort[e, k])
+            if hasattr(act, "stop_effort"):
+                stop[i] = float(act.stop_effort[e, k])
+            if hasattr(act, "spring_effort"):
+                spring[i] = float(act.spring_effort[e, k])
+        self.rows["tau_stop"].append(stop)
+        self.rows["tau_spring"].append(spring)
         self.rows["q"].append(r.data.joint_pos[e, self.ids].cpu().numpy())
         self.rows["qd"].append(r.data.joint_vel[e, self.ids].cpu().numpy())
         self.rows["q_target"].append(r.data.joint_pos_target[e, self.ids].cpu().numpy())
@@ -99,6 +120,28 @@ class MotorTelemetry:
         self.rows["sole_pos_w"].append(r.data.body_link_pos_w[e, s].cpu().numpy())  # (left, right) soles
         self.rows["root_pos_w"].append(r.data.root_link_pos_w[e].cpu().numpy())
         self.rows["proj_grav"].append(r.data.projected_gravity_b[e].cpu().numpy())
+        self._record_loads()
+
+    def _record_loads(self) -> None:
+        """Joint loads (see the module docstring); NaN rows if this PhysX build cannot report them."""
+        r, e = self.robot, self.e
+        n_links = len(r.body_names)
+        if self._loads_ok:
+            try:
+                view = r.root_physx_view
+                proj = view.get_dof_projected_joint_forces()[e, self.ids]
+                act = view.get_dof_actuation_forces()[e, self.ids]
+                wrench = view.get_link_incoming_joint_force()[e]
+                self.rows["dof_proj"].append(torch.as_tensor(proj).detach().cpu().numpy().astype(np.float32))
+                self.rows["dof_act"].append(torch.as_tensor(act).detach().cpu().numpy().astype(np.float32))
+                self.rows["link_wrench"].append(torch.as_tensor(wrench).detach().cpu().numpy().astype(np.float32))
+                return
+            except Exception as exc:  # noqa: BLE001 -- telemetry must never break a rollout
+                print(f"[telemetry] joint loads unavailable: {exc!r}")
+                self._loads_ok = False
+        self.rows["dof_proj"].append(np.full(len(self.names), np.nan, np.float32))
+        self.rows["dof_act"].append(np.full(len(self.names), np.nan, np.float32))
+        self.rows["link_wrench"].append(np.full((n_links, 6), np.nan, np.float32))
 
     def save(self, path: Path, dt: float, meta: dict | None = None) -> Path:
         from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, joint_hw_params
@@ -119,6 +162,7 @@ class MotorTelemetry:
             spec["model"] = np.array([p[m]["model"] for m in self.names])
         arrays = {k: np.array(v) for k, v in self.rows.items() if k != "tau_sub"}
         spec["joint_limits"] = self.robot.data.joint_pos_limits[self.e, self.ids].cpu().numpy()
+        spec["link_names"] = np.array(list(self.robot.body_names))
         np.savez_compressed(path, dt=dt, motor_names=np.array(self.names),
                             can_ids=np.array([MOTOR_CAN_IDS[m] for m in self.names]), peak_torque=self.peak,
                             tau_sub=tau_sub, meta=np.array(__import__("json").dumps(meta)), **arrays, **spec)

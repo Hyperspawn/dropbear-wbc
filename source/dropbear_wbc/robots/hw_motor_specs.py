@@ -1,26 +1,31 @@
-"""Real-actuator ("digital twin v2") motor specs for Dropbear. Pure Python: no Isaac/torch imports.
+"""Real-actuator motor specs for Dropbear (pure Python: no Isaac/torch). docs/ACTUATORS.md is the readable version.
 
-Numbers come from ``data/robot/actuators_datasheet_v1.json`` (built by ``tools/build_actuator_datasheet.py`` from the
-MyActuator PDFs in ``github.com/Hyperspawn/myactuator-can``) plus the user's actuator map of 2026-09-25
-(``myactuator-can/AttemptToExplainActuators.md``). Everything is at the actuator OUTPUT shaft, SI units.
+The robot (user, 2026-10-16): CEM-60 at hip pitch and knee, RMD-X10 1:7 at hip yaw and shoulder pitch, RMD-X8 Pro on
+the ankles and arms, and no hip roll motor yet. Two candidate builds for the six heavy joints, one profile each:
 
-Model per joint (``tasks``' ``hw_*`` actuator profiles, :mod:`dropbear_wbc.robots.hw_actuators`):
+* ``hw_cem6``: CEM-60 at hip roll, hip pitch and knee;
+* ``hw_v4``: RMD-X8-120 (V4) at hip roll and hip pitch, RMD-X10-200 (V4.1) at the knee.
 
-* torque-speed envelope: ``|tau| <= min(peak, saturation * (1 - |w| / no_load))`` in the driving quadrant
-  (Isaac Lab ``DCMotor`` line, chord of the vendor curve);
-* armature = rotor inertia x ratio^2 (the vendor "Inertia" field is rotor x ratio, NOT squared);
-* Coulomb friction ~ the vendor back-drive torque, plus a small viscous term (both randomized per episode);
-* PD gains inside the RMD / CEM motion-mode ("MIT") command range: kp <= 500, kd <= 5 (``PROTO_V39`` p89-90,
-  CEM protocol V4.4 p153);
-* command latency (position target delayed 0..``max_delay`` physics steps, per episode).
+Both carry their motors' masses (:func:`motor_mass_offsets`). Every other profile is an older version kept so the
+policies trained on it replay unchanged: ``hw_v2*`` (the CEM-60 knee at the 2026-10-14 rating, but the CAD's X10-S2
+at hip pitch and an X10 1:7 at hip roll, neither on the robot) and ``hw_v1*`` (a provisional CEM-60 guess).
 
-The knee (CEM-60) has NO public datasheet: the CEM manual in the corpus covers CEM-15/25/45 only. Its entry is
-PROVISIONAL, extrapolated from that series (all 30:1 cycloid, 48 V, rated ~0.57 x peak, rated speed ~0.8 x no-load,
-rotor inertia 0.7 kg*cm^2) and from ``dropbear_docs/docs/03-assembly/legs/actuators.md`` ("CEM-60 60 Nm 60 RPM").
-Replace it with measured values as soon as the motor is on a bench (docs/ACTUATORS.md).
+Motor model (:mod:`dropbear_wbc.robots.hw_actuators`), at the output shaft, SI units:
+
+* torque-speed envelope: ``|tau| <= min(peak, saturation * (1 - |w| / no_load))`` in the driving quadrant;
+* armature = rotor inertia x ratio^2;
+* Coulomb friction ~ the back-drive torque, plus a small viscous term (both randomized per episode);
+* PD gains inside the motion-mode ("MIT") command range kp <= 500, kd <= 5 (RMD protocol V39 p89-90, CEM V4.4 p153);
+* command latency 0-10 ms (position target delayed 0..2 physics steps, per episode).
+
+Sources: MyActuator datasheets (V3 RMD motors: ``data/robot/actuators_datasheet_v1.json``; V4 motors and the CEM-60:
+the Hyperspawn web repo's ``data/actuators/datasheets``) and the user's statements of 2026-09-25, 2026-10-14 and
+2026-10-16. Unconfirmed: the CEM-60's gear ratio (30:1 assumed; its drawing says 50:1), rotor inertia and friction,
+and how the V4 sheets define "Moment of Inertia".
 """
 from __future__ import annotations
 
+import copy
 import math
 from dataclasses import asdict, dataclass
 
@@ -67,6 +72,30 @@ MOTOR_MODELS: dict[str, MotorModel] = {
         # series trend ~85 rpm); rated 34 N*m at 0.8 x no-load -> saturation 34 / 0.2 = 170 N*m; back-drive unknown.
         MotorModel("EPS-CEM-60", 30, 60.0, 34.0, 60.0 * 2.0 * math.pi / 60.0, 170.0, 0.7e-4, 2.0, 0.30, 1.20,
                    "provisional"),
+        # VENDOR (2026-10-14, docs/archive/ACTUATORS_HISTORY.md section 14): the user's 48 V / 330 W / 60 N*m / 60 rpm rating, peak
+        # 75 N*m (<= 10 s) and 80 rpm peak speed from the vendor table. The torque-speed line passes the rated point
+        # (60 N*m at 60 rpm) and ends at 80 rpm: saturation = 60 / (1 - 60/80) = 240 N*m, so the full 75 N*m is
+        # available up to 55 rpm. Reduction 30:1 assumed (unconfirmed). Rotor inertia, Coulomb and viscous friction:
+        # the series values of the provisional entry (unknown for the CEM-60).
+        MotorModel("EPS-CEM-60-V2", 30, 75.0, 60.0, 80.0 * 2.0 * math.pi / 60.0, 240.0, 0.7e-4, 2.0, 0.30, 0.93,
+                   "vendor"),
+        # the same with the drawing's 50:1 reduction (armature 0.175 instead of 0.063 kg*m^2): sensitivity only
+        MotorModel("EPS-CEM-60-V2-50to1", 50, 75.0, 60.0, 80.0 * 2.0 * math.pi / 60.0, 240.0, 0.7e-4, 2.0, 0.30, 0.93,
+                   "vendor"),
+        # CANDIDATES for the hip roll / hip pitch / knee (2026-10-16, the user's MyActuator V4 datasheets in
+        # hyperspawn-web data/actuators/datasheets/myactuator/x8-120details.json and x10-200-details.json):
+        # RMD-X8-P20-120 (V4): 19.61:1, 43 N*m rated at 127 rpm, 120 N*m peak, 158 rpm no-load, 1.40 kg, back-drive
+        # 1.5 N*m, Ø96 x 76 mm. Line through the rated point to no-load: saturation 43 / (1 - 127/158) = 219 N*m.
+        # "Moment of Inertia 1.5 kg*cm^2" taken as the ROTOR inertia (the V3 "rotor x ratio" reading would give a
+        # 0.08 kg*cm^2 rotor, implausible for a 96 mm motor next to the X8 Pro's 3.4); unconfirmed.
+        MotorModel("RMD-X8-P20-120-V4", 19.61, 120.0, 43.0, 158.0 * 2.0 * math.pi / 60.0, 219.2, 1.5e-4, 1.5, 0.05,
+                   1.40, "datasheet"),
+        # RMD-X10-P20-200 (V4.1): 20:1, 60 N*m rated at 74 rpm, 170 N*m peak, 80 rpm no-load, 1.64 kg, back-drive
+        # 1.0 N*m, Ø124 x 63.5 mm. The 48 V load sweep holds ~73 rpm to 84 N*m and gives 65 rpm at 124 N*m:
+        # saturation 124 / (1 - 65/80) = 661 N*m (rated 60 N*m up to 72.7 rpm vs the sheet's 74). "Moment of Inertia
+        # 0.003387 kg*m^2" read as rotor x ratio (V3 convention): rotor 1.69 kg*cm^2; unconfirmed.
+        MotorModel("RMD-X10-P20-200-V4.1", 20, 170.0, 60.0, 80.0 * 2.0 * math.pi / 60.0, 661.0, 1.69e-4, 1.0, 0.05,
+                   1.64, "datasheet"),
     )
 }
 
@@ -92,6 +121,32 @@ JOINT_MOTOR_MAPS: dict[str, dict[str, str]] = {
 JOINT_MOTOR_MAPS["user_knee_x10s2"] = {
     **JOINT_MOTOR_MAPS["user_2026_09_25"],
     **{f"{p}_knee_actuator_joint": "RMD-X10-S2-V3-1:35" for p in ("LL", "RL")},
+}
+# the user's map with the vendor CEM-60 numbers of 2026-10-14 (docs/archive/ACTUATORS_HISTORY.md section 14)
+JOINT_MOTOR_MAPS["vendor_2026_10_14"] = {
+    **JOINT_MOTOR_MAPS["user_2026_09_25"],
+    **{f"{p}_knee_actuator_joint": "EPS-CEM-60-V2" for p in ("LL", "RL")},
+}
+JOINT_MOTOR_MAPS["vendor_2026_10_14_r50"] = {
+    **JOINT_MOTOR_MAPS["user_2026_09_25"],
+    **{f"{p}_knee_actuator_joint": "EPS-CEM-60-V2-50to1" for p in ("LL", "RL")},
+}
+# THE REAL ROBOT (user, 2026-10-16): the 4 CEM-60 bought in 2024 sit at hip pitch and knee (MyActuator had no X10-S2
+# 1:35), hip yaw and shoulder pitch are the 4 X10 1:7, the 12 X8 Pro are the calves and arms. The hip roll motors
+# (butt) are NOT installed yet; the two candidate builds below differ in what goes there and in the legs:
+# "cem6": 6 x CEM-60 (48 V / 330 W rating) at hip roll, hip pitch and knee -> 2 more CEM-60 to buy;
+JOINT_MOTOR_MAPS["cem6_2026_10_16"] = {
+    **JOINT_MOTOR_MAPS["user_2026_09_25"],
+    **{f"PG_{s}_leg_pitch": "EPS-CEM-60-V2" for s in ("left", "right")},
+    **{f"{p}_hip_joint": "EPS-CEM-60-V2" for p in ("LL", "RL")},
+    **{f"{p}_knee_actuator_joint": "EPS-CEM-60-V2" for p in ("LL", "RL")},
+}
+# "v4": X8-120 (V4) at hip roll and hip pitch, X10-200 (V4.1) at the knee
+JOINT_MOTOR_MAPS["v4_2026_10_16"] = {
+    **JOINT_MOTOR_MAPS["user_2026_09_25"],
+    **{f"PG_{s}_leg_pitch": "RMD-X8-P20-120-V4" for s in ("left", "right")},
+    **{f"{p}_hip_joint": "RMD-X8-P20-120-V4" for p in ("LL", "RL")},
+    **{f"{p}_knee_actuator_joint": "RMD-X10-P20-200-V4.1" for p in ("LL", "RL")},
 }
 # the CAD/USD motor components (tools/probe_usd_motor_prims.py): X10-S2 on hip roll, hip pitch AND knee
 JOINT_MOTOR_MAPS["cad_usd"] = {
@@ -140,6 +195,14 @@ HW_PROFILE_MAPS: dict[str, str] = {
     "hw_v1_knee_x10s2": "user_knee_x10s2",  # the user's map, knee upgraded to X10-S2 (hardware A/B)
     "hw_v1i": "user_2026_09_25",  # hw_v1 + target interpolation over the 4 physics steps (firmware-side smoothing)
     "hw_v1ie": "user_2026_09_25",  # hw_v1i + stiffer elbows (docs/ISSUES.md #24)
+    # twin v2.1: the vendor CEM-60 knee (2026-10-14); otherwise identical to the matching hw_v1* profile
+    "hw_v2": "vendor_2026_10_14",
+    "hw_v2i": "vendor_2026_10_14",
+    "hw_v2ie": "vendor_2026_10_14",
+    "hw_v2ie_r50": "vendor_2026_10_14_r50",  # hw_v2ie with the drawing's 50:1 knee reduction (sensitivity only)
+    # twin v3 (2026-10-16): the real robot's legs, two candidate hip-roll/leg builds; hw_v2ie options + motor masses
+    "hw_cem6": "cem6_2026_10_16",
+    "hw_v4": "v4_2026_10_16",
 }
 HW_PROFILE_OPTIONS: dict[str, dict] = {
     "hw_v1i": {"target_interp_steps": 4},
@@ -147,9 +210,68 @@ HW_PROFILE_OPTIONS: dict[str, dict] = {
     # sags ~10 deg instead of ~40 deg under its own weight and the policy needs no large mass-specific target offset
     "hw_v1ie": {"target_interp_steps": 4, "gain_overrides": {"LH_elbow_joint": (200.0, 4.0), "RH_elbow_joint": (200.0, 4.0)}},
 }
+# copies, so that changing a v2 option never changes the published v1 profiles
+HW_PROFILE_OPTIONS["hw_v2i"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1i"])
+HW_PROFILE_OPTIONS["hw_v2ie"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
+HW_PROFILE_OPTIONS["hw_v2ie_r50"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
+HW_PROFILE_OPTIONS["hw_cem6"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
+HW_PROFILE_OPTIONS["hw_v4"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 """Extra ``make_hw_motor_groups`` options per profile (docs/ISSUES.md #11: 50 Hz targets stepped into a 200 Hz PD
 make torque spikes; the motor-side firmware can ramp each new target over the 4 control ticks instead)."""
 """Actuator-profile name (tasks' ``set_actuator_profile``) -> :data:`JOINT_MOTOR_MAPS` key."""
+
+CAD_MOTOR_MODEL = "RMD-X10-S2-V3-1:35"
+"""The motor the CAD (plant USD 45586414) has at hip roll, hip pitch and knee (6 slots)."""
+MOTOR_STATOR_BODY: dict[str, str] = {
+    # body holding each heavy-joint motor's stator in the plant USD (logs/actuators/usd_motor_prims.json): the hip roll
+    # stators sit in the pelvis 'world'; the hip pitch motor's stator IS the thigh body, which also holds the knee stator
+    **{f"PG_{s}_leg_pitch": "world" for s in ("left", "right")},
+    "LL_hip_joint": "LL_RMD_X10_S2_MIR4__3_Stator_1", "RL_hip_joint": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+    "LL_knee_actuator_joint": "LL_RMD_X10_S2_MIR4__3_Stator_1", "RL_knee_actuator_joint": "RL_RMD_X10_S2_MIR4__3_Stator_1",
+}
+
+
+def motor_mass_offsets(profile: str) -> dict[str, float]:
+    """Per-body mass change [kg] that swaps the CAD's X10-S2 (vendor 1.70 kg) for the profile's motor at the 6 heavy
+    joints, the whole difference on the stator body (the CAD part masses are not separable; first-order).
+
+    Only the twin-v3 profiles (``hw_cem6``, ``hw_v4``) change the plant mass; every older profile returns ``{}`` so
+    published policies replay on the plant they were trained on."""
+    if profile not in ("hw_cem6", "hw_v4"):
+        return {}
+    jm = JOINT_MOTOR_MAPS[HW_PROFILE_MAPS[profile]]
+    cad = MOTOR_MODELS[CAD_MOTOR_MODEL].mass_kg
+    out: dict[str, float] = {}
+    for joint, body in MOTOR_STATOR_BODY.items():
+        out[body] = out.get(body, 0.0) + MOTOR_MODELS[jm[joint]].mass_kg - cad
+    return {b: round(d, 4) for b, d in out.items() if abs(d) > 1e-9}
+
+
+STOP_MODEL: dict[str, float] = {"omega": 250.0, "zeta": 0.7, "margin_deg": 10.0, "knee_stiffness": 8000.0,
+                                "knee_damping": 20.0}
+"""Explicit end-stop model (``--stop_model``): past a motor joint's mechanical limit the actuator adds a damped spring
+torque ``k * penetration - d * velocity`` with ``k = omega^2 * armature`` and ``d = 2 * zeta * sqrt(k * armature)`` (stable
+at the 200 Hz explicit step, ~1-2 deg of penetration at full load), and PhysX's own rigid limit moves ``margin_deg``
+outward so that only the modeled stop acts. The knee cranks hold the body's weight through the four-bar (hundreds of
+N*m when a landing drives the knee into a stop), so they get a stiffer spring (``knee_stiffness``, ~3.6 deg at 500
+N*m; their effective inertia includes the reflected shank, so it stays stable). Joints without a mechanical stop
+(travel >= 350 deg: shoulder and wrist rolls) are not modeled. The stop torque is then known exactly (``DatasheetMotor.stop_effort``):
+what the printed stop parts carry (e.g. the knee-lock blocks on the knee drive's 300 mm extrusion)."""
+KNEE_LOCK_ARM_M: float = 0.28
+"""Distance from the knee motor axis to the knee-lock stop blocks (``*_knee_lock_2*`` on the 300 mm extrusion of the knee
+drive; plant USD 45586414): stop torque / this = force on the blocks."""
+
+
+def motor_stop_limits() -> dict[str, tuple[float, float]]:
+    """Mechanical travel [rad] of each motor joint (the plant USD's limits, as pinned in the semantic calibration)."""
+    import json
+
+    from .dropbear_names import REPO_ROOT
+
+    cal = json.loads((REPO_ROOT / "data/calibration/snapshots/dropbear_semantic_calibration_e51033d4.json")
+                     .read_text(encoding="utf-8"))
+    return {m: (float(lo), float(hi)) for m, (lo, hi) in zip(cal["motor_names"], cal["motor_limits_rad"])}
+
 
 LATENCY_STEPS: tuple[int, int] = (0, 2)
 """Position-target delay range in physics steps (dt 5 ms -> 0-10 ms: ESP32 + CAN round trip, unmeasured)."""

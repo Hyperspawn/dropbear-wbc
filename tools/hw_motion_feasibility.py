@@ -10,7 +10,7 @@ of ``robots/hw_motor_specs.py`` (default ``hw_v1`` = the user's map):
   a tracking policy has no authority left in one direction.
 
 This is a REFERENCE-only screen (no physics): it says which clips are kinematically out of reach of the real motors,
-not that the rest is feasible (torque needs a policy rollout on the ``hw_*`` profile, docs/ACTUATORS.md section 11).
+not that the rest is feasible (torque needs a policy rollout on the ``hw_*`` profile, docs/archive/ACTUATORS_HISTORY.md section 11).
 
     python tools/hw_motion_feasibility.py --library data/motions/libraries/accepted_v2.json --out logs/hw_twin/motion_feasibility_hw_v1.json
 """

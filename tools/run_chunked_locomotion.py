@@ -116,8 +116,17 @@ def main() -> int:  # noqa: C901
                     help="calibration JSON to pin (default: the run's pinned file when resuming, else the live one)")
     ap.add_argument("--stand_npz", default=None, help="reset NPZ (scripts/train_locomotion.py --stand_npz)")
     ap.add_argument("--pushes", action="store_true")
+    ap.add_argument("--push_velocity", type=float, default=None, help="scripts/train_locomotion.py --push_velocity")
+    ap.add_argument("--push_interval", type=float, nargs=2, default=None, help="scripts/train_locomotion.py --push_interval")
+    ap.add_argument("--stair_max_m", type=float, default=None, help="scripts/train_locomotion.py --stair_max_m")
+    ap.add_argument("--slope_max", type=float, default=None, help="scripts/train_locomotion.py --slope_max")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train_locomotion.py --actuator_profile")
     ap.add_argument("--thermal_penalty", type=float, default=None, help="scripts/train_locomotion.py --thermal_penalty")
+    ap.add_argument("--stop_model", action="store_true", help="train script --stop_model")
+    ap.add_argument("--stop_load_penalty", type=float, default=0.0, help="train script --stop_load_penalty (< 0)")
+    ap.add_argument("--impact_penalty", type=float, default=0.0, help="train script --impact_penalty (< 0)")
+    ap.add_argument("--knee_band", default=None, help="train script --knee_band 'stiffness,engage_deg'")
+    ap.add_argument("--knee_stop_penalty", type=float, default=0.0, help="scripts/train_locomotion.py --knee_stop_penalty (< 0)")
     ap.add_argument("--gait_shaping", action="store_true", help="scripts/train_locomotion.py --gait_shaping")
     ap.add_argument("--gait_v2", action="store_true", help="scripts/train_locomotion.py --gait_v2")
     ap.add_argument("--gait_v3", action="store_true", help="scripts/train_locomotion.py --gait_v3")
@@ -170,7 +179,8 @@ def main() -> int:  # noqa: C901
     if args.resume_run and not args.actuator_profile:
         infos = sorted((EXP / args.resume_run).glob("run_info*.json"))
         if infos:
-            args.actuator_profile = json.loads(infos[0].read_text(encoding="utf-8")).get("actuator_profile") or None
+            # the newest chunk's profile (run_info_resume_<stamp>.json sort last): a resumed run can change it
+            args.actuator_profile = json.loads(infos[-1].read_text(encoding="utf-8")).get("actuator_profile") or None
         print(json.dumps({"time": _now(), "actuator_profile_from_run_info": args.actuator_profile}), flush=True)
     stop_file = REPO / args.log_dir / f"STOP_{args.run_name}"
     run_dir: Path | None = EXP / args.resume_run if args.resume_run else None
@@ -212,10 +222,28 @@ def main() -> int:  # noqa: C901
                 cmd += ["--stand_npz", args.stand_npz]
             if args.pushes:
                 cmd += ["--pushes"]
+            if args.push_velocity is not None:
+                cmd += [f"--push_velocity={args.push_velocity}"]
+            if args.push_interval is not None:
+                cmd += ["--push_interval", str(args.push_interval[0]), str(args.push_interval[1])]
+            if args.stair_max_m is not None:
+                cmd += [f"--stair_max_m={args.stair_max_m}"]
+            if args.slope_max is not None:
+                cmd += [f"--slope_max={args.slope_max}"]
             if args.actuator_profile:
                 cmd += ["--actuator_profile", args.actuator_profile]
             if args.thermal_penalty is not None:
                 cmd += [f"--thermal_penalty={args.thermal_penalty}"]
+            if args.knee_stop_penalty:
+                cmd += [f"--knee_stop_penalty={args.knee_stop_penalty}"]
+            if args.stop_model:
+                cmd += ["--stop_model"]
+            if args.stop_load_penalty:
+                cmd += [f"--stop_load_penalty={args.stop_load_penalty}"]
+            if args.impact_penalty:
+                cmd += [f"--impact_penalty={args.impact_penalty}"]
+            if args.knee_band:
+                cmd += ["--knee_band", args.knee_band]
             if args.gait_shaping:
                 cmd += ["--gait_shaping"]
             if args.gait_v2:

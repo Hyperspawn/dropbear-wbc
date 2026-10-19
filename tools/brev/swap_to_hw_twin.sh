@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs ON the Brev instance (2026-09-25 midday): stop GPU2 (vel_flat_kneehw_cloud, converged) and GPU3 (lib_v2_future,
 # young A/B), install the hw-twin patch (~/hw_patch.tgz) into every checkout, and fine-tune the cloud walker on the
-# real-actuator profiles: GPU2 hw_v1 (user's motor map), GPU3 hw_v1_cad (CAD motor map). See docs/ACTUATORS.md.
+# real-actuator profiles: GPU2 hw_v1 (user's motor map), GPU3 hw_v1_cad (CAD motor map). See docs/archive/ACTUATORS_HISTORY.md.
 set -u
 source ~/runs/env.sh
 EXPREL=logs/rsl_rl/dropbear_velocity

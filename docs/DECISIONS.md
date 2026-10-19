@@ -4,7 +4,7 @@ Newest first. Each entry gives the decision, the evidence, who made it, and what
 
 ## 2026-09-25: Knee actuation is undersized for a human-style bent-knee walk (sim evidence; lead, 18:55)
 
-- **Evidence:** ACTUATORS.md section 13. The same LAFAN walk tracker was trained with the same init and seed:
+- **Evidence:** archive/ACTUATORS_HISTORY.md section 13. The same LAFAN walk tracker was trained with the same init and seed:
   - with the CEM-60 knee: clipped 82-85 % of the time, RMS 1.65x rated;
   - with an X10-S2 knee: clipped 14 %, RMS 1.03-1.15x rated, tracking twice as accurate.
   - About 30 N*m RMS is needed at the knee joint. The four-bar is a 1.79x speed-up, so the crank needs about 55 N*m RMS.
@@ -261,7 +261,7 @@ Newest first. Each entry gives the decision, the evidence, who made it, and what
 - **Decision.** The user wants quick local training results first, on the RTX 4080 with small env counts. Brev A100s come
   only after the pipeline has been shown to work locally.
 - **Setup.** The Brev CLI v0.6.323 is installed in WSL Ubuntu (`/usr/local/bin/brev`), but its session is logged out.
-  The user will run `brev login` themselves. Claude never handles or stores API keys.
+  The user runs `brev login` themselves; the tooling never handles or stores API keys.
 
 ## 2026-09-23: Plant = user's P: USD (sha 45586414…) with in-memory spawn fixes. Stack = Isaac Lab 2.2 + rsl-rl 2.3.3.
 

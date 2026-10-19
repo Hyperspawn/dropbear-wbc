@@ -4,7 +4,7 @@ Why: the motor model of each joint is not written anywhere authoritative. The Fu
 names (``RMD_X10_S2_*`` = RMD-X10-S2 1:35, ``RMD_X10_V3*`` = RMD-X10 1:7 V3, ``RMD_X8_Pro_*`` = RMD-X8 Pro) as Xform
 prims inside the rigid body they were merged into. A motor joint is driven by the motor whose stator sits in one of
 its two bodies and whose rotor sits in the other, so this listing identifies the motor model per joint
-(docs/ACTUATORS.md section 1).
+(docs/archive/ACTUATORS_HISTORY.md section 1).
 
 Run with an interpreter that has ``pxr`` (usd-core), e.g.::
 

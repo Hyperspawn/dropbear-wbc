@@ -13,6 +13,9 @@ Input: the ``--telemetry`` npz of ``scripts/play.py`` / ``scripts/play_locomotio
                      peak: the mechanical stop carries the load the motor cannot (on the robot: printed stops hammered
                      every step)
 * ``stop_press``     share of steps a motor pushes INTO a stop it already sits on (wasted current, heat)
+* ``stop_rest``      share of a leg's stance steps its knee crank sits on a hard stop, whatever the motor does: the
+                     printed stop carries body weight (2026-10-15: the terrain walkers rested the knee on its flexion
+                     stop in 91-97 % of stance with the motor nearly idle, which ``stop_load`` cannot see)
 * ``target_beyond``  share of steps whose position target lies > 2 deg past a hard stop (a deploy runtime that clamps
                      p_des to the range behaves differently; ISSUES #25)
 * ``jitter``         RMS of the second difference of the 50 Hz targets, per motor (shaky commands)
@@ -46,6 +49,7 @@ THRESH = {
     "near_limit": (0.05, 0.20),      # share of steps
     "stop_load": (0.02, 0.10),       # share of steps
     "stop_press": (0.05, 0.15),      # share of steps
+    "stop_rest": (0.05, 0.15),       # share of the leg's stance steps (published walks: 0-10 %)
     "target_beyond": (0.05, 0.20),   # share of steps
     "jitter": (0.02, 0.05),          # rad, RMS second difference of 50 Hz targets
     "asymmetry": (1.5, 2.0),         # RMS torque ratio (only if the larger side is > 30 % of rated)
@@ -57,7 +61,7 @@ THRESH = {
     "sway_vy": (0.15, 0.30),         # m/s RMS lateral base speed
     "tilt": (0.10, 0.20),            # RMS |projected gravity xy| (~ rad)
 }
-HW_GATE = ("fall", "stop_load", "thermal", "clipped", "speed", "touchdown_skid", "foot_slip", "scuff")
+HW_GATE = ("fall", "stop_load", "stop_rest", "thermal", "clipped", "speed", "touchdown_skid", "foot_slip", "scuff")
 """Checks whose HIGH findings fail the hardware gate: each one breaks or overheats a real part, or slips a foot. The
 rest (jitter, lag, asymmetry, sway, ...) are quality warnings."""
 JUMP_FRAC_OF_PEAK = 0.25
@@ -189,6 +193,20 @@ def scan(path: Path, limits_json: Path = USD_LIMITS_JSON) -> dict:
         c = np.asarray(d["contact"], dtype=bool)
         body["stance_share"] = [round(float(x), 3) for x in c.mean(0)]
         add("limp", abs(c[:, 0].mean() - c[:, 1].mean()), detail=f"stance L/R {c[:, 0].mean():.2f}/{c[:, 1].mean():.2f}")
+        lim_k = np.asarray(d["joint_limits"], dtype=float) if "joint_limits" in d.files else usd_limits(names, limits_json)
+        if lim_k is not None:
+            for k, knee in enumerate(("LL_knee_actuator_joint", "RL_knee_actuator_joint")):
+                if knee not in names or not c[:, k].any():
+                    continue
+                i = names.index(knee)
+                lo, hi = q[:, i] < lim_k[i, 0] + STOP_MARGIN, q[:, i] > lim_k[i, 1] - STOP_MARGIN
+                st = c[:, k]
+                end = "upper" if (hi & st).sum() >= (lo & st).sum() else "lower"
+                on = (hi if end == "upper" else lo) & st
+                add("stop_rest", float(((lo | hi) & st).sum() / st.sum()), motor=knee,
+                    detail=f"on its {end} stop ({np.rad2deg(lim_k[i, 1 if end == 'upper' else 0]):.0f} deg) in "
+                           f"{((lo | hi) & st).sum() / st.sum():.0%} of stance, motor |tau| there "
+                           f"{np.abs(tau[on, i]).mean() if on.any() else 0.0:.1f} N*m")
         for k, side in enumerate(("left", "right")):
             segs = _segments(c[:, k])
             touch = sum(1 for on, L in segs if on and L * dt < CHATTER_S)   # brief touch in swing: toe scuff

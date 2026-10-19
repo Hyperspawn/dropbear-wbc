@@ -3,7 +3,7 @@
 > For the public overview start at the repository README and docs/README.md. This file is the working handoff
 > between development sessions: dense, chronological, and written for someone continuing the work.
 
-Read this first in a new session. Then read `CONTRACTS.md`, `DECISIONS.md`, `ACTUATORS.md`,
+Read this first in a new session. Then read `CONTRACTS.md`, `DECISIONS.md`, `archive/ACTUATORS_HISTORY.md`,
 `OVERNIGHT_BREV_2026-09-25.md`, `DEMOS.md` and the `logs/*/PROGRESS.md` files.
 
 ## What exists (all simulation; the plant is still a CAD-dynamics twin)
@@ -72,7 +72,7 @@ Lessons:
 
 ## The honest gap: why none of this works on the real robot yet
 
-Details are in `docs/ACTUATORS.md` and `data/robot/actuators_datasheet_v1.json`.
+Details are in `docs/archive/ACTUATORS_HISTORY.md` and `data/robot/actuators_datasheet_v1.json`.
 
 The sim's motors are too strong:
 - hips 200 N·m (real: X10-S2 hip pitch 100 N·m, X10 1:7 hip roll and yaw 40 N·m);
@@ -97,7 +97,7 @@ the mass.
 
 ## Phase 1 progress (2026-09-25, 11:45-12:40 IST)
 
-Details are in ACTUATORS.md section 11 and DECISIONS.md.
+Details are in archive/ACTUATORS_HISTORY.md section 11 and DECISIONS.md.
 
 - **Knee motor = EPS-CEM-60, provisional.** No datasheet exists; the vendor only publishes the CEM-15/25/45 (30:1,
   48 V). The model assumes 60 N*m peak, 34 rated, 60 rpm.
@@ -124,7 +124,7 @@ Details are in ACTUATORS.md section 11 and DECISIONS.md.
   - The CAD A/B walks too and has the same pinned knee, so it was stopped.
 - **From 12:51, GPU3 runs `vel_hw_v1_thermal_ft`** (`--thermal_penalty=-2e-4`, warm-started from `model_2786`;
   `tools/brev/swap_gpu3_thermal.sh`). GPU2 keeps running `vel_hw_v1_ft`.
-- **14:00, the locked right knee** (ACTUATORS.md section 12). The policy hops on its left leg and commands the right
+- **14:00, the locked right knee** (archive/ACTUATORS_HISTORY.md section 12). The policy hops on its left leg and commands the right
   knee crank to -300 deg into its stop.
   - Fix: `--gait_shaping` (target clamp, knee flexion in swing, swing clearance, hop penalty, torque rate).
   - Running on Brev: GPU2 `vel_hw_v1_gait_ft` (warm-started from `thermal_ft/model_3500`) and GPU3

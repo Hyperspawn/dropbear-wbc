@@ -58,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--time-scale", type=float, default=1.0,
                     help="stretch the clip in time by this factor (Froude-consistent G1 -> Dropbear: ~1.19 = "
                          "sqrt(hip-height ratio)); the output clip name gets a _ts<k> suffix")
+    ap.add_argument("--knee-max-deg", type=float, default=None,
+                    help="cap the knee flexion [deg] (e.g. 44: keeps squats ~3 deg off the knee's flexion stop); "
+                    "the clip name gets _k<deg>")
     ap.add_argument("--list-sources", action="store_true")
     return ap
 
@@ -79,6 +82,7 @@ def options_from_args(args: argparse.Namespace, mock: bool = False) -> RetargetO
         foot_contact=FootContactParams() if foot else None,
         max_motor_step_rad=step,
         time_scale=float(getattr(args, "time_scale", 1.0) or 1.0),
+        knee_max_deg=getattr(args, "knee_max_deg", None),
     )
 
 
