@@ -104,3 +104,42 @@ class DropbearFlatNoStatePlayEnvCfg(DropbearFlatPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         drop_privileged_policy_obs(self)
+
+
+def use_sensor_dr(cfg, joint_lsb: float = 0.38e-3, action_delay_steps: tuple[int, int] = (0, 4)) -> None:
+    """Sensor-side DR on the POLICY group (``mdp/sensor_dr``) + a wider command delay on ``hw_*`` actuators.
+
+    ``joint_lsb``: 0.38e-3 rad = 0x400/0x500 motion-mode replies; 0.01745 = the 0xA1/A2/A4 replies (1 deg).
+    ``action_delay_steps``: physics steps (5 ms); the default (0, 2) = 0-10 ms is unmeasured, (0, 4) = 0-20 ms.
+    White noise already on the terms is kept. The critic group is untouched.
+    """
+    from isaaclab.managers import EventTermCfg as EventTerm
+    from isaaclab.managers import ObservationTermCfg as ObsTerm
+    from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+
+    from ... import mdp
+    from ...mdp import sensor_dr as sdr
+    from ...tracking_env_cfg import motors_cfg
+
+    cfg.events.sensor_errors = EventTerm(func=sdr.reset_imu_errors, mode="reset")
+    pol = cfg.observations.policy
+    pol.motion_anchor_ori_b = ObsTerm(func=sdr.measured_anchor_ori_b, params={"command_name": "motion"},
+                                      noise=Unoise(n_min=-0.05, n_max=0.05))
+    pol.base_ang_vel = ObsTerm(func=sdr.measured_base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+    pol.joint_pos = ObsTerm(func=sdr.measured_joint, params={"func": mdp.joint_pos_rel, "asset_cfg": motors_cfg(),
+                                                             "lsb": float(joint_lsb)},
+                            noise=Unoise(n_min=-0.01, n_max=0.01))
+    pol.joint_vel = ObsTerm(func=sdr.measured_joint, params={"func": mdp.joint_vel_rel, "asset_cfg": motors_cfg()},
+                            noise=Unoise(n_min=-0.5, n_max=0.5))
+    for act in cfg.scene.robot.actuators.values():
+        if hasattr(act, "max_delay") and hasattr(act, "min_delay") and act.max_delay > 0:
+            act.min_delay, act.max_delay = int(action_delay_steps[0]), int(action_delay_steps[1])
+
+
+@configclass
+class DropbearLibraryNoStateSensorDREnvCfg(DropbearLibraryNoStateEnvCfg):
+    """NoState library training + sensor-side DR (deployment target: 6-axis IMU, motion-mode joint replies)."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        use_sensor_dr(self)

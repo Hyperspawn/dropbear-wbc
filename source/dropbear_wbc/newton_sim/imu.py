@@ -7,7 +7,8 @@ IMU model (root body ``world``, located at the body's centre of mass):
       ``g_world = (0, 0, -9.81)``; ``a_com_world`` is the finite difference of the
       COM velocity over one control tick. Reads ``(0, 0, +9.81)`` upright at rest.
     * ``rpy`` [rad]: intrinsic Z-Y-X roll/pitch/yaw.
-No noise or bias is added.
+No noise or bias is added unless a :class:`~dropbear_wbc.newton_sim.sensor_model.SensorErrorModel` is passed
+(then quat/gyro/accel and motor q/dq are the MEASURED values; the privileged SimState block stays truth).
 """
 from __future__ import annotations
 
@@ -38,8 +39,10 @@ class LowStateAssembler:
         body_names: names of the extra bodies in the readout (for the sim block).
     """
 
-    def __init__(self, tick_dt: float, publish_sim: bool = True, body_names: tuple[str, ...] = ()):
+    def __init__(self, tick_dt: float, publish_sim: bool = True, body_names: tuple[str, ...] = (),
+                 sensor_model=None):
         self.tick_dt = tick_dt
+        self.sensor_model = sensor_model
         self.publish_sim = publish_sim
         self.body_names = tuple(body_names)
         self._prev_lin_vel: np.ndarray | None = None
@@ -54,9 +57,15 @@ class LowStateAssembler:
         ddq = np.zeros(motors.NUM_MOTORS) if self._prev_dq is None else (r.motor_dq - self._prev_dq) / self.tick_dt
         self._prev_lin_vel, self._prev_dq = lin_v, np.asarray(r.motor_dq, float).copy()
         f32 = lambda v: np.asarray(v, dtype=np.float32)  # noqa: E731
-        imu = IMUState(quat_wxyz=f32(q), gyro=f32(rotate_inv_wxyz(q, np.asarray(r.root_ang_vel_w, float))),
-                       accel=f32(rotate_inv_wxyz(q, a_w - GRAVITY_W)), rpy=quat_wxyz_to_rpy(q))
-        motor = MotorStateBlock(mode=np.asarray(motor_mode, np.uint8), q=f32(r.motor_q), dq=f32(r.motor_dq),
+        gyro = rotate_inv_wxyz(q, np.asarray(r.root_ang_vel_w, float))
+        acc = rotate_inv_wxyz(q, a_w - GRAVITY_W)
+        mq, mdq = np.asarray(r.motor_q, float), np.asarray(r.motor_dq, float)
+        qm = q
+        if self.sensor_model is not None:
+            qm, gyro, acc = self.sensor_model.imu(q, gyro, acc)
+            mq, mdq = self.sensor_model.joints(mq, mdq)
+        imu = IMUState(quat_wxyz=f32(qm), gyro=f32(gyro), accel=f32(acc), rpy=quat_wxyz_to_rpy(f32(qm)))
+        motor = MotorStateBlock(mode=np.asarray(motor_mode, np.uint8), q=f32(mq), dq=f32(mdq),
                                 ddq=f32(ddq), tau_est=f32(r.motor_tau),
                                 temperature=np.full(motors.NUM_MOTORS, SIM_TEMPERATURE_C, np.float32))
         neck = MotorStateBlock(mode=np.ones(motors.NUM_NECK, np.uint8), q=f32(r.neck_q), dq=f32(r.neck_dq),
