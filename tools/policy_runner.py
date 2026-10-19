@@ -96,6 +96,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--no-motor-mode-gate", action="store_true",
                     help="do not fail the summary when LowState.motor.mode never reaches ENABLE=1 "
                          "(debug only; default fails — notes/46 F1 / item 156)")
+    ap.add_argument("--no-motor-mode-fsm-gate", action="store_true",
+                    help="disable the FSM L4 gate (Passive + latch when an armed motor reports mode != 1; item 157)")
+    ap.add_argument("--motor-mode-grace-steps", type=int, default=None, help="override fsm.motor_mode_grace_steps")
     return ap.parse_args(argv)
 
 
@@ -176,6 +179,10 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     if args.no_imu_gate:
         cfg.fsm.imu_gate = False
         print("[runner] WARNING: IMU valid/age gate disabled (--no-imu-gate)", flush=True)
+    if args.no_motor_mode_fsm_gate:
+        cfg.fsm.motor_mode_gate = False
+    if args.motor_mode_grace_steps is not None:
+        cfg.fsm.motor_mode_grace_steps = int(args.motor_mode_grace_steps)
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -326,7 +333,8 @@ def main(argv=None) -> int:
                        "root_z": root_z, "state_age_ms": state_age_ms[-1], "imu_valid": info.extra.get("imu_valid"),
                        "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
                        "q": q.tolist(),
-                       "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist()}
+                       "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist(),
+                       "motor_mode": mode_u8.astype(int).tolist()}
                 if info.action is not None:
                     rec["action"] = info.action.tolist()
                 logf.write(json.dumps(rec) + "\n")
@@ -350,6 +358,8 @@ def main(argv=None) -> int:
                         "overall_max_abs_rad": float(np.abs(win).max())}
         mode_ok = motor_mode_enable_steps > 0 or args.no_motor_mode_gate or steps == 0
         status = "executed" if mode_ok else "failed"
+        if mode_ok and ctrl.latched is not None:
+            status = "tripped"  # FSM L4 gate fired: the robot side dropped a motor (item 157); not a clean run
         summary.update({
             "status": status, "steps": steps, "controller_time_s": ctrl_time(st),
             "motor_mode_max": motor_mode_max,
@@ -366,6 +376,10 @@ def main(argv=None) -> int:
             if compute_ms else None,
             "policy_ms_p50": float(np.percentile(policy_ms, 50)) if policy_ms else None,
             "transitions": transitions, "fall": fall, "hold_tracking": tracking,
+            "motor_mode_gate": {"enabled": bool(cfg.fsm.motor_mode_gate),
+                                "grace_steps": int(cfg.fsm.motor_mode_grace_steps),
+                                "arm_timeout_s": cfg.fsm.motor_mode_arm_timeout_s,
+                                "latched": ctrl.latched, "refused": ctrl.refused},
             "final_fsm": ctrl.state.value, "subscriber": sub.stats, "publisher": pub.stats, "keepalives": keepalives,
             "privileged_terms": ctrl.obs_builder.privileged_terms if ctrl.obs_builder else [],
         })

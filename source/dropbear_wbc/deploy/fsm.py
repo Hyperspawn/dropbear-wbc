@@ -22,6 +22,13 @@ IMU health gate (local patch 0004, item 137): ``POLICY`` is refused, and left fo
 same LowState tick has been re-used exceeds ``fsm.imu_max_age_s``) or, if enabled,
 frozen (``fsm.imu_frozen_steps``). A default-constructed ``IMUState`` is invalid, so a
 dead IMU's identity quaternion can no longer pass as "upright".
+
+L4 motor-mode gate (item 157, notes/46 F2): in every active state (MoveToDefault / Hold / Policy) a gated motor
+that the robot side had armed (``LowState.motor.mode == 1``) and that then reports mode != 1 for more than
+``fsm.motor_mode_grace_steps`` steps (HAL: stale reply, latched group fault, watchdog damping) sends the FSM to
+``PASSIVE`` and latches it; a partially armed robot (some motors never 1 within ``motor_mode_arm_timeout_s``)
+trips the same way. Before this gate the FSM never read ``mode``: a damped/faulted leg stayed "held" with q frozen
+at the last reply.
 """
 from __future__ import annotations
 
@@ -95,6 +102,15 @@ class DeployController:
         self._imu_same = 0
         self._imu_health: tuple[str | None, float] = ("imu_unseen", float("inf"))
 
+        n = motors.NUM_MOTORS
+        mask = cfg.fsm.motor_mode_mask
+        self._mode_mask = np.ones(n, bool) if mask is None else np.asarray(mask, bool).reshape(n)
+        self._mode_armed = np.zeros(n, bool)      # motor reported mode 1 at least once
+        self._mode_bad_steps = np.zeros(n, np.int64)  # consecutive steps at mode != 1 after armed
+        self._t_active = None                     # controller time the current active stretch started
+        self.latched: dict | None = None          # set by the motor-mode gate; cleared only by clear_latch()
+        self.refused: list[dict] = []             # requests refused while latched
+
     # ------------------------------------------------------------------ IMU health
 
     def observe_imu(self, low_state: LowState, t: float) -> tuple[str | None, float]:
@@ -124,14 +140,55 @@ class DeployController:
         self._imu_health = (fault, age)
         return fault, age
 
+    # ------------------------------------------------------------------ latch
+
+    def clear_latch(self) -> None:
+        """Operator reset of the motor-mode latch (after the robot side was re-armed). Stays in ``PASSIVE``."""
+        self.latched = None
+        self._mode_armed[:] = False
+        self._mode_bad_steps[:] = 0
+
+    def _motor_mode_check(self, low_state: LowState, t: float, info: StepInfo) -> str | None:
+        """Update the per-motor arm/drop counters; return a trip reason or ``None``."""
+        fsm = self.cfg.fsm
+        mode = np.asarray(low_state.motor.mode).reshape(-1)
+        if mode.shape[0] != motors.NUM_MOTORS:
+            return f"motor_mode(size {mode.shape[0]} != {motors.NUM_MOTORS})"
+        on = mode == MotorMode.ENABLE
+        self._mode_armed |= on
+        active = self.state != FsmState.PASSIVE
+        if not active:
+            self._mode_bad_steps[:] = 0
+            self._t_active = None
+            return None
+        if self._t_active is None:
+            self._t_active = t
+        g = self._mode_mask
+        self._mode_bad_steps = np.where(self._mode_armed & ~on, self._mode_bad_steps + 1, 0)
+        info.extra["motor_mode_bad"] = int(np.count_nonzero(g & (self._mode_bad_steps > 0)))
+        dropped = np.flatnonzero(g & (self._mode_bad_steps > fsm.motor_mode_grace_steps))
+        if dropped.size:
+            return "motor_mode_dropped:" + ",".join(motors.MOTOR_NAMES[i] for i in dropped)
+        if (fsm.motor_mode_arm_timeout_s is not None and np.any(self._mode_armed & g)
+                and t - self._t_active > fsm.motor_mode_arm_timeout_s):
+            never = np.flatnonzero(g & ~self._mode_armed)
+            if never.size:
+                return "motor_mode_never_armed:" + ",".join(motors.MOTOR_NAMES[i] for i in never)
+        return None
+
     # ------------------------------------------------------------------ transitions
 
     def request(self, new: FsmState, low_state: LowState, t: float) -> bool:
-        """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate.
+        """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, or
+        (for any non-Passive state) by the motor-mode latch; the state is then unchanged.
 
-        A refusal leaves the state unchanged and reports ``"<state>->policy refused(<fault>)"`` as the next step's
-        transition (once per distinct fault; callers may retry every step).
+        An IMU refusal reports ``"<state>->policy refused(<fault>)"`` as the next step's transition (once per distinct
+        fault; callers may retry every step).
         """
+        if self.latched is not None and new != FsmState.PASSIVE:
+            self.refused.append({"t": t, "requested": new.value, "latched": self.latched["reason"]})
+            self._pending = f"{self.state.value}->{new.value}(refused:motor_mode_latched)"
+            return False
         if new == FsmState.POLICY and self.policy is None:
             raise RuntimeError("POLICY requested but no ONNX policy is loaded")
         if new == FsmState.POLICY:
@@ -183,6 +240,14 @@ class DeployController:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
             self.state, self._pending = FsmState.PASSIVE, f"policy->passive({fault})"
         info = StepInfo(state=self.state, q_des=np.zeros(n), extra=info_extra)
+        if cfg.fsm.motor_mode_gate:
+            reason = self._motor_mode_check(low_state, t, info)
+            if reason is not None:
+                self._pending = f"{self.state.value}->passive({reason})"
+                self.latched = {"t": t, "tick": int(low_state.tick), "from": self.state.value, "reason": reason}
+                self.state = FsmState.PASSIVE
+                self._t_active = None
+                info.state = self.state
         if self.state == FsmState.PASSIVE:
             q_des, kp, kd = q_meas.copy(), np.zeros(n), cfg.fsm.passive_kd.copy()
         elif self.state == FsmState.MOVE_TO_DEFAULT:

@@ -177,6 +177,17 @@ def _npz_motor_pose(path: Path, frame: int) -> tuple[float, ...]:
     return tuple(float(q[names.index(n)]) for n in _motors.MOTOR_NAMES)
 
 
+
+def published_mode(applied_mode: np.ndarray, damping: bool) -> np.ndarray:
+    """LowState.motor.mode as the HAL reports it (notes/46): 1 only while the motor follows LowCmd.
+
+    The plant keeps its PD enabled in damping (kp=0, kd=damping_kd), but the bridge is then NOT following LowCmd
+    (watchdog / waiting for the first command), so it publishes 0 like the HAL does on watchdog or before arm.
+    Before item 157 the bridge published 1 in damping, so a sim run could never exercise the FSM motor-mode gate.
+    """
+    return np.zeros_like(applied_mode) if damping else applied_mode
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
     report: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()}}
@@ -264,7 +275,7 @@ def main(argv=None) -> int:
             print("[bridge] paused: waiting for the first LowCmd", flush=True)
             t_wait = time.perf_counter()
             while first_cmd is None and not stop["flag"]:
-                pub.Write(asm.build(r0, cur["mode"]))
+                pub.Write(asm.build(r0, published_mode(cur["mode"], True)))  # not following LowCmd yet
                 first_cmd = sub.Read(timeout=0.02)
                 if time.perf_counter() - t_wait > args.wait_timeout_s:
                     raise TimeoutError(f"no LowCmd within {args.wait_timeout_s} s")
@@ -336,7 +347,7 @@ def main(argv=None) -> int:
             step_ms.append((time.perf_counter() - a) * 1e3)
             if not (np.isfinite(r.motor_q).all() and np.isfinite(r.root_pos_w).all()):
                 raise FloatingPointError(f"non-finite plant state at tick {r.tick}")
-            pub.Write(asm.build(r, cur["mode"]))
+            pub.Write(asm.build(r, published_mode(cur["mode"], damping)))
             if trace is not None:
                 trace.add(r, time.perf_counter() - t_start, cur["q"], cur["kp"], cur["kd"], damping, last_cmd_tick)
             # Lockstep: block for the command computed from this tick, unless the watchdog already

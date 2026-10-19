@@ -195,6 +195,17 @@ class FsmCfg:
         imu_frozen_steps: leave/refuse ``POLICY`` when gyro+accel are bit-identical for this many consecutive
             new-tick control steps (a sensor left in SLEEP returns a constant register image, notes/37). 0 = off
             (default: a fixed-base noise-free simulation is legitimately constant). Use ~25 (0.5 s) on hardware.
+        motor_mode_gate: L4 gate on ``LowState.motor.mode`` (notes/46 F2, item 157). In MoveToDefault / Hold /
+            Policy, once the robot side has armed a gated motor (reported mode 1), that motor reporting mode != 1
+            for more than ``motor_mode_grace_steps`` consecutive controller steps sends the FSM to Passive and
+            latches it (``request`` refuses every non-Passive state until :meth:`DeployController.clear_latch`).
+        motor_mode_grace_steps: consecutive mode != 1 steps tolerated per motor (1 = "> 1 step" trips).
+        motor_mode_arm_timeout_s: partial arm: once ANY gated motor reported mode 1, every gated motor must have
+            reported mode 1 within this many seconds of entering an active state; ``None`` disables. A source
+            that never reports mode 1 at all (legacy logs, mode-less sims) is not tripped here; policy_runner's
+            item-156 summary gate fails that run instead.
+        motor_mode_mask: SDK-order bool mask of gated motors (``None`` = all 22; every motor is hold- or
+            policy-controlled in the active states).
     """
 
     move_to_default_s: float = 2.0
@@ -205,6 +216,10 @@ class FsmCfg:
     imu_gate: bool = True
     imu_max_age_s: float | None = 0.060
     imu_frozen_steps: int = 0
+    motor_mode_gate: bool = True
+    motor_mode_grace_steps: int = 1
+    motor_mode_arm_timeout_s: float | None = 0.5
+    motor_mode_mask: np.ndarray | None = None
 
 
 @dataclass
@@ -338,6 +353,24 @@ def _fsm_from(d: dict | None) -> FsmCfg:
         fsm.imu_frozen_steps = int(d["imu_frozen_steps"])
         if fsm.imu_frozen_steps < 0:
             raise ValueError(f"fsm.imu_frozen_steps must be >= 0, got {fsm.imu_frozen_steps}")
+    if "motor_mode_gate" in d:
+        fsm.motor_mode_gate = bool(d["motor_mode_gate"])
+    if "motor_mode_grace_steps" in d:
+        fsm.motor_mode_grace_steps = int(d["motor_mode_grace_steps"])
+        if fsm.motor_mode_grace_steps < 0:
+            raise ValueError("fsm.motor_mode_grace_steps must be >= 0")
+    if "motor_mode_arm_timeout_s" in d:
+        v = d["motor_mode_arm_timeout_s"]
+        fsm.motor_mode_arm_timeout_s = None if v is None else float(v)
+    if d.get("motor_mode_mask") is not None:
+        m = d["motor_mode_mask"]
+        if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):  # motor names
+            bad = [x for x in m if x not in motors.MOTOR_NAMES]
+            if bad:
+                raise ValueError(f"fsm.motor_mode_mask: unknown motor names {bad}")
+            fsm.motor_mode_mask = np.isin(np.asarray(motors.MOTOR_NAMES), m)
+        else:
+            fsm.motor_mode_mask = _vec(m, n, "fsm.motor_mode_mask").astype(bool)
     return fsm
 
 
