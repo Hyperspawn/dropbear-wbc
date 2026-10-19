@@ -119,6 +119,16 @@ class FsmCfg:
         hold_kp, hold_kd: gains for MoveToDefault/Hold and for motors outside the policy.
         bad_orientation_rad: Policy -> Passive when the torso tilt exceeds this [rad]
             (unitree_rl_lab ``bad_orientation(1.0)``); ``None`` disables the check.
+        imu_gate: refuse ``POLICY`` and leave it for ``PASSIVE`` when ``LowState.imu.valid != 1`` (item 137;
+            without it a dead IMU's default identity quaternion reads as "upright" forever and the tilt trip can
+            never fire). Disable only for replaying pre-0004 logs that carry no ``valid`` field.
+        imu_max_age_s: ``POLICY`` needs ``imu.age_us`` (+ time the same LowState tick has been re-used) at or
+            below this [s]; ``None`` disables. Default 0.060 s = modelled worst target-path IMU age 33 ms
+            (notes/39) + one missed 50 Hz DBI frame (20 ms), rounded up. A 20 ms gate false-trips on the
+            modelled real path (13.6-33 ms) and on the sim sensor profiles (7-34 ms + up to 18 ms policy-gate hold).
+        imu_frozen_steps: leave/refuse ``POLICY`` when gyro+accel are bit-identical for this many consecutive
+            new-tick control steps (a sensor left in SLEEP returns a constant register image, notes/37). 0 = off
+            (default: a fixed-base noise-free simulation is legitimately constant). Use ~25 (0.5 s) on hardware.
     """
 
     move_to_default_s: float = 2.0
@@ -126,6 +136,9 @@ class FsmCfg:
     hold_kp: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KP, float))
     hold_kd: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KD, float))
     bad_orientation_rad: float | None = 1.0
+    imu_gate: bool = True
+    imu_max_age_s: float | None = 0.060
+    imu_frozen_steps: int = 0
 
 
 @dataclass
@@ -238,6 +251,14 @@ def _fsm_from(d: dict | None) -> FsmCfg:
             setattr(fsm, key, _vec(d[key], n, f"fsm.{key}"))
     if "bad_orientation_rad" in d:
         fsm.bad_orientation_rad = None if d["bad_orientation_rad"] is None else float(d["bad_orientation_rad"])
+    if "imu_gate" in d:
+        fsm.imu_gate = bool(d["imu_gate"])
+    if "imu_max_age_ms" in d:
+        fsm.imu_max_age_s = None if d["imu_max_age_ms"] is None else float(d["imu_max_age_ms"]) * 1e-3
+    if "imu_frozen_steps" in d:
+        fsm.imu_frozen_steps = int(d["imu_frozen_steps"])
+        if fsm.imu_frozen_steps < 0:
+            raise ValueError(f"fsm.imu_frozen_steps must be >= 0, got {fsm.imu_frozen_steps}")
     return fsm
 
 

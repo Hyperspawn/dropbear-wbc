@@ -15,6 +15,13 @@ States (all 22 motors, SDK slot order in the command):
     * ``POLICY``: ``q* = offset + scale * action`` on the policy joints (policy
       gains); other motors hold the default pose. Leaves to ``PASSIVE`` on bad
       orientation and to ``HOLD`` when a reference motion ends.
+
+IMU health gate (local patch 0004, item 137): ``POLICY`` is refused, and left for
+``PASSIVE`` in the same step (the policy is not evaluated on the bad sample), when
+``LowState.imu`` is invalid (``valid != 1``), stale (``age_us`` plus the time the
+same LowState tick has been re-used exceeds ``fsm.imu_max_age_s``) or, if enabled,
+frozen (``fsm.imu_frozen_steps``). A default-constructed ``IMUState`` is invalid, so a
+dead IMU's identity quaternion can no longer pass as "upright".
 """
 from __future__ import annotations
 
@@ -81,13 +88,60 @@ class DeployController:
         self.full_kp[cfg.motor_ids] = cfg.kp
         self.full_kd[cfg.motor_ids] = cfg.kd
         self._pending: str | None = None
+        self._last_refusal: str | None = None
+        self._imu_tick: int | None = None
+        self._imu_tick_t0 = 0.0
+        self._imu_last_raw: bytes | None = None
+        self._imu_same = 0
+        self._imu_health: tuple[str | None, float] = ("imu_unseen", float("inf"))
+
+    # ------------------------------------------------------------------ IMU health
+
+    def observe_imu(self, low_state: LowState, t: float) -> tuple[str | None, float]:
+        """Update the IMU-health tracker with ``low_state`` at controller time ``t``.
+
+        Returns ``(fault, age_s)``: ``fault`` is ``None`` (healthy), ``"imu_invalid"``, ``"imu_stale"`` or
+        ``"imu_frozen"``; ``age_s`` is the effective sample age (``imu.age_us`` + time this LowState tick has
+        been re-used, ``inf`` when unknown). Idempotent for repeated calls with the same (tick, t).
+        """
+        fsm, imu = self.cfg.fsm, low_state.imu
+        tick = int(low_state.tick)
+        new_tick = tick != self._imu_tick
+        if new_tick:
+            self._imu_tick, self._imu_tick_t0 = tick, t
+            raw = imu.gyro.tobytes() + imu.accel.tobytes()
+            self._imu_same = self._imu_same + 1 if raw == self._imu_last_raw else 0
+            self._imu_last_raw = raw
+        age = imu.age_s + max(0.0, t - self._imu_tick_t0)
+        fault = None
+        if fsm.imu_gate:
+            if int(imu.valid) != 1:
+                fault = "imu_invalid"
+            elif fsm.imu_max_age_s is not None and not age <= fsm.imu_max_age_s:
+                fault = "imu_stale"
+            elif fsm.imu_frozen_steps > 0 and self._imu_same >= fsm.imu_frozen_steps:
+                fault = "imu_frozen"
+        self._imu_health = (fault, age)
+        return fault, age
 
     # ------------------------------------------------------------------ transitions
 
-    def request(self, new: FsmState, low_state: LowState, t: float) -> None:
-        """Enter ``new`` (runs its ``enter`` logic)."""
+    def request(self, new: FsmState, low_state: LowState, t: float) -> bool:
+        """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate.
+
+        A refusal leaves the state unchanged and reports ``"<state>->policy refused(<fault>)"`` as the next step's
+        transition (once per distinct fault; callers may retry every step).
+        """
         if new == FsmState.POLICY and self.policy is None:
             raise RuntimeError("POLICY requested but no ONNX policy is loaded")
+        if new == FsmState.POLICY:
+            fault, _ = self.observe_imu(low_state, t)
+            if fault is not None:
+                if fault != self._last_refusal:
+                    self._pending = f"{self.state.value}->policy refused({fault})"
+                self._last_refusal = fault
+                return False
+        self._last_refusal = None
         self._pending = f"{self.state.value}->{new.value}"
         self.state = new
         self._t_enter = t
@@ -102,6 +156,7 @@ class DeployController:
                 ctx = self._ctx(low_state)
                 pos = ctx.robot_anchor_pos_w() if (self.allow_privileged and low_state.sim is not None) else None
                 self.motion.align(ctx.robot_anchor_quat_w(), pos)
+        return True
 
     def _ctx(self, low_state: LowState) -> ObsContext:
         ctx = ObsContext(state=low_state, cfg=self.cfg, last_action=self._last_action,
@@ -122,7 +177,12 @@ class DeployController:
         cfg = self.cfg
         q_meas = low_state.motor.q.astype(np.float64)
         kp, kd = self.full_kp.copy(), self.full_kd.copy()
-        info = StepInfo(state=self.state, q_des=np.zeros(n))
+        fault, age = self.observe_imu(low_state, t)
+        info_extra = {"imu_valid": int(low_state.imu.valid), "imu_age_s": age, "imu_fault": fault}
+        if self.state == FsmState.POLICY and fault is not None:
+            # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
+            self.state, self._pending = FsmState.PASSIVE, f"policy->passive({fault})"
+        info = StepInfo(state=self.state, q_des=np.zeros(n), extra=info_extra)
         if self.state == FsmState.PASSIVE:
             q_des, kp, kd = q_meas.copy(), np.zeros(n), cfg.fsm.passive_kd.copy()
         elif self.state == FsmState.MOVE_TO_DEFAULT:

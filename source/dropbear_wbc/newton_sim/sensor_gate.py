@@ -66,6 +66,11 @@ class PolicyGatedSensorModel:
         self._i += 1
         return self._held_imu
 
+    def imu_age_s(self) -> float:
+        """Modelled age of the held IMU output [s]: model lag + bridge ticks it has been held since the advance."""
+        held = (self._i - 1) % self.steps_per_policy if self._i > 0 else 0
+        return self.model.imu_age_s() + held * self.model.tick_dt / self.steps_per_policy
+
     def joints(self, q, dq):
         if self._advance or self._held_joints is None:
             self._held_joints = self.model.joints(q, dq)

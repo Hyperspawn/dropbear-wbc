@@ -77,6 +77,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--hold-s", type=float, default=1.0, help="policy mode: time in Hold before Policy")
     ap.add_argument("--move-s", type=float, default=None, help="override MoveToDefault duration [s]")
     ap.add_argument("--no-bad-orientation", action="store_true", help="disable Policy->Passive tilt check")
+    ap.add_argument("--imu-max-age-ms", type=float, default=None,
+                    help="IMU staleness gate [ms] for POLICY (default: config / 60; <= 0 disables the age check)")
+    ap.add_argument("--imu-frozen-steps", type=int, default=None,
+                    help="leave/refuse POLICY after N steps of bit-identical gyro+accel (default: config / 0 = off)")
+    ap.add_argument("--no-imu-gate", action="store_true",
+                    help="disable the IMU valid/age/frozen gate (replaying pre-0004 logs only; unsafe on hardware)")
     ap.add_argument("--fall-tilt-rad", type=float, default=1.0, help="summary: tilt counted as a fall")
     ap.add_argument("--fall-height-m", type=float, default=None, help="summary: root z counted as a fall")
     ap.add_argument("--host", default="127.0.0.1")
@@ -160,6 +166,13 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         cfg.fsm.move_to_default_s = args.move_s
     if args.no_bad_orientation:
         cfg.fsm.bad_orientation_rad = None
+    if args.imu_max_age_ms is not None:
+        cfg.fsm.imu_max_age_s = None if args.imu_max_age_ms <= 0 else args.imu_max_age_ms * 1e-3
+    if args.imu_frozen_steps is not None:
+        cfg.fsm.imu_frozen_steps = max(0, int(args.imu_frozen_steps))
+    if args.no_imu_gate:
+        cfg.fsm.imu_gate = False
+        print("[runner] WARNING: IMU valid/age gate disabled (--no-imu-gate)", flush=True)
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -169,6 +182,11 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
+
+
+def _age_ms(age_s: float | None) -> float | None:
+    """JSON-safe IMU age [ms] (``None`` when absent or unknown)."""
+    return None if age_s is None or age_s == float("inf") else 1e3 * age_s
 
 
 def _meta_list(meta: dict, key: str) -> list[str]:
@@ -190,6 +208,8 @@ def main(argv=None) -> int:
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
                              "hold_kp": cfg.fsm.hold_kp.tolist(), "hold_kd": cfg.fsm.hold_kd.tolist(),
                              "move_to_default_s": cfg.fsm.move_to_default_s,
+                             "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
+                             "imu_frozen_steps": cfg.fsm.imu_frozen_steps,
                              "observations": [t.__dict__ for t in cfg.observations]}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)
         sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
@@ -265,8 +285,8 @@ def main(argv=None) -> int:
                 ctrl.request(schedule[seq_i][1], st, t)
                 seq_i += 1
             if policy_at is not None and t >= policy_at and ctrl.state == FsmState.HOLD:
-                ctrl.request(FsmState.POLICY, st, t)
-                policy_at = None
+                if ctrl.request(FsmState.POLICY, st, t):  # refused while the IMU gate fails: retry next step
+                    policy_at = None
             a = time.perf_counter()
             cmd, info = ctrl.step(st, t)
             pub.Write(cmd)
@@ -293,7 +313,9 @@ def main(argv=None) -> int:
                 print(f"[runner] FALL detected at t={t:.3f}s tilt={tilt:.2f} rad root_z={root_z}", flush=True)
             if logf is not None:
                 rec = {"step": steps, "t": t, "tick": st.tick, "fsm": info.state.value, "tilt": tilt,
-                       "root_z": root_z, "state_age_ms": state_age_ms[-1], "q": q.tolist(),
+                       "root_z": root_z, "state_age_ms": state_age_ms[-1], "imu_valid": info.extra.get("imu_valid"),
+                       "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
+                       "q": q.tolist(),
                        "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist()}
                 if info.action is not None:
                     rec["action"] = info.action.tolist()

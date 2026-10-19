@@ -176,6 +176,10 @@ class SensorErrorModel:
         self.t += self.tick_dt
         return q, out[4:7], out[7:10]
 
+    def imu_age_s(self) -> float:
+        """Modelled IMU sample age [s] of the last ``imu()`` output (episode lag x policy tick)."""
+        return float(self.ep.imu_lag) * self.tick_dt
+
     def joints(self, q, dq):
         """Perfect motor (q, dq) -> measured (aged, quantized, optionally stale-held)."""
         c, n = self.cfg, len(q)

@@ -9,6 +9,8 @@ IMU model (root body ``world``, located at the body's centre of mass):
     * ``rpy`` [rad]: intrinsic Z-Y-X roll/pitch/yaw.
 No noise or bias is added unless a :class:`~dropbear_wbc.newton_sim.sensor_model.SensorErrorModel` is passed
 (then quat/gyro/accel and motor q/dq are the MEASURED values; the privileged SimState block stays truth).
+IMU health (patch 0004): ``valid = 1`` always (the simulated sensor cannot die); ``age_us`` = the sensor model's
+modelled sample age (``imu_age_s()``), 0 without a model.
 """
 from __future__ import annotations
 
@@ -64,7 +66,11 @@ class LowStateAssembler:
         if self.sensor_model is not None:
             qm, gyro, acc = self.sensor_model.imu(q, gyro, acc)
             mq, mdq = self.sensor_model.joints(mq, mdq)
-        imu = IMUState(quat_wxyz=f32(qm), gyro=f32(gyro), accel=f32(acc), rpy=quat_wxyz_to_rpy(f32(qm)))
+        age_s = 0.0
+        if self.sensor_model is not None and hasattr(self.sensor_model, "imu_age_s"):
+            age_s = float(self.sensor_model.imu_age_s())
+        imu = IMUState(quat_wxyz=f32(qm), gyro=f32(gyro), accel=f32(acc), rpy=quat_wxyz_to_rpy(f32(qm)),
+                       valid=1, age_us=int(round(1e6 * max(0.0, age_s))))
         motor = MotorStateBlock(mode=np.asarray(motor_mode, np.uint8), q=f32(mq), dq=f32(mdq),
                                 ddq=f32(ddq), tau_est=f32(r.motor_tau),
                                 temperature=np.full(motors.NUM_MOTORS, SIM_TEMPERATURE_C, np.float32))

@@ -115,6 +115,8 @@ docstrings are authoritative.
 | `imu_state.accelerometer[3]` | `imu.accel` (wire key `acc`) | Body-frame specific force [m/s²]: `R^T (a_com − g)`, reading +9.81 on z when upright at rest. `a_com` is the finite difference of the root CoM velocity over one tick. No noise or bias. Alias `accelerometer`. |
 | `imu_state.rpy[3]` | `imu.rpy` (`rpy`) | Intrinsic ZYX roll/pitch/yaw [rad]. |
 | `imu_state.temperature` (int16) | none | |
+| (none) | `imu.valid` (uint8 on the wire as a msgpack int; key `valid`) | *Added by local patch 0004 (item 137).* 1 = a live, configured IMU sample; 0 = no / dead / unconfigured IMU. A default `IMUState()` is **0**: its identity quaternion is a placeholder. The Newton bridge always sends 1. A message without the key (pre-0004 sender) decodes as 0 and its CRC is checked over the legacy canonical bytes. |
+| (none) | `imu.age_us` (uint32, key `age_us`) | *Patch 0004.* Producer's estimate of IMU sample time -> LowState publish [µs]; `0xFFFFFFFF` = unknown (default; treated as stale). Bridge: 0 without `--sensor-profile`, else the sensor model's modelled lag plus the policy-gate hold. Robot HAL (not written): DBI frame sample stamp mapped through the item-39 clock map, or host arrival time as a lower bound. CRC: appended after `rpy` as `<II valid age_us`. |
 | `motor_state[35]` of `MotorState_` | `motor` block, 22 slots | Motor-contract order. Alias `state.motor_state[i].q`. |
 | `MotorState_.mode` | `motor.mode` (uint8) | Echo of the applied command mode. |
 | `MotorState_.q, dq` | `motor.q, dq` (float32) | Measured joint position and velocity (rad, rad/s). |
@@ -214,7 +216,7 @@ unitree_rl_gym `deploy_real`. It runs once per control step (`step_dt`, 0.02 s).
 | `PASSIVE` | measured q | 0 / `passive_kd` (legacy kd) | Start. Also entered from POLICY on bad orientation. |
 | `MOVE_TO_DEFAULT` | linear from the measured pose to `default_pose_sdk` over `move_to_default_s` (2 s) | hold gains (legacy kp/kd) | After `--passive-s`. Goes to HOLD when the ramp finishes. |
 | `HOLD` | `default_pose_sdk` | hold gains | Unitree `FixStand` |
-| `POLICY` | policy joints: `action_offset + action_scale × action`; other slots hold the default | policy joints: config kp/kd; others: hold gains | After `--hold-s` in policy mode. Goes to PASSIVE if torso tilt > `bad_orientation_rad` (1.0, unitree_rl_lab `bad_orientation`). Goes to HOLD when a reference motion ends. |
+| `POLICY` | policy joints: `action_offset + action_scale × action`; other slots hold the default | policy joints: config kp/kd; others: hold gains | After `--hold-s` in policy mode. Goes to PASSIVE if torso tilt > `bad_orientation_rad` (1.0, unitree_rl_lab `bad_orientation`). Goes to HOLD when a reference motion ends. *Patch 0004:* refused (state unchanged, transition `hold->policy refused(<fault>)`) and left for PASSIVE in the same step, without evaluating the policy, on an IMU fault: `imu_invalid` (`imu.valid != 1`), `imu_stale` (`imu.age_us` + time the same LowState tick has been re-used > `imu_max_age_ms`, default 60) or `imu_frozen` (gyro+accel bit-identical for `imu_frozen_steps` new ticks; default 0 = off). |
 
 Entering POLICY does three things:
 - resets the last action and the observation history;
@@ -232,6 +234,9 @@ MoveToDefault, then Hold, then (policy mode) Policy after `--hold-s`.
   slow-joiner start-up and slow sims.
 - `--clock wall`: a fixed wall-clock period like the Unitree C++ deploy (**UNVERIFIED**, not exercised by any run).
 - `--state-timeout-s` (5): abort if LowState stops.
+- `--imu-max-age-ms` (config, 60; <= 0 disables), `--imu-frozen-steps` (config, 0 = off; ~25 on hardware),
+  `--no-imu-gate` (replaying pre-0004 logs only): IMU health gate of POLICY (patch 0004). The runner retries a
+  refused Hold -> Policy request every step until the IMU is healthy.
 - Outputs:
   - `--log` JSONL, one record per step: t, tick, fsm, tilt, root_z, state age, q, q*, tau_est, action.
   - `--summary` JSON:
@@ -285,7 +290,7 @@ Written upstream by `unitree_rl_lab/utils/export_deploy_cfg.py` and read by `uni
 | `observations: {name: {params, clip, scale, history_length[, func, dim]}}` | Ordered terms. `func` defaults to the key (unitree_rl_lab keys are function names). |
 | `policy` (Dropbear extension) | ONNX path relative to the YAML |
 | `motion` (Dropbear extension) | `{file\|npz\|motion_file, source: npz\|csv\|onnx, anchor_body(_name), fps, time_start, time_end, align, anchor_offset_pos, anchor_offset_quat}` |
-| `fsm` (Dropbear extension) | `{move_to_default_s, passive_kd[22], hold_kp[22], hold_kd[22], bad_orientation_rad}` (SDK order) |
+| `fsm` (Dropbear extension) | `{move_to_default_s, passive_kd[22], hold_kp[22], hold_kd[22], bad_orientation_rad, imu_gate, imu_max_age_ms, imu_frozen_steps}` (SDK order; the `imu_*` keys are patch 0004) |
 
 The Unitree exporter itself cannot be pointed at the Dropbear Isaac env. It resolves *all* 91 articulation joints
 against the SDK names, and the 63 passive DOFs have no SDK slot. A Dropbear `deploy.yaml` is therefore hand-written or

@@ -40,7 +40,8 @@ class FakeArmRobot(threading.Thread):
 
     def state(self) -> LowState:
         st = LowState(tick=self.ticks, stamp_ns=time.perf_counter_ns())
-        st.imu = IMUState(quat_wxyz=np.array([1, 0, 0, 0], np.float32), accel=np.array([0, 0, 9.81], np.float32))
+        st.imu = IMUState(quat_wxyz=np.array([1, 0, 0, 0], np.float32), accel=np.array([0, 0, 9.81], np.float32),
+                          valid=1, age_us=0)
         st.motor = MotorStateBlock.zeros(22)
         st.motor.q[:] = self.q.astype(np.float32)
         sem = self.ik.motor_to_semantic_arms_fast(self.q)
