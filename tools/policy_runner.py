@@ -47,7 +47,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode  # noqa: E402
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -93,6 +93,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--log", type=Path, help="JSONL per-step log")
     ap.add_argument("--summary", type=Path, help="JSON summary")
     ap.add_argument("--settle-window-s", type=float, default=1.0, help="tracking stats over the last N s of Hold")
+    ap.add_argument("--no-motor-mode-gate", action="store_true",
+                    help="do not fail the summary when LowState.motor.mode never reaches ENABLE=1 "
+                         "(debug only; default fails — notes/46 F1 / item 156)")
     return ap.parse_args(argv)
 
 
@@ -210,7 +213,8 @@ def main(argv=None) -> int:
                              "move_to_default_s": cfg.fsm.move_to_default_s,
                              "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
                              "imu_frozen_steps": cfg.fsm.imu_frozen_steps,
-                             "observations": [t.__dict__ for t in cfg.observations]}
+                             "observations": [t.__dict__ for t in cfg.observations],
+                             "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)
         sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
         pub = ChannelPublisher(LOWCMD, LowCmd, endpoints=ep, role="client")
@@ -239,6 +243,8 @@ def main(argv=None) -> int:
         steps, wall_steps, state_age_ms, compute_ms, tick_gaps, policy_ms = 0, [], [], [], [], []
         hold_err: list[np.ndarray] = []
         transitions, fall = [], None
+        motor_mode_max = 0
+        motor_mode_enable_steps = 0
         last_tick = st.tick - decim
         last_rx = time.perf_counter()
         last_cmd: LowCmd | None = None
@@ -303,6 +309,10 @@ def main(argv=None) -> int:
                 print(f"[runner] t={t:6.3f}s {info.transition}", flush=True)
             q = st.motor.q.astype(float)
             err = q - info.q_des
+            mode_u8 = np.asarray(st.motor.mode)
+            motor_mode_max = max(motor_mode_max, int(mode_u8.max()) if mode_u8.size else 0)
+            if np.any(mode_u8 == MotorMode.ENABLE):
+                motor_mode_enable_steps += 1
             tilt = Q.tilt_angle(st.imu.quat_wxyz.astype(float))
             root_z = float(st.sim.root_pos_w[2]) if st.sim is not None else None
             if info.state == FsmState.HOLD and ctrl.state == FsmState.HOLD:
@@ -338,8 +348,12 @@ def main(argv=None) -> int:
                         "per_motor_max_abs_rad": dict(zip(motors.MOTOR_NAMES, np.abs(win).max(0).tolist())),
                         "overall_rms_rad": float(np.sqrt((win ** 2).mean())),
                         "overall_max_abs_rad": float(np.abs(win).max())}
+        mode_ok = motor_mode_enable_steps > 0 or args.no_motor_mode_gate or steps == 0
+        status = "executed" if mode_ok else "failed"
         summary.update({
-            "status": "executed", "steps": steps, "controller_time_s": ctrl_time(st),
+            "status": status, "steps": steps, "controller_time_s": ctrl_time(st),
+            "motor_mode_max": motor_mode_max,
+            "motor_mode_enable_steps": motor_mode_enable_steps,
             "runner_hz_wall": float(1.0 / wall.mean()) if len(wall) else None,
             "step_interval_wall_ms": {"p50": float(np.percentile(wall, 50) * 1e3) if len(wall) else None,
                                       "p99": float(np.percentile(wall, 99) * 1e3) if len(wall) else None},
@@ -355,6 +369,13 @@ def main(argv=None) -> int:
             "final_fsm": ctrl.state.value, "subscriber": sub.stats, "publisher": pub.stats, "keepalives": keepalives,
             "privileged_terms": ctrl.obs_builder.privileged_terms if ctrl.obs_builder else [],
         })
+        if not mode_ok:
+            summary["error"] = (
+                "LowState.motor.mode never reached ENABLE=1; robot side never armed or every LowCmd was "
+                "refused (e.g. hold_kd > motion-mode kd field 5 — notes/46 F1 / item 156). "
+                f"motor_mode_max={motor_mode_max}, steps={steps}. Pass --no-motor-mode-gate to bypass."
+            )
+            print(f"[runner] FAIL: {summary['error']}", flush=True)
     except Exception:  # noqa: BLE001
         summary["error"] = traceback.format_exc()
         print(summary["error"], file=sys.stderr, flush=True)

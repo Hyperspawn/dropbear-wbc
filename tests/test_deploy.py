@@ -27,7 +27,8 @@ def test_fsm_passive_move_hold_sequence():
     cmd, info = ctrl.step(st, 0.0)
     assert info.state == FsmState.PASSIVE
     np.testing.assert_allclose(cmd.motor.kp, 0.0)
-    np.testing.assert_allclose(cmd.motor.kd, np.asarray(motors.DEFAULT_KD, np.float32))
+    from dropbear_wbc.deploy.config import motion_mode_field_kd
+    np.testing.assert_allclose(cmd.motor.kd, motion_mode_field_kd().astype(np.float32))
     np.testing.assert_allclose(cmd.motor.q, q0.astype(np.float32))
     ctrl.request(FsmState.MOVE_TO_DEFAULT, st, 0.0)
     cmd, info = ctrl.step(st, 1.0)  # halfway through the 2 s interpolation
@@ -112,7 +113,7 @@ def test_unitree_deploy_yaml_parse(tmp_path):
         joint_ids_map: {ids}
         step_dt: 0.02
         stiffness: {[10.0 + i for i in range(22)]}
-        damping: {[0.5 + 0.25 * i for i in range(22)]}
+        damping: {[0.5 + 0.2 * i for i in range(22)]}  # max 4.7 < motion-mode kd field 5
         default_joint_pos: {[0.01 * i for i in range(22)]}
         actions:
           JointPositionAction:
@@ -133,7 +134,7 @@ def test_unitree_deploy_yaml_parse(tmp_path):
     assert cfg.joint_names[1] == motors.MOTOR_NAMES[6]
     # unitree_rl_lab: stiffness/damping are SDK slot order; default_joint_pos is policy order
     np.testing.assert_allclose(cfg.kp, [10.0 + s for s in ids])
-    np.testing.assert_allclose(cfg.kd, [0.5 + 0.25 * s for s in ids])
+    np.testing.assert_allclose(cfg.kd, [0.5 + 0.2 * s for s in ids])
     np.testing.assert_allclose(cfg.default_joint_pos, [0.01 * i for i in range(22)])
     np.testing.assert_allclose(cfg.default_pose_sdk[ids], [0.01 * i for i in range(22)])
     ctrl = DeployController(cfg)

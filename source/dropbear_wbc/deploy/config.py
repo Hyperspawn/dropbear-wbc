@@ -105,8 +105,74 @@ class MotionCfg:
     :func:`dropbear_wbc.deploy.motion.load_runtime_motion`."""
 
 
+
 MOTION_SOURCE_RUNTIME = "runtime"
 """``motion.source`` of an export that embeds no reference: the runner needs ``--motion <npz|csv>``."""
+
+
+def motion_mode_field_kd(values: Any = None) -> np.ndarray:
+    """SDK-order kd clipped to the motion-mode field (PROTO_V39 / CEM V4.4: 0..5).
+
+    Legacy ``motors.DEFAULT_KD`` puts 12 on both knees (IdealPD plant damping), which the MIT
+    12-bit kd field cannot carry; HAL reject mode then drops every LowCmd (notes/46 F1 / item 156).
+    """
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    arr = np.asarray(motors.DEFAULT_KD if values is None else values, dtype=float).reshape(-1)
+    return np.clip(arr, 0.0, MOTION_MODE_LIMITS["kd_max"])
+
+
+def motion_mode_field_kp(values: Any = None) -> np.ndarray:
+    """SDK- or policy-order kp clipped to the motion-mode field (0..500)."""
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    arr = np.asarray(motors.DEFAULT_KP if values is None else values, dtype=float).reshape(-1)
+    return np.clip(arr, 0.0, MOTION_MODE_LIMITS["kp_max"])
+
+
+def clamp_deploy_motion_mode_gains(cfg: "DeployConfig") -> list[dict]:
+    """Clamp every on-wire gain (policy kp/kd + FSM hold/passive) to :data:`MOTION_MODE_LIMITS`.
+
+    Same numeric gate as :func:`dropbear_wbc.robots.hw_motor_specs._check_motion_mode_gains` /
+    ``make_hw_motor_groups``, but clamps instead of raising so legacy sidecars / ``DEFAULT_KD``
+    still load. Returns a list of ``{name, field, before, after}`` for anything that moved;
+    stored on ``cfg.meta["motion_mode_gains_clamped"]``.
+    """
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    kd_max = float(MOTION_MODE_LIMITS["kd_max"])
+    kp_max = float(MOTION_MODE_LIMITS["kp_max"])
+    log: list[dict] = []
+
+    def _clip_sdk(arr: np.ndarray, hi: float, field: str) -> np.ndarray:
+        out = arr.astype(float, copy=True)
+        for i, name in enumerate(motors.MOTOR_NAMES):
+            before = float(out[i])
+            after = float(np.clip(before, 0.0, hi))
+            if after != before:
+                log.append({"name": name, "field": field, "before": before, "after": after})
+                out[i] = after
+        return out
+
+    def _clip_policy(arr: np.ndarray, hi: float, field: str) -> np.ndarray:
+        out = arr.astype(float, copy=True)
+        for j, name in enumerate(cfg.joint_names):
+            before = float(out[j])
+            after = float(np.clip(before, 0.0, hi))
+            if after != before:
+                log.append({"name": name, "field": field, "before": before, "after": after})
+                out[j] = after
+        return out
+
+    cfg.fsm.passive_kd = _clip_sdk(np.asarray(cfg.fsm.passive_kd, float), kd_max, "fsm.passive_kd")
+    cfg.fsm.hold_kd = _clip_sdk(np.asarray(cfg.fsm.hold_kd, float), kd_max, "fsm.hold_kd")
+    cfg.fsm.hold_kp = _clip_sdk(np.asarray(cfg.fsm.hold_kp, float), kp_max, "fsm.hold_kp")
+    cfg.kp = _clip_policy(np.asarray(cfg.kp, float), kp_max, "kp")
+    cfg.kd = _clip_policy(np.asarray(cfg.kd, float), kd_max, "kd")
+    if log:
+        cfg.meta = dict(cfg.meta or {})
+        cfg.meta["motion_mode_gains_clamped"] = log
+    return log
 
 
 @dataclass
@@ -132,9 +198,9 @@ class FsmCfg:
     """
 
     move_to_default_s: float = 2.0
-    passive_kd: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KD, float))
-    hold_kp: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KP, float))
-    hold_kd: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KD, float))
+    passive_kd: np.ndarray = field(default_factory=motion_mode_field_kd)
+    hold_kp: np.ndarray = field(default_factory=motion_mode_field_kp)
+    hold_kd: np.ndarray = field(default_factory=motion_mode_field_kd)
     bad_orientation_rad: float | None = 1.0
     imu_gate: bool = True
     imu_max_age_s: float | None = 0.060
@@ -193,6 +259,19 @@ class DeployConfig:
             raise ValueError(f"target_clip: expected ({n}, 2) with lo <= hi, got {self.target_clip.shape}")
         if self.target_interp_steps < 0:
             raise ValueError(f"target_interp_steps must be >= 0, got {self.target_interp_steps}")
+        from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+        kd_max = MOTION_MODE_LIMITS["kd_max"]
+        kp_max = MOTION_MODE_LIMITS["kp_max"]
+        if np.any(np.asarray(self.fsm.passive_kd) > kd_max) or np.any(np.asarray(self.fsm.hold_kd) > kd_max):
+            raise ValueError(
+                f"fsm.passive_kd/hold_kd must be <= motion-mode kd field {kd_max} "
+                f"(call clamp_deploy_motion_mode_gains); knee DEFAULT_KD=12 is not wire-legal"
+            )
+        if np.any(np.asarray(self.fsm.hold_kp) > kp_max) or np.any(np.asarray(self.kp) > kp_max)                 or np.any(np.asarray(self.kd) > kd_max):
+            raise ValueError(
+                f"policy/hold gains must be inside motion-mode limits {MOTION_MODE_LIMITS} "
+                f"(call clamp_deploy_motion_mode_gains before validate)"
+            )
 
 
 def _vec(value: Any, n: int, name: str) -> np.ndarray:
@@ -326,6 +405,7 @@ def load_deploy_yaml(path: Path) -> DeployConfig:
         policy_path=None if d.get("policy") is None else (base / d["policy"]).resolve(),
         motion=_motion_from(d.get("motion"), base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
         source=str(path))
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
@@ -377,16 +457,22 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
         motion=_motion_from(motion or None, base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
         obs_dim=d.get("obs_dim"), source=str(path), meta={k: d[k] for k in ("task", "usd_sha256", "run_path")
                                                             if k in d})
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
 
 def hold_config(default_pose_sdk: np.ndarray | None = None) -> DeployConfig:
-    """A policy-less configuration for the ``hold`` mode (all 22 motors, legacy gains)."""
+    """A policy-less configuration for the ``hold`` mode (all 22 motors, motion-mode-safe gains).
+
+    Legacy ``DEFAULT_KD`` knees are 12 (IdealPD); the MIT kd field max is 5, so hold/passive defaults
+    are clipped via :func:`clamp_deploy_motion_mode_gains` (notes/46 F1 / item 156).
+    """
     full = np.asarray(motors.DEFAULT_POS if default_pose_sdk is None else default_pose_sdk, dtype=float)
     cfg = DeployConfig(joint_names=motors.MOTOR_NAMES, motor_ids=np.arange(motors.NUM_MOTORS), step_dt=0.02,
-                       kp=np.asarray(motors.DEFAULT_KP, float), kd=np.asarray(motors.DEFAULT_KD, float),
+                       kp=motion_mode_field_kp(), kd=motion_mode_field_kd(),
                        default_joint_pos=full.copy(), action_scale=np.zeros(motors.NUM_MOTORS),
                        action_offset=full.copy(), default_pose_sdk=full, source="builtin:hold")
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
