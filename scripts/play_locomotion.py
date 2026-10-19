@@ -260,13 +260,10 @@ def main() -> int:  # noqa: C901
     finite = True
     # per-motor torque / speed samples (last physics substep of each policy step, live envs after warm-up):
     # "clipped" = the actuator model cut the PD torque (effort limit or, for hw_* profiles, the torque-speed line)
-    motor_cols = [(N.MOTOR_NAMES.index(name), act, k) for act in robot.actuators.values()
-                  for k, name in enumerate(act.joint_names) if name in N.MOTOR_NAMES]
+    from dropbear_wbc.isaac.motor_torque import MotorTorqueSampler
+
+    torque = MotorTorqueSampler(robot.actuators, N.MOTOR_NAMES, num_envs, dev)
     motor_ids = robot.find_joints(list(N.MOTOR_NAMES), preserve_order=True)[0]
-    tq_samples, clip_samples, vel_samples = [], [], []
-    peak_lim = torch.zeros(len(N.MOTOR_NAMES), device=dev)
-    for i, act, k in motor_cols:
-        peak_lim[i] = act.effort_limit[0, k]
     tel = None
     if args.telemetry is not None:
         from dropbear_wbc.isaac.telemetry import MotorTelemetry
@@ -320,15 +317,7 @@ def main() -> int:  # noqa: C901
             anchor_min = torch.where(live, torch.minimum(anchor_min, robot.data.body_link_pos_w[:, anchor, 2]), anchor_min)
             worst_gap = max(worst_gap, float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)[live].max())
                             if bool(live.any()) else 0.0)
-            if bool(live.any()):
-                tau = torch.zeros(num_envs, len(N.MOTOR_NAMES), device=dev)
-                clip = torch.zeros_like(tau, dtype=torch.bool)
-                for i, act, k in motor_cols:
-                    tau[:, i] = act.applied_effort[:, k]
-                    clip[:, i] = (act.computed_effort[:, k] - act.applied_effort[:, k]).abs() > 0.01 * peak_lim[i]
-                tq_samples.append(tau[live].abs())
-                clip_samples.append(clip[live])
-                vel_samples.append(robot.data.joint_vel[live][:, motor_ids].abs())
+            torque.add(robot.data.joint_vel[:, motor_ids], live)
         end_xy = torch.where(live.unsqueeze(-1), robot.data.root_pos_w[:, :2], end_xy)
         alive &= ~terminated
         if step % 50 == 0 or step == args.steps - 1:
@@ -375,21 +364,11 @@ def main() -> int:  # noqa: C901
         "finite": finite, "falls_total": int((fall_step >= 0).sum()), "worst_closure_gap_m": worst_gap,
         "by_scenario": by_scn, "per_env": per_env, "trace_env0": trace,
     })
-    if tq_samples:
-        tq, cl, vl = torch.cat(tq_samples), torch.cat(clip_samples).float(), torch.cat(vel_samples)
-        summary["motor_torque"] = {
-            "note": "|applied motor torque| and |joint speed| at the last physics substep of each policy step, live envs "
-                    "after warm-up, all scenarios pooled; clip_frac = share of samples where the actuator model cut the "
-                    "PD torque (peak limit, or the torque-speed line for hw_* profiles)",
-            "samples": int(tq.shape[0]),
-            "per_motor": {name: {"peak_limit_Nm": round(float(peak_lim[i]), 2), "max_Nm": round(float(tq[:, i].max()), 2),
-                                 "p95_Nm": round(float(torch.quantile(tq[:, i], 0.95)), 2),
-                                 "rms_Nm": round(float(tq[:, i].pow(2).mean().sqrt()), 2),
-                                 "clip_frac": round(float(cl[:, i].mean()), 4),
-                                 "max_speed_rad_s": round(float(vl[:, i].max()), 2),
-                                 "p95_speed_rad_s": round(float(torch.quantile(vl[:, i], 0.95)), 2)}
-                          for i, name in enumerate(N.MOTOR_NAMES)},
-        }
+    mt = torque.block("|applied motor torque| and |joint speed| at the last physics substep of each policy step, "
+                      "live envs after warm-up, all scenarios pooled; clip_frac = share of samples where the actuator "
+                      "model cut the PD torque (peak limit, or the torque-speed line for hw_* profiles)")
+    if mt is not None:
+        summary["motor_torque"] = mt
     if args.video:
         summary["video_dir"] = str(video_dir)
         summary["video_script"] = args.video_script
