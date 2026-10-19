@@ -106,11 +106,12 @@ class DropbearFlatNoStatePlayEnvCfg(DropbearFlatPlayEnvCfg):
         drop_privileged_policy_obs(self)
 
 
-def use_sensor_dr(cfg, joint_lsb: float = 0.38e-3, action_delay_steps: tuple[int, int] = (0, 4)) -> None:
+def use_sensor_dr(cfg, joint_lsb: float = 0.38e-3, action_delay_steps: tuple[int, int] = (0, 3)) -> None:
     """Sensor-side DR on the POLICY group (``mdp/sensor_dr``) + a wider command delay on ``hw_*`` actuators.
 
     ``joint_lsb``: 0.38e-3 rad = 0x400/0x500 motion-mode replies; 0.01745 = the 0xA1/A2/A4 replies (1 deg).
-    ``action_delay_steps``: physics steps (5 ms); the default (0, 2) = 0-10 ms is unmeasured, (0, 4) = 0-20 ms.
+    ``action_delay_steps``: physics steps (5 ms). (0, 3) = 0-15 ms: notes/39 chain model gives policy tick -> torque
+    applied 0.9-9.6 ms (200 Hz MIT round, async HAL), p99 10.7 ms with 1 ms round jitter. Not yet measured (S39).
     White noise already on the terms is kept. The critic group is untouched.
     """
     from isaaclab.managers import EventTermCfg as EventTerm

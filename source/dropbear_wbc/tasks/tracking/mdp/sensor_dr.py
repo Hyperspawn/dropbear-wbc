@@ -5,7 +5,8 @@ IMU with no magnetometer (heading = integrated gyro), a tilted/misaligned mount,
 that is up to one command period old with a reply-format quantum. This module adds those errors to the POLICY group.
 
 * :func:`reset_imu_errors` (EventTerm, mode="reset") samples per env: roll/pitch misalignment, gyro bias, heading
-  drift rate, and IMU / joint-state ages in policy steps (fractional).
+  drift rate, and IMU / joint-state ages in policy steps (fractional). Defaults from notes/39 (item 39): IMU 7-34 ms,
+  joint 0-10 ms; both are per-boot phase constants on hardware, so per-episode sampling is the right structure.
 * :class:`measured_anchor_ori_b` replaces ``motion_anchor_ori_b``: robot anchor orientation is
   ``Rz(rate * t) * q_true * q_mis`` before the frame subtraction, then aged.
 * :class:`measured_base_ang_vel` replaces ``base_ang_vel``: ``R_mis^T w + b``, aged (white noise stays on the term).
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
 _ATTR = "_dropbear_sensor_err"
+MAX_AGE_STEPS = 2.0
+"""History depth for every aged term; an age above it is a config error (raised, not clamped)."""
 
 
 class _SensorErr:
@@ -50,8 +53,8 @@ def _err(env: ManagerBasedEnv) -> _SensorErr:
 
 def reset_imu_errors(env: ManagerBasedEnv, env_ids: torch.Tensor | None, tilt_rad: float = math.radians(3.0),
                      gyro_bias: float = 0.02, yaw_drift_rate: float = 0.02,
-                     imu_age_steps: tuple[float, float] = (0.0, 0.75),
-                     joint_age_steps: tuple[float, float] = (0.0, 1.0)) -> None:
+                     imu_age_steps: tuple[float, float] = (0.35, 1.7),
+                     joint_age_steps: tuple[float, float] = (0.0, 0.5)) -> None:
     """EventTerm (mode="reset"): sample per-episode sensor errors for ``env_ids``."""
     e = _err(env)
     if env_ids is None:
@@ -64,6 +67,9 @@ def reset_imu_errors(env: ManagerBasedEnv, env_ids: torch.Tensor | None, tilt_ra
     e.r_mis[env_ids] = matrix_from_quat(q)
     e.gyro_b[env_ids] = u(gyro_bias, n, 3)
     e.yaw_rate[env_ids] = u(yaw_drift_rate, n)
+    for name, (lo, hi) in (("imu_age_steps", imu_age_steps), ("joint_age_steps", joint_age_steps)):
+        if not 0.0 <= lo <= hi <= MAX_AGE_STEPS:
+            raise ValueError(f"{name}={(lo, hi)} outside [0, MAX_AGE_STEPS={MAX_AGE_STEPS}]")
     lo, hi = imu_age_steps
     e.imu_lag[env_ids] = lo + (hi - lo) * torch.rand(n, device=dev)
     lo, hi = joint_age_steps
@@ -92,6 +98,8 @@ class _FracDelay:
         if self.fresh.any():
             self.h[:, self.fresh] = x[self.fresh].unsqueeze(0)
             self.fresh[:] = False
+        if bool((lag > self.k - 1 + 1e-6).any()):
+            raise ValueError(f"age {float(lag.max()):.3f} steps > history {self.k - 1} (raise max_age_steps)")
         lag = lag.clamp(0.0, self.k - 1)
         i0 = lag.floor().long()
         a = (lag - i0).unsqueeze(-1)
@@ -105,12 +113,12 @@ class measured_anchor_ori_b(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ManagerBasedEnv):
         super().__init__(cfg, env)
-        self._d = _FracDelay(float(cfg.params.get("max_age_steps", 1.0)))
+        self._d = _FracDelay(float(cfg.params.get("max_age_steps", MAX_AGE_STEPS)))
 
     def reset(self, env_ids=None) -> None:
         self._d.reset(slice(None) if env_ids is None else env_ids)
 
-    def __call__(self, env: ManagerBasedEnv, command_name: str, max_age_steps: float = 1.0) -> torch.Tensor:
+    def __call__(self, env: ManagerBasedEnv, command_name: str, max_age_steps: float = MAX_AGE_STEPS) -> torch.Tensor:
         e, cmd = _err(env), env.command_manager.get_term(command_name)
         t = env.episode_length_buf.float() * env.step_dt
         zero = torch.zeros_like(t)
@@ -126,13 +134,13 @@ class measured_base_ang_vel(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ManagerBasedEnv):
         super().__init__(cfg, env)
-        self._d = _FracDelay(float(cfg.params.get("max_age_steps", 1.0)))
+        self._d = _FracDelay(float(cfg.params.get("max_age_steps", MAX_AGE_STEPS)))
 
     def reset(self, env_ids=None) -> None:
         self._d.reset(slice(None) if env_ids is None else env_ids)
 
     def __call__(self, env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-                 max_age_steps: float = 1.0) -> torch.Tensor:
+                 max_age_steps: float = MAX_AGE_STEPS) -> torch.Tensor:
         e = _err(env)
         w = env.scene[asset_cfg.name].data.root_ang_vel_b
         w = torch.bmm(e.r_mis.transpose(1, 2), w.unsqueeze(-1)).squeeze(-1) + e.gyro_b
@@ -145,7 +153,7 @@ class measured_joint(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ManagerBasedEnv):
         super().__init__(cfg, env)
-        self._d = _FracDelay(float(cfg.params.get("max_age_steps", 1.0)))
+        self._d = _FracDelay(float(cfg.params.get("max_age_steps", MAX_AGE_STEPS)))
         a = cfg.params.get("asset_cfg")
         if isinstance(a, SceneEntityCfg):
             a.resolve(env.scene)
@@ -154,6 +162,6 @@ class measured_joint(ManagerTermBase):
         self._d.reset(slice(None) if env_ids is None else env_ids)
 
     def __call__(self, env: ManagerBasedEnv, func, asset_cfg: SceneEntityCfg, lsb: float = 0.0,
-                 max_age_steps: float = 1.0) -> torch.Tensor:
+                 max_age_steps: float = MAX_AGE_STEPS) -> torch.Tensor:
         x = self._d(func(env, asset_cfg=asset_cfg), _err(env).joint_lag)
         return torch.round(x / lsb) * lsb if lsb > 0 else x

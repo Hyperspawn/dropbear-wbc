@@ -10,7 +10,8 @@ Per episode (``reset``), one sample of:
     * residual gyro bias (uniform +-``gyro_bias``, per axis, after a boot still-stand calibration);
     * heading drift rate (uniform +-``yaw_drift_rate``): a 6-axis fusion integrates yaw from the gyro;
     * accelerometer bias (uniform +-``accel_bias``);
-    * IMU and joint-state ages in control ticks (uniform, fractional; linear interpolation between ticks).
+    * IMU and joint-state ages in policy steps (uniform, fractional; linear interpolation between steps). Call the
+      model once per POLICY step (50 Hz), not per bridge tick, or the ages shrink 10x. Ranges: notes/39 (item 39).
 Per tick: gyro bias random walk, white noise, full-scale clipping, LSB quantization; joint q/dq quantization and
 optional stale hold (a motor's state refreshes with probability ``joint_update_prob`` per tick: polled state).
 
@@ -47,13 +48,17 @@ class SensorErrorCfg:
     accel_lsb: float = G / 16384.0
     yaw_drift_rate: float = 0.02
     """Heading drift [rad/s] of 6-axis fusion = residual z bias integrated; 0.02 rad/s = 11.5 deg per 10 s clip."""
-    imu_age_ticks: tuple[float, float] = (0.0, 0.75)
+    imu_age_ticks: tuple[float, float] = (0.35, 1.7)
+    """IMU sample (incl. DLPF group delay) -> policy input, in policy steps: 7-34 ms. notes/39 chain model, item-8
+    target over DBI v1 at 115200: 13.6-33 ms (5 ch) / 8.9-28 ms (torso 1 ch); never below ~7 ms (DLPF 4.8-5.9 ms +
+    wire). Per episode: the age is a boot-phase constant (within-session std ~1 ms). Replace after bench S39."""
     # joint state
     joint_q_lsb: float = 0.38e-3
     """0x400/0x500 motion-mode reply angle quantum [rad]; the 0xA1/A2/A4 replies are 1 deg = 17.5e-3 (item 34)."""
     joint_dq_lsb: float = 22e-3
-    joint_age_ticks: tuple[float, float] = (0.0, 1.0)
-    """Motion-mode replies answer the PREVIOUS command: up to one control tick old at inference."""
+    joint_age_ticks: tuple[float, float] = (0.0, 0.5)
+    """Encoder sample -> policy input, in policy steps (0-10 ms). notes/39: 0.6-8.1 ms with a 200 Hz MIT round,
+    12.8 ms max with 1 ms round jitter + 2 ms USB. The old (0, 1) = 0-20 ms assumed reply-per-policy-step."""
     joint_update_prob: float = 1.0
     """Per-tick probability a motor's state refreshes (0.034 = deployed 0x92 poll ~1.7 Hz/motor at 50 Hz)."""
 
@@ -66,7 +71,11 @@ PROFILES: dict[str, SensorErrorCfg] = {
     "motion_mode": SensorErrorCfg(),
 }
 PROFILES["a1_reply"] = replace(PROFILES["motion_mode"], joint_q_lsb=math.radians(1.0), joint_dq_lsb=math.radians(1.0))
-PROFILES["deployed_054"] = replace(PROFILES["a1_reply"], joint_update_prob=1.7 / 50.0)
+PROFILES["deployed_054"] = replace(PROFILES["a1_reply"], joint_update_prob=1.7 / 50.0, imu_age_ticks=(0.0, 0.75),
+                                   joint_age_ticks=(0.0, 1.0))
+PROFILES["center_0010"] = replace(PROFILES["motion_mode"], gyro_full_scale=math.radians(1000.0),
+                                  gyro_lsb=math.radians(1.0 / 32.8), accel_full_scale=8.0 * G, accel_lsb=G / 4096.0)
+"""Center board with Dropbear-0010 (FS_SEL 2 +-1000 dps, AFS_SEL 2 +-8 g, DLPF 3)."""
 """Firmware .54 as deployed: 0x92 poll, ~1.7 Hz per motor."""
 
 
