@@ -170,9 +170,10 @@ class DatasheetMotorCfg(IdealPDActuatorCfg):
 
 
 def make_hw_profile_groups(profile: str, stop_model: bool = False,
-                           knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
+                           knee_band: tuple[float, float] | None = None) -> dict:
     """Motor groups of an ``hw_*`` actuator profile: its motor map plus its options (``HW_PROFILE_OPTIONS``).
-    ``knee_band``: (stiffness N*m/rad, engage deg) of an elastic on each knee crank (see ``make_hw_motor_groups``)."""
+    ``knee_band``: (stiffness N*m/rad, engage deg) of an elastic on each knee crank (see ``make_hw_motor_groups``).
+    Armature-DR profiles (``*_armdr``) mix DatasheetMotor + ImplicitActuator on the notes/13 T3 joints."""
     from .hw_motor_specs import HW_PROFILE_MAPS, HW_PROFILE_OPTIONS
 
     return make_hw_motor_groups(HW_PROFILE_MAPS[profile], stop_model=stop_model, knee_band=knee_band,
@@ -183,10 +184,15 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
                          target_interp_steps: int = 0,
                          gain_overrides: dict[str, tuple[float, float]] | None = None,
                          stop_model: bool = False,
-                         knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
+                         knee_band: tuple[float, float] | None = None,
+                         armature_dr: bool = False) -> dict:
     """One :class:`DatasheetMotorCfg` group per motor model of ``map_name`` (group name ``hw_<model>``).
-    ``gain_overrides``: motor name -> (kp, kd) replacing the role gains (checked against the motion-mode limits)."""
-    from .hw_motor_specs import MOTION_MODE_LIMITS, STOP_MODEL, motor_stop_limits
+    ``gain_overrides``: motor name -> (kp, kd) replacing the role gains (checked against the motion-mode limits).
+    ``armature_dr``: put :data:`ARMATURE_DR_IMPLICIT_JOINTS` on ImplicitActuator (stable at the alt armature under
+    explicit 5 ms PD) and leave the rest on DatasheetMotor; callers must also install the armature DR EventTerm
+    (``DropbearFlatEnvCfg.enable_armature_dr``). The explicit stop model and the knee band act on the DatasheetMotor
+    groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits."""
+    from .hw_motor_specs import MOTION_MODE_LIMITS, STOP_MODEL, armature_dr_group_plan, motor_stop_limits
 
     params = joint_hw_params(map_name)
     for name, (kp, kd) in (gain_overrides or {}).items():
@@ -195,15 +201,21 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
         if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
             raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
         params[name] = {**params[name], "kp": float(kp), "kd": float(kd)}
+
+    plan = armature_dr_group_plan(map_name, gain_overrides=gain_overrides) if armature_dr else None
     by_model: dict[str, list[str]] = {}
-    for joint, p in params.items():
-        by_model.setdefault(p["model"], []).append(joint)
-    groups: dict[str, DatasheetMotorCfg] = {}
+    if plan is None:
+        for joint, p in params.items():
+            by_model.setdefault(p["model"], []).append(joint)
+    else:
+        by_model = {m: list(js) for m, js in plan["explicit"].items()}
+
+    groups: dict = {}
     for model, joints in by_model.items():
         key = "hw_" + model.lower().replace("-", "_").replace(":", "_").replace(".", "_")
 
-        def per_joint(field: str, scale: float = 1.0) -> dict[str, float]:
-            return {j: float(params[j][field]) * scale for j in joints}
+        def per_joint(field: str, scale: float = 1.0, _joints=joints) -> dict[str, float]:
+            return {j: float(params[j][field]) * scale for j in _joints}
 
         groups[key] = DatasheetMotorCfg(
             joint_names_expr=list(joints),
@@ -248,6 +260,16 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             if knees:  # an elastic beside each knee motor, pulling the crank back toward a straight knee
                 groups[key].spring_stiffness = {j: (float(knee_band[0]) if j in knees else 0.0) for j in joints}
                 groups[key].spring_engage = {j: (math.radians(float(knee_band[1])) if j in knees else 0.0) for j in joints}
+    if plan is not None:
+        # one ImplicitActuator group for the T3-unstable joints (calves + wrist roll)
+        joints = list(plan["implicit"])
+        groups["hw_armdr_implicit"] = ImplicitActuatorCfg(
+            joint_names_expr=joints,
+            effort_limit_sim={j: plan["implicit"][j]["effort"] for j in joints},
+            stiffness={j: plan["implicit"][j]["kp"] for j in joints},
+            damping={j: plan["implicit"][j]["kd"] for j in joints},
+            armature={j: plan["implicit"][j]["armature"] for j in joints},
+        )
     return groups
 
 

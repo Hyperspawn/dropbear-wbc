@@ -58,8 +58,16 @@ class MotorModel:
 
     @property
     def armature(self) -> float:
-        """Reflected rotor inertia rotor x ratio^2 [kg*m^2]."""
+        """Reflected rotor inertia rotor x ratio^2 [kg*m^2] (datasheet reading of the vendor Inertia field)."""
         return self.rotor_inertia * self.gear_ratio**2
+
+    @property
+    def armature_alt(self) -> float | None:
+        """Alternative catalog reading: vendor Inertia taken as already output-reflected (= rotor x N), not rotor x N^2.
+        None when unknown (CEM-60 provisional). Lower end of the armature DR until bench E4 (notes/13 T2)."""
+        if self.name.startswith("EPS-CEM"):
+            return None
+        return self.rotor_inertia * self.gear_ratio
 
 
 MOTOR_MODELS: dict[str, MotorModel] = {
@@ -209,6 +217,12 @@ HW_PROFILE_OPTIONS: dict[str, dict] = {
     # elbow kp 50 -> 200: at the joint kp / G^2 = 2.2 -> 8.7 N*m/rad through the 4.8x speed-up linkage, so the forearm
     # sags ~10 deg instead of ~40 deg under its own weight and the policy needs no large mass-specific target offset
     "hw_v1ie": {"target_interp_steps": 4, "gain_overrides": {"LH_elbow_joint": (200.0, 4.0), "RH_elbow_joint": (200.0, 4.0)}},
+    # armature DR (notes/13 T2-T3): log-uniform alt..datasheet on the critical set; ImplicitActuator on joints whose
+    # explicit PD at 5 ms goes unstable at the alt read (calves + wrist roll). Upper-arm roll stays explicit (rho_alt<1).
+    "hw_v1_armdr": {"armature_dr": True},
+    "hw_v1i_armdr": {"target_interp_steps": 4, "armature_dr": True},
+    "hw_v1ie_armdr": {"target_interp_steps": 4, "armature_dr": True,
+                      "gain_overrides": {"LH_elbow_joint": (200.0, 4.0), "RH_elbow_joint": (200.0, 4.0)}},
 }
 # copies, so that changing a v2 option never changes the published v1 profiles
 HW_PROFILE_OPTIONS["hw_v2i"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1i"])
@@ -289,6 +303,30 @@ def legacy_group_armature(map_name: str = "user_2026_09_25") -> dict[str, dict[s
     return {g: {m: float(params[m]["armature"]) for m in motors} for g, motors in ACTUATOR_GROUP_MOTORS.items()}
 
 
+# armature DR profiles share the same motor maps as their non-DR parents
+HW_PROFILE_MAPS["hw_v1_armdr"] = "user_2026_09_25"
+HW_PROFILE_MAPS["hw_v1i_armdr"] = "user_2026_09_25"
+HW_PROFILE_MAPS["hw_v1ie_armdr"] = "user_2026_09_25"
+
+ARMATURE_DR_CRITICAL_JOINTS: tuple[str, ...] = (
+    "LL_Revolute67", "LL_Revolute81", "RL_Revolute67", "RL_Revolute81",  # calves (parallel ankle)
+    "LH_wrist_roll", "RH_wrist_roll",
+    "LH_roll", "RH_roll",  # upper-arm roll
+)
+"""First joints for armature DR (notes/13 T2-T3): link_at_rest < armature_alt * 3."""
+
+ARMATURE_DR_IMPLICIT_JOINTS: tuple[str, ...] = (
+    "LL_Revolute67", "LL_Revolute81", "RL_Revolute67", "RL_Revolute81",
+    "LH_wrist_roll", "RH_wrist_roll",
+)
+"""Critical joints whose explicit PD at dt=5 ms has spectral radius >1 at the alt armature (notes/13 B). Upper-arm
+roll is in the critical set but stays on DatasheetMotor (rho_alt 0.88). Alternative to implicit: physics dt 2.5 ms
+(``ARMATURE_DR_SAFE_DT``) keeps DatasheetMotor on these joints too."""
+
+ARMATURE_DR_PHYSICS_DT: float = 0.005
+ARMATURE_DR_SAFE_DT: float = 0.0025
+"""Halving the physics step (and doubling decimation to keep 50 Hz) also stabilises explicit PD at the alt armature."""
+
 LATENCY_STEPS: tuple[int, int] = (0, 2)
 """Position-target delay range in physics steps (dt 5 ms -> 0-10 ms: ESP32 + CAN round trip, unmeasured)."""
 FRICTION_SCALE_RANGE: tuple[float, float] = (0.5, 1.5)
@@ -311,8 +349,153 @@ def joint_hw_params(map_name: str = "user_2026_09_25") -> dict[str, dict]:
         kp, kd = HW_GAINS[JOINT_ROLES[name]]
         if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
             raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
-        out[name] = {**asdict(m), "model": m.name, "armature": m.armature, "role": JOINT_ROLES[name], "kp": kp, "kd": kd}
+        out[name] = {**asdict(m), "model": m.name, "armature": m.armature, "armature_alt": m.armature_alt,
+                     "role": JOINT_ROLES[name], "kp": kp, "kd": kd}
     return out
+
+
+
+def link_inertia_at_rest(joint: str, datasheet_path: str | None = None) -> float:
+    """Link inertia at rest [kg*m^2] from ``data/robot/actuators_datasheet_v1.json`` (notes/13)."""
+    import json
+    from pathlib import Path
+
+    path = Path(datasheet_path) if datasheet_path else Path(__file__).resolve().parents[3] / "data/robot/actuators_datasheet_v1.json"
+    data = json.loads(path.read_text())
+    return float(data["joints"][joint]["inertia"]["link_inertia_at_rest_kgm2"])
+
+
+def armature_dr_ranges(map_name: str = "user_2026_09_25",
+                       joints: tuple[str, ...] | list[str] | None = None) -> dict[str, tuple[float, float]]:
+    """Per-joint (alt, datasheet) armature range for log-uniform DR (notes/13 T2). Skips motors with no alt (CEM-60).
+    Default ``joints`` = :data:`ARMATURE_DR_CRITICAL_JOINTS`."""
+    params = joint_hw_params(map_name)
+    want = list(joints) if joints is not None else list(ARMATURE_DR_CRITICAL_JOINTS)
+    out: dict[str, tuple[float, float]] = {}
+    for name in want:
+        if name not in params:
+            raise ValueError(f"unknown joint {name!r} for map {map_name!r}")
+        alt, arm = params[name]["armature_alt"], float(params[name]["armature"])
+        if alt is None:
+            continue
+        lo, hi = float(alt), arm
+        if not (0.0 < lo < hi):
+            raise ValueError(f"{name}: armature DR needs 0 < alt < datasheet, got {lo}, {hi}")
+        out[name] = (lo, hi)
+    return out
+
+
+def explicit_pd_spectral_radius(kp: float, kd: float, inertia: float, dt: float = ARMATURE_DR_PHYSICS_DT) -> float:
+    """Spectral radius of semi-implicit Euler explicit PD (notes/13 B). >1 => unstable."""
+    import math
+
+    if inertia <= 0.0 or dt <= 0.0:
+        raise ValueError("inertia and dt must be > 0")
+    a = dt / inertia
+    # A = [[1 - a*kp*dt, dt*(1 - a*kd)], [-a*kp, 1 - a*kd]]
+    a00 = 1.0 - a * kp * dt
+    a01 = dt * (1.0 - a * kd)
+    a10 = -a * kp
+    a11 = 1.0 - a * kd
+    # eigenvalues of 2x2
+    tr, det = a00 + a11, a00 * a11 - a01 * a10
+    disc = tr * tr - 4.0 * det
+    if disc >= 0.0:
+        s = math.sqrt(disc)
+        return max(abs(0.5 * (tr + s)), abs(0.5 * (tr - s)))
+    # complex conjugate: |lambda| = sqrt(det) when det>0; else use modulus of complex pair
+    re = 0.5 * tr
+    im = 0.5 * math.sqrt(-disc)
+    return math.hypot(re, im)
+
+
+def joints_unstable_at_alt(map_name: str = "user_2026_09_25", dt: float = ARMATURE_DR_PHYSICS_DT,
+                           joints: tuple[str, ...] | list[str] | None = None) -> list[str]:
+    """Joints in ``joints`` (default critical set) whose explicit PD at ``dt`` has rho>1 at the alt armature."""
+    params = joint_hw_params(map_name)
+    want = list(joints) if joints is not None else list(ARMATURE_DR_CRITICAL_JOINTS)
+    bad: list[str] = []
+    for name in want:
+        alt = params[name]["armature_alt"]
+        if alt is None:
+            continue
+        J = link_inertia_at_rest(name) + float(alt)
+        if explicit_pd_spectral_radius(params[name]["kp"], params[name]["kd"], J, dt) > 1.0:
+            bad.append(name)
+    return bad
+
+
+def sample_armature_log_uniform(ranges: dict[str, tuple[float, float]], n_envs: int, rng=None):
+    """Sample armature [n_envs, n_joints] log-uniform in each joint's (lo, hi). Joint order = ``ranges`` insertion order.
+
+    ``rng``: ``random.Random``, a numpy Generator, or None (deterministic ``Random(0)``). Returns ``(array, names)``;
+    ``array`` is a numpy ndarray when numpy is importable, else a list of rows.
+    """
+    import math
+    import random
+
+    if rng is None:
+        rng = random.Random(0)
+
+    def _u() -> float:
+        if hasattr(rng, "uniform") and not isinstance(rng, random.Random):
+            return float(rng.uniform(0.0, 1.0))
+        return float(rng.random())
+
+    names = list(ranges)
+    out = []
+    for _ in range(n_envs):
+        row = []
+        for n in names:
+            lo, hi = ranges[n]
+            row.append(math.exp(math.log(lo) + _u() * (math.log(hi) - math.log(lo))))
+        out.append(row)
+    try:
+        import numpy as np
+        return np.asarray(out, dtype=float), names
+    except ImportError:  # pragma: no cover
+        return out, names
+
+
+def armature_dr_group_plan(map_name: str = "user_2026_09_25", *,
+                           gain_overrides: dict[str, tuple[float, float]] | None = None,
+                           critical: tuple[str, ...] | list[str] | None = None,
+                           implicit: tuple[str, ...] | list[str] | None = None) -> dict:
+    """Isaac-free plan for an armature-DR hw profile (notes/13 T2-T3).
+
+    Returns ``explicit`` (model -> joint list for DatasheetMotor), ``implicit`` (joint -> cfg dict for ImplicitActuator),
+    ``ranges`` (joint -> (alt, datasheet)), ``spawn_armature`` (geometric mean for the ImplicitActuator default).
+    """
+    import math
+
+    params = joint_hw_params(map_name)
+    for name, (kp, kd) in (gain_overrides or {}).items():
+        if name not in params:
+            raise ValueError(f"gain override for unknown motor {name!r}")
+        if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
+            raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
+        params[name] = {**params[name], "kp": float(kp), "kd": float(kd)}
+    crit = set(critical if critical is not None else ARMATURE_DR_CRITICAL_JOINTS)
+    imp = set(implicit if implicit is not None else ARMATURE_DR_IMPLICIT_JOINTS)
+    if not imp.issubset(crit):
+        raise ValueError(f"implicit joints must be a subset of critical; extra={sorted(imp - crit)}")
+    ranges = armature_dr_ranges(map_name, joints=sorted(crit))
+    explicit: dict[str, list[str]] = {}
+    implicit_cfg: dict[str, dict] = {}
+    spawn: dict[str, float] = {}
+    for joint, p in params.items():
+        if joint in imp:
+            lo, hi = ranges[joint]
+            spawn_a = math.exp(0.5 * (math.log(lo) + math.log(hi)))  # geometric mean
+            spawn[joint] = spawn_a
+            implicit_cfg[joint] = {
+                "kp": float(p["kp"]), "kd": float(p["kd"]), "effort": float(p["peak_torque"]),
+                "armature": spawn_a, "armature_range": (lo, hi), "model": p["model"],
+            }
+        else:
+            explicit.setdefault(p["model"], []).append(joint)
+    return {"explicit": explicit, "implicit": implicit_cfg, "ranges": ranges, "spawn_armature": spawn,
+            "critical": sorted(crit), "implicit_joints": sorted(imp)}
 
 
 def hw_motor_torque(tau_pd, dq, peak, saturation, no_load_speed, coulomb, viscous, friction_vel_eps: float = 0.05):

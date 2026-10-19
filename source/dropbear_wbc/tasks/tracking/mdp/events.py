@@ -83,3 +83,40 @@ def randomize_rigid_body_com(
     coms = asset.root_physx_view.get_coms().clone()
     coms[env_ids[:, None], body_ids, :3] += rand
     asset.root_physx_view.set_coms(coms, env_ids)
+
+
+def randomize_joint_armature(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    armature_ranges: dict[str, tuple[float, float]],
+):
+    """Per-reset log-uniform armature between alt and datasheet reads (notes/13 T2, item 58).
+
+    ``armature_ranges``: joint name -> (lo, hi) with lo = armature_alt, hi = datasheet armature. Writes PhysX
+    armature via ``write_joint_armature_to_sim`` (Isaac Lab 2.2). Intended for the critical set under an
+    ``*_armdr`` profile (ImplicitActuator on calves/wrist so explicit 5 ms PD does not blow up at the low end).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device=asset.device)
+    elif not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.as_tensor(env_ids, device=asset.device, dtype=torch.long)
+    if not armature_ranges:
+        return
+    # resolve joint ids from names (preserve_order SceneEntityCfg or range keys)
+    names = list(armature_ranges)
+    name_to_id = {n: i for i, n in enumerate(asset.joint_names)}
+    missing = [n for n in names if n not in name_to_id]
+    if missing:
+        raise ValueError(f"armature DR joints not on articulation: {missing}")
+    joint_ids = torch.tensor([name_to_id[n] for n in names], dtype=torch.long, device=asset.device)
+    n_env, n_j = len(env_ids), len(names)
+    lo = torch.tensor([armature_ranges[n][0] for n in names], device=asset.device, dtype=torch.float32)
+    hi = torch.tensor([armature_ranges[n][1] for n in names], device=asset.device, dtype=torch.float32)
+    u = torch.rand((n_env, n_j), device=asset.device)
+    sampled = torch.exp(torch.log(lo) + u * (torch.log(hi) - torch.log(lo)))
+    writer = getattr(asset, "write_joint_armature_to_sim", None)
+    if writer is None:
+        raise RuntimeError("Articulation has no write_joint_armature_to_sim; need Isaac Lab >=2.2 for armature DR")
+    writer(sampled, joint_ids=joint_ids, env_ids=env_ids)

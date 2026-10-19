@@ -218,10 +218,35 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=stopped, preserve_order=True),
                     "margin_rad": math.radians(STOP_MODEL["margin_deg"])})
 
+    def enable_armature_dr(self) -> None:
+        """Install per-reset log-uniform armature DR on the notes/13 T2 critical joints (``*_armdr`` profiles).
+
+        Requires the matching ``make_hw_motor_groups(..., armature_dr=True)`` groups (ImplicitActuator on calves +
+        wrist roll). Play configs should clear ``self.events.armature_dr`` like the other startup/reset DR terms.
+        """
+        from isaaclab.managers import EventTermCfg as EventTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.robots.hw_motor_specs import ARMATURE_DR_CRITICAL_JOINTS, HW_PROFILE_MAPS, armature_dr_ranges
+        from dropbear_wbc.tasks.tracking import mdp
+
+        if self.actuator_profile not in HW_PROFILE_MAPS:
+            raise ValueError(f"armature DR needs an hw_* profile, not {self.actuator_profile!r}")
+        ranges = armature_dr_ranges(HW_PROFILE_MAPS[self.actuator_profile], joints=ARMATURE_DR_CRITICAL_JOINTS)
+        self.events.armature_dr = EventTerm(
+            func=mdp.randomize_joint_armature,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names=list(ranges), preserve_order=True),
+                "armature_ranges": ranges,
+            },
+        )
+
     def set_actuator_profile(self, name: str) -> None:
-        """Switch the body-motor groups to ``legacy`` or an ``hw_*`` twin profile (neck and passive groups unchanged)."""
+        """Switch the body-motor groups to ``legacy`` or an ``hw_*`` twin profile (neck and passive groups unchanged).
+        ``*_armdr`` profiles also install :meth:`enable_armature_dr`."""
         from dropbear_wbc.robots.hw_actuators import legacy_motor_groups, make_hw_profile_groups, set_motor_groups
-        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, LEGACY_HW_ARMATURE_PROFILES
+        from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, HW_PROFILE_OPTIONS, LEGACY_HW_ARMATURE_PROFILES
 
         if name == "legacy":
             set_motor_groups(self.scene.robot.actuators, legacy_motor_groups())
@@ -233,6 +258,10 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
             raise ValueError(f"unknown tracking actuator profile {name!r}; known: legacy, "
                              f"{sorted(LEGACY_HW_ARMATURE_PROFILES)}, {sorted(HW_PROFILE_MAPS)}")
         self.actuator_profile = name
+        if HW_PROFILE_OPTIONS.get(name, {}).get("armature_dr"):
+            self.enable_armature_dr()
+        elif getattr(self.events, "armature_dr", None) is not None:
+            self.events.armature_dr = None
         self._set_motor_mass_offsets(name)
 
     def _set_motor_mass_offsets(self, profile: str) -> None:
@@ -267,6 +296,8 @@ class DropbearFlatPlayEnvCfg(DropbearFlatEnvCfg):
         self.events.base_com = None
         self.events.add_base_mass = None
         self.events.scale_limb_mass = None
+        if getattr(self.events, "armature_dr", None) is not None:
+            self.events.armature_dr = None
         motion = self.commands.motion
         motion.pose_range = {}
         motion.velocity_range = {}
