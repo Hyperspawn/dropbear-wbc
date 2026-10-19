@@ -22,6 +22,8 @@ from collections.abc import Sequence
 
 import torch
 
+from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
+
 KEYS = ("peak_limit_Nm", "max_Nm", "p95_Nm", "rms_Nm", "clip_frac", "max_speed_rad_s", "p95_speed_rad_s")
 CLIP_TOL = 0.01
 
@@ -61,7 +63,7 @@ class MotorTorqueSampler:
         self.num_envs, self.device, self.clip_tol = int(num_envs), device, float(clip_tol)
         self.peak_lim = torch.zeros(len(self.names), device=device)
         for i, act, k in self.cols:
-            self.peak_lim[i] = act.effort_limit[0, k]
+            self.peak_lim[i] = actuator_effort_limit(act)[0, k]
         self._tq: list[torch.Tensor] = []
         self._cl: list[torch.Tensor] = []
         self._vl: list[torch.Tensor] = []
