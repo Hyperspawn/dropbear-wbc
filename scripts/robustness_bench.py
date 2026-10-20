@@ -59,8 +59,20 @@ parser.add_argument("--slope_max", type=float, default=0.5, help="rise / run (0.
 parser.add_argument("--block_max_m", type=float, default=0.12)
 parser.add_argument("--speed", type=float, default=0.5)
 parser.add_argument("--walk_s", type=float, default=8.0)
+# video: film one or a few cases in the live scene (terrain visible); falls are not terminated so they play out
+parser.add_argument("--only", default=None,
+                    help="keep only matching cases: push 'phase:dir_deg:dv:offset_s' (e.g. stand:0:0.6:0), terrain "
+                         "'name:level' (e.g. stairs_down:1, level 0-based); several separated by ';'")
+parser.add_argument("--clean_video", action="store_true", help="record env 0 (see --only) with the demo renderer")
+parser.add_argument("--video_dir", type=Path, default=_REPO / "logs" / "reels" / "bench")
+parser.add_argument("--video_tag", default="bench")
+parser.add_argument("--video_cams", default="track", help="track, front, side, feet (comma list)")
+parser.add_argument("--video_res", default="1280x720")
+parser.add_argument("--caption", default="", help="burned-in caption (a literal \\n starts a new line)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
+if args.clean_video:
+    args.enable_cameras = True
 app = AppLauncher(args).app
 
 TERRAIN_COLS = ("flat", "rough", "uphill", "downhill", "stairs_up", "stairs_down")
@@ -138,6 +150,9 @@ def main() -> int:  # noqa: C901
         margin = float(next((i["target_clamp_margin_deg"] for i in infos if i.get("target_clamp_margin_deg") is not None), 3.0))
         env_cfg.clamp_targets_to_limits(margin)
     env_cfg.set_solver_iterations(*args.solver_iters)
+    arm = {k: next((i[k] for i in infos if i.get(k) is not None), None) for k in ("arm_action_scale", "arm_deviation_weight")}
+    if any(v is not None for v in arm.values()):  # the arm freedom the policy was trained with
+        env_cfg.set_arm_freedom(arm["arm_action_scale"], arm["arm_deviation_weight"])
 
     step_dt = env_cfg.sim.dt * env_cfg.decimation
     cases: list[dict] = []
@@ -161,8 +176,33 @@ def main() -> int:  # noqa: C901
             for lv in range(args.levels):
                 cases.append({"terrain": name, "col": col, "level": lv, "cmd": (args.speed, 0.0, 0.0)})
         steps = int(round(args.walk_s / step_dt))
+    if args.only:
+        keys = [k.strip() for k in args.only.split(";") if k.strip()]
+
+        def _key(c):
+            if args.mode == "push":
+                return f"{c['phase']}:{c['dir_deg']:g}:{c['dv']:g}:{c['offset_s']:g}"
+            return f"{c['terrain']}:{c['level']}"
+        cases = [c for c in cases if _key(c) in keys]
+        if not cases:
+            raise SystemExit(f"--only matched no case: {args.only}")
     num_envs = len(cases)
     env_cfg.set_num_envs(num_envs)
+    clean_render_changes = None
+    if args.clean_video:  # let falls play out on camera; the clean demo lighting and floor
+        from types import SimpleNamespace
+
+        from dropbear_wbc.tasks.tracking.demo_render import apply_clean_render
+
+        for term in ("anchor_height", "anchor_tilt", "non_foot_contact"):
+            if getattr(env_cfg.terminations, term, None) is not None:
+                setattr(env_cfg.terminations, term, None)
+        env_cfg.commands.motion = SimpleNamespace(debug_vis=False)  # the renderer expects the tracking command term
+        # terrain: a darker floor and softer light, or the white steps disappear on camera
+        clean_render_changes = (apply_clean_render(env_cfg) if args.mode == "push" else
+                                apply_clean_render(env_cfg, floor_rgb=(0.30, 0.33, 0.38), key_intensity=1500.0,
+                                                   dome_intensity=450.0))
+        delattr(env_cfg.commands, "motion")
     env_cfg.episode_length_s = max(env_cfg.episode_length_s, steps * step_dt + 10.0)
     cmd_cfg = env_cfg.commands.base_velocity
     cmd_cfg.resampling_time_range = (1.0e9, 1.0e9)
@@ -186,6 +226,14 @@ def main() -> int:  # noqa: C901
         terr.env_origins[:] = terr.terrain_origins[terr.terrain_levels, terr.terrain_types]
         env.reset()
 
+    recorder = None
+    if args.clean_video:
+        from dropbear_wbc.tasks.tracking.demo_render import DemoRecorder, parse_resolution
+
+        recorder = DemoRecorder(env=uw, out_dir=args.video_dir, tag=args.video_tag,
+                                cams=tuple(c.strip() for c in args.video_cams.split(",") if c.strip()),
+                                resolution=parse_resolution(args.video_res),
+                                caption=args.caption.replace("\\n", "\n"))
     base = robot.body_names.index("world")  # the articulation root (pelvis chassis, 19.5 kg)
     mass = float(robot.root_physx_view.get_masses()[0].sum())
     push_steps = max(1, int(round(args.push_s / step_dt)))
@@ -217,6 +265,8 @@ def main() -> int:  # noqa: C901
             actions = policy(obs)
         obs, _, _, _ = env.step(actions)
         cmd.vel_command_b[:] = fixed
+        if recorder is not None:
+            recorder.capture()
         terminated = uw.termination_manager.terminated
         newly = terminated & alive
         for e in torch.nonzero(newly).flatten().tolist():
@@ -231,6 +281,8 @@ def main() -> int:  # noqa: C901
             d = robot.data.root_pos_w[:, :2] - start_xy
             progress = torch.where(alive, d[:, 0], progress)  # tiles start at yaw 0: the command is along +x
 
+    if recorder is not None:
+        print(json.dumps({"video": recorder.close()}, default=str), flush=True)
     results = []
     for e, c in enumerate(cases):
         r = dict(c, fell=bool(fall_step[e] >= 0), fall_s=float(fall_step[e]) * step_dt if fall_step[e] >= 0 else None,

@@ -138,7 +138,7 @@ need more knee torque (a lower-ratio linkage or stronger motor) and a stronger c
 **The actuator map was wrong at the hips.**
 - The robot has CEM-60s at hip pitch and knee, and no hip roll motor yet.
 - Every sim profile before `hw_cem6` / `hw_v4` modeled the CAD's X10-S2 at hip pitch (100 N·m peak, 0.70 kg·m² reflected inertia vs ~0.06) and an X10 1:7 at hip roll (40 N·m peak).
-- In the motion library that hip roll sat at its 40 N·m limit, while one-leg stance needs about 56 N·m.
+- In the motion library that hip roll sat at its 40 N·m limit. One-leg stance measured later in sim (session-6 Build B specialist) needs a median of 31 N·m, p95 43 and max 53 N·m at the hip roll. The 56 N·m quoted here before was a static estimate with the weight centred between the feet.
 - The two candidate builds are now profiles with motor masses ([ACTUATORS.md](ACTUATORS.md) section 2):
   - `hw_cem6`: 6 × CEM-60;
   - `hw_v4`: X8-120 at the hips, X10-200 at the knee.
@@ -248,3 +248,30 @@ below was scored on the 14-clip set with the stop model on. Results in `logs/fid
   - Stairs up and down to 8–11 cm steps; falls at 11–14 cm.
   - Rough blocks: mixed above 5 cm.
 - Every result is a single deterministic run per cell, so neighbouring cells can disagree (rough 5–6.5 cm fell, 6.5–8 cm walked).
+
+## Cloud session 8 (2026-10-20): pushes and harder terrain
+
+4× L40 (hyperstack), about 8.5 h, $42. Build B, stop model and safety penalties on every job. The walkers trained with
+`--push_velocity` (each push a random velocity change of up to ± that per horizontal axis, every 4–8 s) and harder
+terrain (`--stair_max_m=0.15 --slope_max=0.35`). Scored with `scripts/robustness_bench.py`. "Weakest side" = the
+strongest push survived from every direction. Terrain counts a cell only if the robot did not fall AND covered at
+least half of the commanded 4 m. Charts: `logs/reports/s8_push_final.png`, `logs/reports/bench_vel_*_16050.png`.
+
+| Walker | Standing: weakest side / 1.0 m/s shoves survived | Walking: weakest side / 1.0 m/s / 1.2 m/s | Flat, 4 m asked | Terrain cells | Stairs up / down |
+|---|---|---|---:|---:|---|
+| Before (`vel_rough_v4_safe/10950`) | 0.2 m/s / 4 of 16 | 0.4 m/s / 9 / 4 of 16 | 3.7 m | 23 / 36 | 8–11 / 8–11 cm |
+| Pushes ≤0.6 (`vel_push_v4/16050`) | **0.8 m/s / 13 of 16** | **0.8 m/s / 12 / 7 of 16** | 3.7 m | 23 / 36 | 5–8 / 5–8 cm |
+| Pushes ≤1.0 + motor-heat ×10 (`vel_push_hard_v4/16050`) | 0.8 m/s / 15 of 16 | 0.8 m/s / 14 / 7 of 16 | 2.4–2.8 m | 21 / 36 | none / 14–17 cm |
+| From scratch (`vel_scratch_v4/4800`) | 0.6 m/s / 5 of 16 | 0.6 m/s / 0 / 0 of 16 | 2.7 m | 14 / 36 | none / 5–8 cm |
+
+- **Pushes ≤0.6 is the new default walker.** Its weakest side is 4× stronger standing and 2× walking. It keeps its
+  walking speed and overall terrain score; stairs up dropped one band (5–8 cm instead of 8–11).
+- **Pushes ≤1.0 is the toughest against shoves but became cautious.** It walks at 60–70 % of the commanded speed and
+  stands at the foot of stairs instead of climbing them, though it walks down 14–17 cm steps.
+- **From scratch needs far more than 4,800 iterations.**
+- **Stairs remain the gap.** A blind walker has to feel each step. A teacher that sees the ground (height scan),
+  distilled into a student, plus more knee travel, is the path past about 10 cm.
+
+**Tracker `lib_v4_cool2/30600`** (motor-heat recipe, about 3,600 more iterations): the hardware gate passes on 11 of 14
+motions, the best yet (8 at 27,000; 6 before the safety work). But the motion score fell to 0.25 (from 0.29 and 0.31).
+At ×10 the motor-heat term makes it track lazily, so it needs a lighter weight or fidelity-based motion sampling.

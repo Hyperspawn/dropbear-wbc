@@ -47,17 +47,26 @@ def push_panel(ax, res: dict) -> None:
     ax.legend(loc="upper left", bbox_to_anchor=(-0.05, -0.04), frameon=False, fontsize=10)
 
 
+def terrain_status(row: dict, goal_m: float) -> int:
+    """0 = fell, 1 = stalled (no fall, but under half the commanded distance), 2 = walked."""
+    if not row["survived"]:
+        return 0
+    return 2 if row["progress_m"] >= 0.5 * goal_m else 1
+
+
 def terrain_panel(ax, res: dict) -> None:
     names = list(res["summary"])
     levels = max(len(v) for v in res["summary"].values())
+    a = res.get("args", {})
+    goal = float(a.get("speed", 0.5)) * float(a.get("walk_s", 8.0))
     grid = np.full((len(names), levels), np.nan)
     for i, n in enumerate(names):
         for row in res["summary"][n]:
-            grid[i, row["level"]] = 1.0 if row["survived"] else 0.0
+            grid[i, row["level"]] = terrain_status(row, goal)
     from matplotlib.colors import ListedColormap
 
-    cmap = ListedColormap(["#f0c9c3", "#cfe3f5"])
-    ax.imshow(grid, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+    cmap = ListedColormap(["#f0c9c3", "#f5e3b8", "#cfe3f5"])
+    ax.imshow(grid, cmap=cmap, vmin=0, vmax=2, aspect="auto")
     for i, n in enumerate(names):
         for row in res["summary"][n]:
             band = row.get("band")
@@ -69,8 +78,9 @@ def terrain_panel(ax, res: dict) -> None:
                 txt = f"≤{band[1] * 100:.0f} cm"
             else:
                 txt = ""
-            ax.text(row["level"], i - 0.13, ("walked" if row["survived"] else "fell"), ha="center", va="center",
-                    fontsize=9.5, fontweight="semibold", color="#1d4f80" if row["survived"] else "#8c2a1e")
+            st = terrain_status(row, goal)
+            ax.text(row["level"], i - 0.13, ("fell", "stalled", "walked")[st], ha="center", va="center",
+                    fontsize=9.5, fontweight="semibold", color=("#8c2a1e", "#7a5a12", "#1d4f80")[st])
             ax.text(row["level"], i + 0.2, f"{txt}  {row['progress_m']:.1f} m".strip(), ha="center", va="center",
                     fontsize=8, color=INK2)
     ax.set_yticks(range(len(names)), [TERRAIN_LABEL.get(n, n) for n in names])
@@ -78,7 +88,7 @@ def terrain_panel(ax, res: dict) -> None:
     ax.tick_params(length=0)
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_title("Terrain: walk 0.5 m/s for 8 s from each tile's centre (distance walked)", loc="left")
+    ax.set_title(f"Terrain: walk {goal:g} m from each tile's centre (distance walked; stalled = under half)", loc="left")
 
 
 def main() -> int:

@@ -149,6 +149,12 @@ def main() -> int:  # noqa: C901
         margin = float(next((m for m in margins if m is not None), 3.0))  # runs before the option used 3 deg
         env_cfg.clamp_targets_to_limits(margin)
         print(f"[play_locomotion] motor targets clamped to the joint limits +- {margin:g} deg", flush=True)
+    arm = {k: next((json.loads(i.read_text(encoding="utf-8")).get(k) for i in reversed(infos)
+                    if json.loads(i.read_text(encoding="utf-8")).get(k) is not None), None)
+           for k in ("arm_action_scale", "arm_deviation_weight")}
+    if any(v is not None for v in arm.values()):  # the arm freedom the policy was trained with (newest run_info)
+        env_cfg.set_arm_freedom(arm["arm_action_scale"], arm["arm_deviation_weight"])
+        print(f"[play_locomotion] arm freedom: {arm}", flush=True)
     num_envs = args.num_envs or (1 if (args.video or args.clean_video) else 2 * len(scenarios))
     env_cfg.set_num_envs(num_envs)
     if args.solver_iters is not None:

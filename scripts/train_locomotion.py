@@ -55,6 +55,10 @@ parser.add_argument("--action_rate_weight", type=float, default=None,
 parser.add_argument("--terrain", choices=("flat", "rough"), default="flat",
                     help="rough: blind curriculum terrain sized for Dropbear (flat_env_cfg.enable_rough_terrain)")
 parser.add_argument("--stair_max_m", type=float, default=None, help="rough terrain: hardest step height [m] (default 0.10)")
+parser.add_argument("--arm_action_scale", type=float, default=None,
+                    help="arm action scale [rad per unit action] (default 0.1; legs 0.25-0.375): let the arms help balance")
+parser.add_argument("--arm_deviation_weight", type=float, default=None,
+                    help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
 parser.add_argument("--target_clamp_margin_deg", type=float, default=3.0,
                     help="gait-shaped runs: motor targets clipped to the hard limits +- this [deg]; 3 pressed the knees "
@@ -123,6 +127,8 @@ def main() -> int:
         env_cfg.set_actuator_profile(args.actuator_profile)
     if args.thermal_penalty is not None:
         env_cfg.enable_thermal_penalty(args.thermal_penalty)
+    if args.arm_action_scale is not None or args.arm_deviation_weight is not None:
+        env_cfg.set_arm_freedom(args.arm_action_scale, args.arm_deviation_weight)
     if args.gait_v3:
         # weights sized so the new penalties stay well below the tracking reward (at -20 / -5 / -1.0 the warm-started
         # run learned that falling early is cheaper than walking: episode length 990 -> 49 in 70 iterations)
@@ -233,6 +239,7 @@ def main() -> int:
         ],
         "pushes": env_cfg.events.push_robot is not None,
         "push_velocity": args.push_velocity, "push_interval": args.push_interval,
+        "arm_action_scale": args.arm_action_scale, "arm_deviation_weight": args.arm_deviation_weight,
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

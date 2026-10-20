@@ -60,7 +60,7 @@ higher.
 
 | Joint | Average torque (RMS) | Peaks | Speed (99th pct.) | Notes |
 |---|---|---|---|---|
-| Hip roll | 20–32 N·m in hard motions | stuck at the old 40 N·m limit | ≤ 19 rpm | Standing on one leg needs about 56 N·m. |
+| Hip roll | 20–32 N·m in hard motions | stuck at the old 40 N·m limit | ≤ 19 rpm | One-leg stance in sim (Build B one-foot specialist): median 31, p95 43, max 53 N·m (RMS 0.71× of the X8-120's 43 rated). The earlier static estimate of 56 N·m assumed the body's weight stayed centred between the feet. |
 | Hip pitch | 15–35 N·m | up to 100 N·m (squat, lunge); 45–75 walking | ≤ 36 rpm | |
 | Knee motor | 20–62 N·m | 75 N·m in almost every rollout | ≤ 55 rpm | The tightest joint. A static squat at 40–47° knee needs 66–79 N·m. |
 | Hip yaw | 4–11 N·m (one 23) | ≤ 40 N·m | ≤ 25 rpm | The X10 1:7 is enough. |

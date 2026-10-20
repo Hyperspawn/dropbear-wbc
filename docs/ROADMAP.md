@@ -23,7 +23,7 @@ and later manipulation with hands), smoothly, and on the real hardware. Updated 
 | 1 | Body truth | The sim matches the CAD and the motors; every motor's load is reported against its rating | Done in sim (actuator viewer, closed loops, stop model). Missing: the robot's weight. |
 | 2 | Stand and walk on the real motors | Rough-terrain walker passes the hardware gate, no falls | Passed (Build B, sessions 5b/6). |
 | 3 | Track the motion library | Fidelity score ≥ 0.7 and the hardware gate passes on the 14-clip set (proposed bar) | Score 0.29–0.35, gate 8 / 14. |
-| 4 | Pushes and terrain | `scripts/robustness_bench.py`: survive pushes from every direction (standing, walking, mid-motion); stairs, slopes, rough ground | Walker baseline (2026-10-19): pushes 0.2 m/s standing / 0.4 m/s walking on its weakest side; stairs to 11 cm, uphill to 18°. Never trained with pushes; blind. |
+| 4 | Pushes and terrain | `scripts/robustness_bench.py`: survive pushes from every direction (standing, walking, mid-motion); stairs, slopes, rough ground | Push-trained walker (session 8): weakest side 0.8 m/s standing and walking (from 0.2 / 0.4); stairs still about 8 cm blind. Next: height-scan teacher, then student. |
 | 5 | One real leg on a bench | Torque, friction, delay and position tracking match the sim | Not built. |
 | 6 | Full robot | A policy that uses only the real sensors runs on the hardware | After 5. |
 

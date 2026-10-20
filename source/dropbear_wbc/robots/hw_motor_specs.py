@@ -148,6 +148,12 @@ JOINT_MOTOR_MAPS["v4_2026_10_16"] = {
     **{f"{p}_hip_joint": "RMD-X8-P20-120-V4" for p in ("LL", "RL")},
     **{f"{p}_knee_actuator_joint": "RMD-X10-P20-200-V4.1" for p in ("LL", "RL")},
 }
+# "v4_arms" (sim study, 2026-10-20): Build B + X8-120 (V4) at shoulder pitch (was X10 1:7) and shoulder roll (was
+# X8 Pro) -- do stronger shoulders let the arms help balance?
+JOINT_MOTOR_MAPS["v4_arms_2026_10_20"] = {
+    **JOINT_MOTOR_MAPS["v4_2026_10_16"],
+    **{f"{p}_{j}": "RMD-X8-P20-120-V4" for p in ("LH", "RH") for j in ("yaw", "pitch")},
+}
 # the CAD/USD motor components (tools/probe_usd_motor_prims.py): X10-S2 on hip roll, hip pitch AND knee
 JOINT_MOTOR_MAPS["cad_usd"] = {
     **JOINT_MOTOR_MAPS["user_2026_09_25"],
@@ -203,6 +209,7 @@ HW_PROFILE_MAPS: dict[str, str] = {
     # twin v3 (2026-10-16): the real robot's legs, two candidate hip-roll/leg builds; hw_v2ie options + motor masses
     "hw_cem6": "cem6_2026_10_16",
     "hw_v4": "v4_2026_10_16",
+    "hw_v4_arms": "v4_arms_2026_10_20",  # Build B + X8-120 shoulders (sim study)
 }
 HW_PROFILE_OPTIONS: dict[str, dict] = {
     "hw_v1i": {"target_interp_steps": 4},
@@ -216,6 +223,7 @@ HW_PROFILE_OPTIONS["hw_v2ie"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_v2ie_r50"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_cem6"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_v4"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
+HW_PROFILE_OPTIONS["hw_v4_arms"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 """Extra ``make_hw_motor_groups`` options per profile (docs/ISSUES.md #11: 50 Hz targets stepped into a 200 Hz PD
 make torque spikes; the motor-side firmware can ramp each new target over the 4 control ticks instead)."""
 """Actuator-profile name (tasks' ``set_actuator_profile``) -> :data:`JOINT_MOTOR_MAPS` key."""
@@ -231,19 +239,32 @@ MOTOR_STATOR_BODY: dict[str, str] = {
 }
 
 
+ARM_MOTOR_BODY: dict[str, str] = {
+    # body holding each shoulder motor in the plant USD (logs/actuators/usd_motor_prims.json): the shoulder-pitch X10 1:7
+    # stators sit in the torso 'world'; each shoulder-roll X8 Pro is its own body after the shoulder-pitch rotor
+    "LH_yaw": "world", "RH_yaw": "world",
+    "LH_pitch": "LH_RMD_X8_Pro_MIR8_MIR1__1__1", "RH_pitch": "RH_RMD_X8_Pro_MIR8_MIR1__1__1",
+}
+BASE_ARM_MAP = "user_2026_09_25"
+"""The arm motors the plant USD and the real robot have (X10 1:7 shoulder pitch, X8 Pro elsewhere)."""
+
+
 def motor_mass_offsets(profile: str) -> dict[str, float]:
     """Per-body mass change [kg] that swaps the CAD's X10-S2 (vendor 1.70 kg) for the profile's motor at the 6 heavy
     joints, the whole difference on the stator body (the CAD part masses are not separable; first-order).
 
-    Only the twin-v3 profiles (``hw_cem6``, ``hw_v4``) change the plant mass; every older profile returns ``{}`` so
+    Only the twin-v3 profiles (``hw_cem6``, ``hw_v4``, ``hw_v4_arms``) change the plant mass; every older profile returns ``{}`` so
     published policies replay on the plant they were trained on."""
-    if profile not in ("hw_cem6", "hw_v4"):
+    if profile not in ("hw_cem6", "hw_v4", "hw_v4_arms"):
         return {}
     jm = JOINT_MOTOR_MAPS[HW_PROFILE_MAPS[profile]]
     cad = MOTOR_MODELS[CAD_MOTOR_MODEL].mass_kg
     out: dict[str, float] = {}
     for joint, body in MOTOR_STATOR_BODY.items():
         out[body] = out.get(body, 0.0) + MOTOR_MODELS[jm[joint]].mass_kg - cad
+    base = JOINT_MOTOR_MAPS[BASE_ARM_MAP]
+    for joint, body in ARM_MOTOR_BODY.items():  # shoulder swaps (hw_v4_arms): new motor minus the USD's motor
+        out[body] = out.get(body, 0.0) + MOTOR_MODELS[jm[joint]].mass_kg - MOTOR_MODELS[base[joint]].mass_kg
     return {b: round(d, 4) for b, d in out.items() if abs(d) > 1e-9}
 
 

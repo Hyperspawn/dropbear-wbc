@@ -85,3 +85,17 @@ def test_motor_mass_offsets_swap_the_cad_x10s2():
     assert set(cem6) == {"world", "LL_RMD_X10_S2_MIR4__3_Stator_1", "RL_RMD_X10_S2_MIR4__3_Stator_1"}
     for old in ("hw_v1ie", "hw_v2ie", "hw_v2ie_r50"):  # published policies keep their plant
         assert motor_mass_offsets(old) == {}
+
+
+def test_v4_arms_swaps_only_the_shoulders():
+    """hw_v4_arms = Build B + X8-120 at shoulder pitch and roll; the mass change lands on the shoulder bodies."""
+    from dropbear_wbc.robots.hw_motor_specs import JOINT_MOTOR_MAPS, HW_PROFILE_MAPS, motor_mass_offsets
+
+    v4, arms = JOINT_MOTOR_MAPS[HW_PROFILE_MAPS["hw_v4"]], JOINT_MOTOR_MAPS[HW_PROFILE_MAPS["hw_v4_arms"]]
+    changed = {j for j in v4 if v4[j] != arms[j]}
+    assert changed == {"LH_yaw", "RH_yaw", "LH_pitch", "RH_pitch"}
+    assert all(arms[j] == "RMD-X8-P20-120-V4" for j in changed)
+    off_v4, off_arms = motor_mass_offsets("hw_v4"), motor_mass_offsets("hw_v4_arms")
+    # X8-120 1.40 kg vs X10 1:7 1.15 kg at both shoulder pitches (torso 'world'), vs X8 Pro 0.71 kg at shoulder roll
+    assert abs((off_arms["world"] - off_v4["world"]) - 2 * (1.40 - 1.15)) < 1e-6
+    assert abs(off_arms["LH_RMD_X8_Pro_MIR8_MIR1__1__1"] - (1.40 - 0.71)) < 1e-6

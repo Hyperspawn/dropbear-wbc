@@ -359,6 +359,24 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         props.solver_position_iteration_count = int(position)
         props.solver_velocity_iteration_count = int(velocity)
 
+    def set_arm_freedom(self, action_scale: float | None = None, deviation_weight: float | None = None) -> None:
+        """Let the arms take part in balance. The default walker holds them near the standing pose: a 0.1 rad action
+        scale (legs 0.25-0.375) and ``joint_deviation_arms`` -0.2. ``action_scale`` [rad per unit action] sets all 10
+        arm motors; ``deviation_weight`` (<= 0; 0 removes the term) sets the pull back to the standing pose. Evaluation
+        must apply the same values (play_locomotion / robustness_bench read them from the run's run_info)."""
+        from dropbear_wbc.robots.dropbear_names import ARM_MOTORS
+
+        if action_scale is not None:
+            scale = dict(self.actions.joint_pos.scale)
+            for n in ARM_MOTORS:
+                scale[n] = float(action_scale)
+            self.actions.joint_pos.scale = scale
+        if deviation_weight is not None:
+            if float(deviation_weight) == 0.0:
+                self.rewards.joint_deviation_arms = None
+            else:
+                self.rewards.joint_deviation_arms.weight = float(deviation_weight)
+
     def enable_pushes(self, velocity_xy: float = 0.3, interval_s: tuple[float, float] = (8.0, 12.0)) -> None:
         from isaaclab.managers import EventTermCfg as EventTerm
 

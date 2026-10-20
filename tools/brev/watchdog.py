@@ -44,6 +44,10 @@ DEST_NAME = str(_SESSION["dest"])                                           # lo
 PULL_EVERY_S = 30 * 60
 WSL_HOME = "$HOME"  # expanded by the WSL login shell (commands run via bash -lc)
 SSH = f"ssh -F {WSL_HOME}/.brev/ssh_config -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=30"
+# Optional direct route (session keys "ssh" + "ssh_target", e.g. "ssh -i $HOME/.brev/brev.pem -p 22 ..." and
+# "shadeform@<ip>"): pulls keep working when Brev cannot issue its gateway SSH certificates (outage 2026-10-20)
+SSH = str(_SESSION.get("ssh", SSH))
+TARGET = str(_SESSION.get("ssh_target", INSTANCE))
 BREV = f"{WSL_HOME}/.local/bin/brev"
 # this repository as seen from WSL (H:\x -> /mnt/h/x)
 DEST = (f"/mnt/{REPO.drive[0].lower()}{REPO.as_posix()[2:]}/logs/brev/{DEST_NAME}" if REPO.drive
@@ -99,13 +103,13 @@ def pull() -> bool:
     ok = True
     for g in _SESSION.get("dirs", list(range(int(_SESSION.get("gpus", 4))))):  # ~/dbw<g> folders to pull
         rc, out = wsl(f"mkdir -p {DEST}/dbw{g} && rsync -az --partial --prune-empty-dirs {inc} -e \"{SSH}\" "
-                      f"{INSTANCE}:~/dbw{g}/ {DEST}/dbw{g}/")
+                      f"{TARGET}:~/dbw{g}/ {DEST}/dbw{g}/")
         ok &= rc == 0
         if rc != 0:
             log(event="pull_fail", gpu=g, rc=rc, out=out[-600:])
-    rc, out = wsl(f"mkdir -p {DEST}/runs && rsync -az -e \"{SSH}\" {INSTANCE}:~/runs/ {DEST}/runs/ ; "
-                  f"rsync -az -e \"{SSH}\" {INSTANCE}:~/setup_instance.log {DEST}/ ; "
-                  f"{SSH} {INSTANCE} 'nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader' "
+    rc, out = wsl(f"mkdir -p {DEST}/runs && rsync -az -e \"{SSH}\" {TARGET}:~/runs/ {DEST}/runs/ ; "
+                  f"rsync -az -e \"{SSH}\" {TARGET}:~/setup_instance.log {DEST}/ ; "
+                  f"{SSH} {TARGET} 'nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader' "
                   f"> {DEST}/nvidia_smi_last.txt 2>&1")
     log(event="pull", ok=ok)
     return ok
@@ -129,7 +133,7 @@ def delete_instance(reason: str) -> None:
         if rc != 0 and attempt == 3:
             # 2026-09-26 lesson: an expired brev login makes every delete fail; SSH (keys) still works, so stop the
             # jobs and power the VM off while retrying (billing of a powered-off VM depends on the provider)
-            rc3, out3 = wsl(f"{SSH} {INSTANCE} 'for g in 0 1 2 3; do tmux kill-session -t gpu$g; done; "
+            rc3, out3 = wsl(f"{SSH} {TARGET} 'for g in 0 1 2 3; do tmux kill-session -t gpu$g; done; "
                             f"pkill -f run_chunked; sudo -n shutdown -h +0' < /dev/null", timeout=120)
             log(event="delete_failing_ssh_poweroff", rc=rc3, out=out3[-300:])
         time.sleep(60)

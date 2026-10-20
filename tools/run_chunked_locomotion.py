@@ -120,6 +120,9 @@ def main() -> int:  # noqa: C901
     ap.add_argument("--push_interval", type=float, nargs=2, default=None, help="scripts/train_locomotion.py --push_interval")
     ap.add_argument("--stair_max_m", type=float, default=None, help="scripts/train_locomotion.py --stair_max_m")
     ap.add_argument("--slope_max", type=float, default=None, help="scripts/train_locomotion.py --slope_max")
+    ap.add_argument("--arm_action_scale", type=float, default=None, help="scripts/train_locomotion.py --arm_action_scale")
+    ap.add_argument("--arm_deviation_weight", type=float, default=None,
+                    help="scripts/train_locomotion.py --arm_deviation_weight")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train_locomotion.py --actuator_profile")
     ap.add_argument("--thermal_penalty", type=float, default=None, help="scripts/train_locomotion.py --thermal_penalty")
     ap.add_argument("--stop_model", action="store_true", help="train script --stop_model")
@@ -230,6 +233,10 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--stair_max_m={args.stair_max_m}"]
             if args.slope_max is not None:
                 cmd += [f"--slope_max={args.slope_max}"]
+            if args.arm_action_scale is not None:
+                cmd += [f"--arm_action_scale={args.arm_action_scale}"]
+            if args.arm_deviation_weight is not None:
+                cmd += [f"--arm_deviation_weight={args.arm_deviation_weight}"]
             if args.actuator_profile:
                 cmd += ["--actuator_profile", args.actuator_profile]
             if args.thermal_penalty is not None:
