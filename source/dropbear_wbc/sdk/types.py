@@ -14,6 +14,12 @@ Units and frames:
       world (z up); ``gyro`` is the body-frame angular velocity [rad/s];
       ``accel`` is the body-frame specific force [m/s^2] (reads +9.81 on z
       when upright and at rest); ``rpy`` is roll/pitch/yaw [rad] (intrinsic ZYX).
+    * ``IMUState.valid`` (uint8, wire ``valid``) is 1 only when the producer holds a live, configured IMU sample
+      (sim: always 1; robot HAL: WHO_AM_I-verified, configured, fresh DBI frame). ``IMUState.age_us`` (uint32,
+      wire ``age_us``) is the producer's best estimate of sample time -> LowState publish [us]
+      (:data:`IMU_AGE_UNKNOWN` = unknown). A default-constructed ``IMUState`` is **invalid** (valid=0, age
+      unknown): the identity quaternion it carries is a placeholder, not an upright reading. Consumers must gate
+      on both fields (``deploy.fsm`` refuses / leaves ``POLICY``). Added by local patch 0004 (item 137).
     * ``SimState`` is privileged, simulation-only ground truth in the world
       frame. It never exists on hardware; policies that need it are sim-only.
 
@@ -48,6 +54,9 @@ from .crc import crc32_bytes
 from .motors import NUM_MOTORS, NUM_NECK
 
 SCHEMA = "dropbear_hg-v1"
+
+IMU_AGE_UNKNOWN = 0xFFFFFFFF
+"""``IMUState.age_us`` sentinel: the producer does not know the sample age (treated as stale)."""
 
 
 class CrcError(ValueError):
@@ -283,17 +292,22 @@ def quat_wxyz_to_rpy(q: np.ndarray) -> np.ndarray:
 
 @dataclass
 class IMUState:
-    """Torso IMU (root body ``world``); see the module docstring for frames and units."""
+    """Torso IMU (root body ``world``); see the module docstring for frames, units and ``valid`` / ``age_us``."""
 
     quat_wxyz: np.ndarray = field(default_factory=lambda: np.array([1, 0, 0, 0], _F32))
     gyro: np.ndarray = field(default_factory=lambda: np.zeros(3, _F32))
     accel: np.ndarray = field(default_factory=lambda: np.zeros(3, _F32))
     rpy: np.ndarray = field(default_factory=lambda: np.zeros(3, _F32))
+    valid: int = 0
+    """1 = live configured sample, 0 = no/dead/unconfigured IMU (default: a fresh IMUState is NOT a reading)."""
+    age_us: int = IMU_AGE_UNKNOWN
+    """Sample -> publish age [us]; :data:`IMU_AGE_UNKNOWN` when unknown (default)."""
 
     FIELDS = ("quat_wxyz", "gyro", "accel", "rpy")
     _SIZES = {"quat_wxyz": 4, "gyro": 3, "accel": 3, "rpy": 3}
     _WIRE = {"quat_wxyz": "quat_wxyz", "gyro": "gyro", "accel": "acc", "rpy": "rpy"}
-    """Wire keys follow CONTRACTS section 6 (``imu{quat_wxyz, gyro, acc}``)."""
+    """Wire keys follow CONTRACTS section 6 (``imu{quat_wxyz, gyro, acc}``); ``valid`` / ``age_us`` are ints."""
+    HEALTH_KEYS = ("valid", "age_us")
 
     # Unitree ``IMUState_`` aliases (``quaternion`` is wxyz in Unitree too).
     quaternion = property(lambda s: s.quat_wxyz)
@@ -301,21 +315,45 @@ class IMUState:
     accelerometer = property(lambda s: s.accel)
     acc = property(lambda s: s.accel)
 
+    @property
+    def age_s(self) -> float:
+        """``age_us`` in seconds (``inf`` when unknown)."""
+        return math.inf if int(self.age_us) >= IMU_AGE_UNKNOWN else int(self.age_us) * 1e-6
+
     def validate(self) -> None:
         for f in self.FIELDS:
             arr = getattr(self, f)
             if arr.shape != (self._SIZES[f],) or arr.dtype != _F32:
                 raise ValueError(f"imu.{f}: expected float32 shape ({self._SIZES[f]},), got {arr.dtype} {arr.shape}")
+        if int(self.valid) not in (0, 1):
+            raise ValueError(f"imu.valid: expected 0 or 1, got {self.valid!r}")
+        if not 0 <= int(self.age_us) <= IMU_AGE_UNKNOWN:
+            raise ValueError(f"imu.age_us: expected uint32, got {self.age_us!r}")
 
-    def to_wire(self) -> dict[str, bytes]:
-        return {self._WIRE[f]: getattr(self, f).tobytes() for f in self.FIELDS}
+    def to_wire(self) -> dict[str, Any]:
+        out: dict[str, Any] = {self._WIRE[f]: getattr(self, f).tobytes() for f in self.FIELDS}
+        out["valid"], out["age_us"] = int(self.valid), int(self.age_us)
+        return out
 
     @classmethod
     def from_wire(cls, d: dict) -> "IMUState":
-        return cls(**{f: _from_bin(d[cls._WIRE[f]], _F32, cls._SIZES[f], f"imu.{f}") for f in cls.FIELDS})
+        """Decode; a pre-0004 sender (no ``valid`` / ``age_us`` keys) decodes as INVALID with unknown age."""
+        kw = {f: _from_bin(d[cls._WIRE[f]], _F32, cls._SIZES[f], f"imu.{f}") for f in cls.FIELDS}
+        if "valid" in d or "age_us" in d:
+            if "valid" not in d or "age_us" not in d:
+                raise ValueError("imu: 'valid' and 'age_us' must both be present or both absent")
+            kw["valid"], kw["age_us"] = int(d["valid"]), int(d["age_us"])
+        msg = cls(**kw)
+        msg.validate()
+        return msg
 
-    def _canonical(self) -> bytes:
-        return b"".join(getattr(self, f).tobytes() for f in self.FIELDS)
+    @staticmethod
+    def wire_has_health(d: dict) -> bool:
+        return "valid" in d and "age_us" in d
+
+    def _canonical(self, health: bool = True) -> bytes:
+        body = b"".join(getattr(self, f).tobytes() for f in self.FIELDS)
+        return body + struct.pack("<II", int(self.valid), int(self.age_us)) if health else body
 
 
 @dataclass
@@ -502,16 +540,16 @@ class LowState:
         if self.neck is not None:
             self.neck.validate(NUM_NECK, "neck")
 
-    def _canonical(self) -> bytes:
-        parts = [_header(self.tick, self.stamp_ns), self.imu._canonical(), self.motor._canonical()]
+    def _canonical(self, imu_health: bool = True) -> bytes:
+        parts = [_header(self.tick, self.stamp_ns), self.imu._canonical(imu_health), self.motor._canonical()]
         if self.neck is not None:
             parts.append(self.neck._canonical())
         if self.sim is not None:
             parts.append(self.sim._canonical())
         return b"".join(parts)
 
-    def compute_crc(self) -> int:
-        return crc32_bytes(self._canonical())
+    def compute_crc(self, imu_health: bool = True) -> int:
+        return crc32_bytes(self._canonical(imu_health))
 
     def to_bytes(self) -> bytes:
         """Validate, fill :attr:`crc` and serialize to msgpack."""
@@ -529,10 +567,11 @@ class LowState:
         """Decode msgpack; raise ``ValueError`` on malformed data and :class:`CrcError` on CRC mismatch."""
         d = _check_envelope(msgpack.unpackb(data, raw=False), "LowState")
         neck, sim = d.get("neck"), d.get("sim")
+        health = IMUState.wire_has_health(d["imu"])  # pre-0004 senders: CRC over the legacy canonical bytes
         msg = cls(tick=int(d["tick"]), stamp_ns=int(d["stamp_ns"]), imu=IMUState.from_wire(d["imu"]),
                   motor=MotorStateBlock.from_wire(d["motor"], NUM_MOTORS, "motor"),
                   neck=None if neck is None else MotorStateBlock.from_wire(neck, NUM_NECK, "neck"),
                   sim=None if sim is None else SimState.from_wire(sim), crc=int(d["crc"]))
-        if verify_crc and msg.compute_crc() != msg.crc:
-            raise CrcError(f"LowState CRC mismatch: got {msg.crc:#010x}, computed {msg.compute_crc():#010x}")
+        if verify_crc and msg.compute_crc(health) != msg.crc:
+            raise CrcError(f"LowState CRC mismatch: got {msg.crc:#010x}, computed {msg.compute_crc(health):#010x}")
         return msg

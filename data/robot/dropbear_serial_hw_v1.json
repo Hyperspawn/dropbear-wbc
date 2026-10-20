@@ -1,0 +1,401 @@
+{
+ "schema": "dropbear-serial-hw-surrogate-v1",
+ "source_xml_sha256": "1564a82c6fcc7f105bddcc10c8b20cb232562aaf7ebe6c9553121dc028ca56fb",
+ "map": "user_2026_09_25",
+ "profile": "hw_v1",
+ "method": "J = dm/ds at standing_semantic_pos; effort = sum|J| x peak|rated; velocity = min no_load/|J|; armature = sum J^2 rotor N^2; kp/kd = sum J^2 HW_GAINS",
+ "joints": {
+  "left_hip_pitch": {
+   "effort_peak": 106.1681507957343,
+   "effort_rated": 52.12680078627221,
+   "velocity": 5.699627070712141,
+   "armature": 0.6754755209657389,
+   "kp": 198.67417591358395,
+   "kd": 5.0051040274584295,
+   "motors": {
+    "PG_left_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_left_leg_roll": "RMD-X10-V3-1:7",
+    "LL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "left_hip_roll": {
+   "effort_peak": 45.87601341092989,
+   "effort_rated": 17.437530150422738,
+   "velocity": 19.672365083519075,
+   "armature": 0.02799279115574112,
+   "kp": 149.7551793246632,
+   "kd": 4.991255121409726,
+   "motors": {
+    "PG_left_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_left_leg_roll": "RMD-X10-V3-1:7",
+    "LL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "left_hip_yaw": {
+   "effort_peak": 61.30717459306648,
+   "effort_rated": 25.17852159052635,
+   "velocity": 19.970615981010962,
+   "armature": 0.04830279022278464,
+   "kp": 151.75489315623238,
+   "kd": 5.007415978993768,
+   "motors": {
+    "PG_left_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_left_leg_roll": "RMD-X10-V3-1:7",
+    "LL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "left_shoulder_pitch": {
+   "effort_peak": 40.00103179556321,
+   "effort_rated": 15.000412708986573,
+   "velocity": 19.5388998194858,
+   "armature": 0.027807500553600904,
+   "kp": 80.00000155043399,
+   "kd": 3.000000058321876,
+   "motors": {
+    "LH_yaw": "RMD-X10-V3-1:7"
+   }
+  },
+  "left_shoulder_roll": {
+   "effort_peak": 25.000082230365546,
+   "effort_rated": 10.000032426757855,
+   "velocity": 16.755199827528266,
+   "armature": 0.027540000567155738,
+   "kp": 50.000001029700904,
+   "kd": 2.0000000411879926,
+   "motors": {
+    "LH_pitch": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "left_shoulder_yaw": {
+   "effort_peak": 25.00013138868052,
+   "effort_rated": 10.000052504424294,
+   "velocity": 16.755199545624073,
+   "armature": 0.02754000149441673,
+   "kp": 50.00000271317498,
+   "kd": 2.0000001085269985,
+   "motors": {
+    "LH_roll": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "left_knee": {
+   "effort_peak": 33.48923656073977,
+   "effort_rated": 18.977234051085865,
+   "velocity": 11.25708308539738,
+   "armature": 0.019626756894870808,
+   "kp": 155.76791186405404,
+   "kd": 1.5576791186405403,
+   "motors": {
+    "LL_knee_actuator_joint": "EPS-CEM-60"
+   }
+  },
+  "left_ankle_pitch": {
+   "effort_peak": 55.820560367034204,
+   "effort_rated": 22.32822414681368,
+   "velocity": 12.900274476270175,
+   "armature": 0.07048305612453093,
+   "kp": 204.7438086406127,
+   "kd": 10.237190432030635,
+   "motors": {
+    "LL_Revolute67": "RMD-X8-Pro-V2-1:9",
+    "LL_Revolute81": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "left_ankle_roll": {
+   "effort_peak": 73.52075915728132,
+   "effort_rated": 29.408303662912527,
+   "velocity": 9.74358927448204,
+   "armature": 0.12251004973927873,
+   "kp": 355.8752352629738,
+   "kd": 17.79376176314869,
+   "motors": {
+    "LL_Revolute67": "RMD-X8-Pro-V2-1:9",
+    "LL_Revolute81": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "left_elbow": {
+   "effort_peak": 5.190099161504238,
+   "effort_rated": 2.0760396646016948,
+   "velocity": 80.70751385771148,
+   "armature": 0.0011869576657504671,
+   "kp": 2.1549703444997585,
+   "kd": 0.08619881377999035,
+   "motors": {
+    "LH_elbow_joint": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "left_wrist_roll": {
+   "effort_peak": 25.00000039130053,
+   "effort_rated": 10.000000156520212,
+   "velocity": 16.755199737747258,
+   "armature": 0.027540000862113338,
+   "kp": 50.00000156520213,
+   "kd": 2.0000000626080854,
+   "motors": {
+    "LH_wrist_roll": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_hip_pitch": {
+   "effort_peak": 106.2451162644284,
+   "effort_rated": 52.15732842740966,
+   "velocity": 5.69885622799275,
+   "armature": 0.6756604224536381,
+   "kp": 198.73955502609317,
+   "kd": 5.006845762333961,
+   "motors": {
+    "PG_right_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_right_leg_roll": "RMD-X10-V3-1:7",
+    "RL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "right_hip_roll": {
+   "effort_peak": 46.01542979219711,
+   "effort_rated": 17.494526645248595,
+   "velocity": 19.656464474068088,
+   "armature": 0.02805752783716518,
+   "kp": 150.05373505654418,
+   "kd": 5.0011832004071355,
+   "motors": {
+    "PG_right_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_right_leg_roll": "RMD-X10-V3-1:7",
+    "RL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "right_hip_yaw": {
+   "effort_peak": 60.92341810088135,
+   "effort_rated": 25.024547157333778,
+   "velocity": 19.97495608744154,
+   "armature": 0.048049385006311146,
+   "kp": 151.38658117951402,
+   "kd": 4.995607745770711,
+   "motors": {
+    "PG_right_leg_pitch": "RMD-X10-V3-1:7",
+    "PG_right_leg_roll": "RMD-X10-V3-1:7",
+    "RL_hip_joint": "RMD-X10-S2-V3-1:35"
+   }
+  },
+  "right_shoulder_pitch": {
+   "effort_peak": 40.001052063065195,
+   "effort_rated": 15.000420810335646,
+   "velocity": 19.53889970905734,
+   "armature": 0.027807500876575318,
+   "kp": 80.00000247042111,
+   "kd": 3.000000092860671,
+   "motors": {
+    "RH_yaw": "RMD-X10-V3-1:7"
+   }
+  },
+  "right_shoulder_roll": {
+   "effort_peak": 25.00013793381234,
+   "effort_rated": 10.000054115388993,
+   "velocity": 16.75519850708617,
+   "armature": 0.02754000490812789,
+   "kp": 50.00000891094061,
+   "kd": 2.0000003564374005,
+   "motors": {
+    "RH_pitch": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_shoulder_yaw": {
+   "effort_peak": 25.000275159637496,
+   "effort_rated": 10.00010919820993,
+   "velocity": 16.755200185741494,
+   "armature": 0.027539999391981103,
+   "kp": 49.999998896138855,
+   "kd": 1.9999999558454045,
+   "motors": {
+    "RH_roll": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_knee": {
+   "effort_peak": 33.068582643110965,
+   "effort_rated": 18.738863497762882,
+   "velocity": 11.400280516991316,
+   "armature": 0.01913679526542455,
+   "kp": 151.87932750336944,
+   "kd": 1.5187932750336943,
+   "motors": {
+    "RL_knee_actuator_joint": "EPS-CEM-60"
+   }
+  },
+  "right_ankle_pitch": {
+   "effort_peak": 55.873142599734834,
+   "effort_rated": 22.349257039893935,
+   "velocity": 12.776251127352669,
+   "armature": 0.07085203266719105,
+   "kp": 205.81563592502846,
+   "kd": 10.290781796251423,
+   "motors": {
+    "RL_Revolute67": "RMD-X8-Pro-V2-1:9",
+    "RL_Revolute81": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_ankle_roll": {
+   "effort_peak": 73.6368355349952,
+   "effort_rated": 29.45473421399808,
+   "velocity": 9.737020990421577,
+   "armature": 0.12285457821001516,
+   "kp": 356.87604418305057,
+   "kd": 17.84380220915253,
+   "motors": {
+    "RL_Revolute67": "RMD-X8-Pro-V2-1:9",
+    "RL_Revolute81": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_elbow": {
+   "effort_peak": 4.932392507820543,
+   "effort_rated": 1.9729570031282173,
+   "velocity": 84.92430384156285,
+   "armature": 0.0010720108411874632,
+   "kp": 1.9462796680963383,
+   "kd": 0.07785118672385354,
+   "motors": {
+    "RH_elbow_joint": "RMD-X8-Pro-V2-1:9"
+   }
+  },
+  "right_wrist_roll": {
+   "effort_peak": 25.000000500202894,
+   "effort_rated": 10.000000200081159,
+   "velocity": 16.755199664760024,
+   "armature": 0.027540001102047035,
+   "kp": 50.000002000811605,
+   "kd": 2.000000080032464,
+   "motors": {
+    "RH_wrist_roll": "RMD-X8-Pro-V2-1:9"
+   }
+  }
+ },
+ "legacy": {
+  "left_hip_pitch": {
+   "effort": 235.31089226974726,
+   "kp": 150.1531208237529,
+   "kd": 5.0051040274584295,
+   "armature": 0.010010208054916859
+  },
+  "left_hip_roll": {
+   "effort": 223.76346414287272,
+   "kp": 149.73765364229175,
+   "kd": 4.991255121409726,
+   "armature": 0.00998251024281945
+  },
+  "left_hip_yaw": {
+   "effort": 254.01592613029823,
+   "kp": 150.22247936981304,
+   "kd": 5.007415978993768,
+   "armature": 0.010014831957987535
+  },
+  "left_shoulder_pitch": {
+   "effort": 40.00165065117212,
+   "kp": 50.000000996111474,
+   "kd": 2.000000039844459,
+   "armature": 0.010000000199222295
+  },
+  "left_shoulder_roll": {
+   "effort": 40.00012039926413,
+   "kp": 50.0000010296944,
+   "kd": 2.000000041187776,
+   "armature": 0.01000000020593888
+  },
+  "left_shoulder_yaw": {
+   "effort": 40.0002089967389,
+   "kp": 50.0000027131749,
+   "kd": 2.000000108526996,
+   "armature": 0.010000000542634979
+  },
+  "left_knee": {
+   "effort": 167.44618280369883,
+   "kp": 62.30716474562161,
+   "kd": 3.7384298847372968,
+   "armature": 0.0031153582372810806
+  },
+  "left_ankle_pitch": {
+   "effort": 178.62579317450945,
+   "kp": 204.7438086406127,
+   "kd": 10.237190432030635,
+   "armature": 0.025592976080076588
+  },
+  "left_ankle_roll": {
+   "effort": 235.2664293033002,
+   "kp": 355.8752352629738,
+   "kd": 17.79376176314869,
+   "armature": 0.04448440440787173
+  },
+  "left_elbow": {
+   "effort": 8.304158658406779,
+   "kp": 2.1549703444997585,
+   "kd": 0.08619881377999035,
+   "armature": 0.00043099406889995174
+  },
+  "left_wrist_roll": {
+   "effort": 40.00000062608085,
+   "kp": 50.00000156520213,
+   "kd": 2.0000000626080854,
+   "armature": 0.010000000313040427
+  },
+  "right_hip_pitch": {
+   "effort": 235.65574544416577,
+   "kp": 150.20537287001883,
+   "kd": 5.006845762333961,
+   "armature": 0.010013691524667922
+  },
+  "right_hip_roll": {
+   "effort": 224.34737760479328,
+   "kp": 150.03549601221403,
+   "kd": 5.0011832004071355,
+   "armature": 0.01000236640081427
+  },
+  "right_hip_yaw": {
+   "effort": 252.33872163632827,
+   "kp": 149.86823237312132,
+   "kd": 4.995607745770711,
+   "armature": 0.00999121549154142
+  },
+  "right_shoulder_pitch": {
+   "effort": 40.001682943533936,
+   "kp": 50.000001576995174,
+   "kd": 2.0000000630798067,
+   "armature": 0.010000000315399033
+  },
+  "right_shoulder_roll": {
+   "effort": 40.00019529883709,
+   "kp": 50.00000891090702,
+   "kd": 2.0000003564362805,
+   "armature": 0.010000001782181404
+  },
+  "right_shoulder_yaw": {
+   "effort": 40.000419479938365,
+   "kp": 49.99999889611638,
+   "kd": 1.999999955844655,
+   "armature": 0.009999999779223275
+  },
+  "right_knee": {
+   "effort": 165.34291321555483,
+   "kp": 60.75173100134778,
+   "kd": 3.6451038600808667,
+   "armature": 0.003037586550067389
+  },
+  "right_ankle_pitch": {
+   "effort": 178.79405631915148,
+   "kp": 205.81563592502846,
+   "kd": 10.290781796251423,
+   "armature": 0.025726954490628555
+  },
+  "right_ankle_roll": {
+   "effort": 235.63787371198464,
+   "kp": 356.87604418305057,
+   "kd": 17.84380220915253,
+   "armature": 0.04460950552288132
+  },
+  "right_elbow": {
+   "effort": 7.891828012512869,
+   "kp": 1.9462796680963383,
+   "kd": 0.07785118672385354,
+   "armature": 0.0003892559336192677
+  },
+  "right_wrist_roll": {
+   "effort": 40.000000800324635,
+   "kp": 50.000002000811605,
+   "kd": 2.000000080032464,
+   "armature": 0.010000000400162322
+  }
+ }
+}

@@ -28,6 +28,7 @@ import numpy as np
 import torch
 
 from dropbear_wbc.robots.dropbear_names import FOOT_BODIES, MOTOR_NAMES
+from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
 from dropbear_wbc.robots.hw_motor_specs import MOTOR_CAN_IDS
 
 
@@ -42,7 +43,7 @@ class MotorTelemetry:
                      for k, n in enumerate(act.joint_names) if n in self.names]
         self.peak = np.zeros(len(self.names))
         for i, act, k in self.cols:
-            self.peak[i] = float(act.effort_limit[self.e, k])
+            self.peak[i] = float(actuator_effort_limit(act)[self.e, k])
         self.foot_ids = [robot.body_names.index(b) for b in FOOT_BODIES if b in robot.body_names]
         self.anchor = robot.body_names.index(anchor_body) if anchor_body else None
         self.rows: dict[str, list] = {k: [] for k in ("q", "qd", "q_target", "tau", "tau_pd", "tau_sub", "base_vel_b",

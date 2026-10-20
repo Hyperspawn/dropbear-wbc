@@ -263,6 +263,8 @@ def main() -> int:  # noqa: C901
         _mterm._update_metrics = _sampled_metrics
 
     summary: dict = {"checkpoint": str(ckpt), "motion_file": str(motion), "task": args.task, "num_envs": env.num_envs,
+                     "actuator_profile": profile,
+                     "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
                      "default_pose_source": env_cfg.default_pose_source, "default_pose_note": pose_note}
     cmd_term = env.unwrapped.command_manager.get_term("motion")
     if is_library:  # per-env clip (env i -> play clip i % N); T per env
@@ -277,6 +279,7 @@ def main() -> int:  # noqa: C901
         wrap_jump = float((cmd_term.motion.joint_pos[-1] - cmd_term.motion.joint_pos[0]).abs().max())
     summary["eval_design"] = {
         "policy": "deterministic (inference policy, mean action)",
+        "perturbed": bool(args.perturbed),
         "randomization": randomization,
         "seed": env_cfg.seed,
         "start": "frame 0 (start_at_zero), no RSI noise",
@@ -329,6 +332,16 @@ def main() -> int:  # noqa: C901
     robot = unwrapped.scene["robot"]
     mon = ClosureMonitor(find_closures("/World/envs/env_0/Robot", list(robot.body_names)), unwrapped.device)
     gap_hist = []
+    # per-motor torque / speed (same block and reductions as play_locomotion.py; tools/scoreboard.py gates it)
+    from dropbear_wbc.isaac.motor_torque import MotorTorqueSampler, tracking_sample_mask
+    from dropbear_wbc.robots import dropbear_names as _NM
+
+    torque = MotorTorqueSampler(robot.actuators, _NM.MOTOR_NAMES, unwrapped.num_envs, unwrapped.device)
+    motor_ids = robot.find_joints(list(_NM.MOTOR_NAMES), preserve_order=True)[0]
+    # reset_at_wrap: the clip end rewrites the robot to frame 0 inside env.step (command update, after physics), so
+    # that env's joint_vel is the written reference state, not the rollout; continuous_loop only wraps the clock
+    # (the robot state is the rollout's, so the wrap step is sampled)
+    wrap_rewrites = not args.continuous_loop
     alive_steps = torch.zeros(unwrapped.num_envs, dtype=torch.long, device=unwrapped.device)
     ended_lengths = []
     falls: list[dict] = []  # terminations that are not time-outs: env, global step, episode step, loop index, terms
@@ -441,6 +454,7 @@ def main() -> int:  # noqa: C901
                 rollout_obs.append(obs[:1].detach().cpu().clone())
                 rollout_act.append(actions[:1].detach().cpu().clone())
             t1 = time.perf_counter()
+            ts_prev = command.time_steps.clone()
             obs, _, dones, _ = env.step(actions)
             timing["policy_s"] += t1 - t0
             timing["env_step_s"] += time.perf_counter() - t1
@@ -456,6 +470,10 @@ def main() -> int:  # noqa: C901
         gap_hist.append(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w).cpu())
         alive_steps += 1
         d = dones.bool()
+        # torque/speed sample: every env except the ones reset this step (fall or time-out: Isaac Lab wrote the reset
+        # state before returning) or rewritten at a reference wrap (the reference clock did not advance by one frame)
+        tq_ok = tracking_sample_mask(d, ts_prev, command.time_steps, wrap_rewrites)
+        torque.add(robot.data.joint_vel[:, motor_ids], tq_ok, groups=env_clip if is_library else None)
         if live is not None and bool(d[0]):
             live.restart("fall" if bool(unwrapped.termination_manager.terminated[0]) else "time-out")
         if bool(d.any()):
@@ -554,6 +572,16 @@ def main() -> int:  # noqa: C901
         },
         note="Tracking quality numbers only; finite simulation is not success.",
     )
+    mt = torque.block(
+        "|applied motor torque| and |joint speed| at the last physics substep of each policy step; every env-step "
+        "except envs reset in that step (fall or time-out) or rewritten to frame 0 at a reference wrap (their "
+        "joint_vel is the written state); no warm-up (episodes start on the reference); all envs/clips pooled; "
+        "clip_frac = share of samples where the actuator model cut the PD torque (peak limit, or the torque-speed "
+        "line for hw_* profiles)",
+        env_steps=steps * unwrapped.num_envs)
+    if mt is not None:
+        summary["motor_torque"] = mt
+    clip_torque = torque.group_blocks() if is_library else {}
     if is_library:  # per-clip breakdown (env i played clip env_clip[i] from frame 0)
         per_clip = {}
         for c, name in enumerate(cmd_term.clip_names):
@@ -566,6 +594,8 @@ def main() -> int:  # noqa: C901
                 "mean_metrics": {k: float(env_sums[k][envs].mean()) / steps for k in metric_keys},
                 "falls": len(ev), "one_step_falls": sum(1 for f in ev if f["episode_step"] <= 1),
                 "first_fall_episode_step": min((f["episode_step"] for f in ev), default=None)}
+            if c in clip_torque:
+                per_clip[name]["motor_torque"] = clip_torque[c]
         summary["library"] = {k: cmd_term.library_info.get(k) for k in ("name", "sha256", "num_clips", "all_accepted")}
         summary["per_clip"] = per_clip
     if args.video:

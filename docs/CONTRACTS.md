@@ -719,8 +719,14 @@ needs these details to interoperate. They are additive; nothing above changes.
   - `acc` is the body-frame specific force, in m/s². It reads +9.81 on z when the robot is upright at rest.
   - `sim` holds privileged ground truth: the root pose and velocity in world, plus the poses of any requested bodies.
     Hardware never has it. A policy that needs it is sim-only and must say so.
+  - *Added by local patch 0004 (item 137):* `imu.valid` (int 0/1) and `imu.age_us` (uint32, `0xFFFFFFFF` = unknown).
+    `valid = 1` only for a live, configured sample; a default `IMUState` is invalid with unknown age, so its
+    identity quaternion can never pass as "upright". `age_us` = sample time -> LowState publish. A LowState without
+    these keys (pre-0004 sender) decodes as invalid. The deploy FSM refuses / leaves `POLICY` on an invalid or stale
+    (> 60 ms default) IMU. The schema string stays `dropbear_hg-v1` (additive keys); see backlog for the version bump.
 - **CRC.** Unitree's `crc32_core` is applied to the canonical bytes (`<I tick`, `<q stamp_ns`, then every
-  array in field order), read as little-endian uint32 words.
+  array in field order), read as little-endian uint32 words. Patch 0004 appends `<II imu.valid imu.age_us` after
+  `imu.rpy`; a message without the keys is checked over the legacy bytes.
 - **Safety semantics.** The robot side holds the last command.
   - If no command arrives for more than 100 ms (wall clock), it switches to damping (`kp=0`, `kd=damping`).
   - The Newton bridge stays paused until the first command arrives.

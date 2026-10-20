@@ -47,7 +47,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode  # noqa: E402
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -77,6 +77,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--hold-s", type=float, default=1.0, help="policy mode: time in Hold before Policy")
     ap.add_argument("--move-s", type=float, default=None, help="override MoveToDefault duration [s]")
     ap.add_argument("--no-bad-orientation", action="store_true", help="disable Policy->Passive tilt check")
+    ap.add_argument("--imu-max-age-ms", type=float, default=None,
+                    help="IMU staleness gate [ms] for POLICY (default: config / 60; <= 0 disables the age check)")
+    ap.add_argument("--imu-frozen-steps", type=int, default=None,
+                    help="leave/refuse POLICY after N steps of bit-identical gyro+accel (default: config / 0 = off)")
+    ap.add_argument("--no-imu-gate", action="store_true",
+                    help="disable the IMU valid/age/frozen gate (replaying pre-0004 logs only; unsafe on hardware)")
     ap.add_argument("--fall-tilt-rad", type=float, default=1.0, help="summary: tilt counted as a fall")
     ap.add_argument("--fall-height-m", type=float, default=None, help="summary: root z counted as a fall")
     ap.add_argument("--host", default="127.0.0.1")
@@ -87,6 +93,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--log", type=Path, help="JSONL per-step log")
     ap.add_argument("--summary", type=Path, help="JSON summary")
     ap.add_argument("--settle-window-s", type=float, default=1.0, help="tracking stats over the last N s of Hold")
+    ap.add_argument("--no-motor-mode-gate", action="store_true",
+                    help="do not fail the summary when LowState.motor.mode never reaches ENABLE=1 "
+                         "(debug only; default fails — notes/46 F1 / item 156)")
+    ap.add_argument("--no-motor-mode-fsm-gate", action="store_true",
+                    help="disable the FSM L4 gate (Passive + latch when an armed motor reports mode != 1; item 157)")
+    ap.add_argument("--motor-mode-grace-steps", type=int, default=None, help="override fsm.motor_mode_grace_steps")
     return ap.parse_args(argv)
 
 
@@ -160,6 +172,17 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         cfg.fsm.move_to_default_s = args.move_s
     if args.no_bad_orientation:
         cfg.fsm.bad_orientation_rad = None
+    if args.imu_max_age_ms is not None:
+        cfg.fsm.imu_max_age_s = None if args.imu_max_age_ms <= 0 else args.imu_max_age_ms * 1e-3
+    if args.imu_frozen_steps is not None:
+        cfg.fsm.imu_frozen_steps = max(0, int(args.imu_frozen_steps))
+    if args.no_imu_gate:
+        cfg.fsm.imu_gate = False
+        print("[runner] WARNING: IMU valid/age gate disabled (--no-imu-gate)", flush=True)
+    if args.no_motor_mode_fsm_gate:
+        cfg.fsm.motor_mode_gate = False
+    if args.motor_mode_grace_steps is not None:
+        cfg.fsm.motor_mode_grace_steps = int(args.motor_mode_grace_steps)
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -169,6 +192,11 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
+
+
+def _age_ms(age_s: float | None) -> float | None:
+    """JSON-safe IMU age [ms] (``None`` when absent or unknown)."""
+    return None if age_s is None or age_s == float("inf") else 1e3 * age_s
 
 
 def _meta_list(meta: dict, key: str) -> list[str]:
@@ -190,7 +218,10 @@ def main(argv=None) -> int:
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
                              "hold_kp": cfg.fsm.hold_kp.tolist(), "hold_kd": cfg.fsm.hold_kd.tolist(),
                              "move_to_default_s": cfg.fsm.move_to_default_s,
-                             "observations": [t.__dict__ for t in cfg.observations]}
+                             "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
+                             "imu_frozen_steps": cfg.fsm.imu_frozen_steps,
+                             "observations": [t.__dict__ for t in cfg.observations],
+                             "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)
         sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
         pub = ChannelPublisher(LOWCMD, LowCmd, endpoints=ep, role="client")
@@ -219,6 +250,8 @@ def main(argv=None) -> int:
         steps, wall_steps, state_age_ms, compute_ms, tick_gaps, policy_ms = 0, [], [], [], [], []
         hold_err: list[np.ndarray] = []
         transitions, fall = [], None
+        motor_mode_max = 0
+        motor_mode_enable_steps = 0
         last_tick = st.tick - decim
         last_rx = time.perf_counter()
         last_cmd: LowCmd | None = None
@@ -265,8 +298,8 @@ def main(argv=None) -> int:
                 ctrl.request(schedule[seq_i][1], st, t)
                 seq_i += 1
             if policy_at is not None and t >= policy_at and ctrl.state == FsmState.HOLD:
-                ctrl.request(FsmState.POLICY, st, t)
-                policy_at = None
+                if ctrl.request(FsmState.POLICY, st, t):  # refused while the IMU gate fails: retry next step
+                    policy_at = None
             a = time.perf_counter()
             cmd, info = ctrl.step(st, t)
             pub.Write(cmd)
@@ -283,6 +316,10 @@ def main(argv=None) -> int:
                 print(f"[runner] t={t:6.3f}s {info.transition}", flush=True)
             q = st.motor.q.astype(float)
             err = q - info.q_des
+            mode_u8 = np.asarray(st.motor.mode)
+            motor_mode_max = max(motor_mode_max, int(mode_u8.max()) if mode_u8.size else 0)
+            if np.any(mode_u8 == MotorMode.ENABLE):
+                motor_mode_enable_steps += 1
             tilt = Q.tilt_angle(st.imu.quat_wxyz.astype(float))
             root_z = float(st.sim.root_pos_w[2]) if st.sim is not None else None
             if info.state == FsmState.HOLD and ctrl.state == FsmState.HOLD:
@@ -293,8 +330,11 @@ def main(argv=None) -> int:
                 print(f"[runner] FALL detected at t={t:.3f}s tilt={tilt:.2f} rad root_z={root_z}", flush=True)
             if logf is not None:
                 rec = {"step": steps, "t": t, "tick": st.tick, "fsm": info.state.value, "tilt": tilt,
-                       "root_z": root_z, "state_age_ms": state_age_ms[-1], "q": q.tolist(),
-                       "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist()}
+                       "root_z": root_z, "state_age_ms": state_age_ms[-1], "imu_valid": info.extra.get("imu_valid"),
+                       "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
+                       "q": q.tolist(),
+                       "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist(),
+                       "motor_mode": mode_u8.astype(int).tolist()}
                 if info.action is not None:
                     rec["action"] = info.action.tolist()
                 logf.write(json.dumps(rec) + "\n")
@@ -316,8 +356,14 @@ def main(argv=None) -> int:
                         "per_motor_max_abs_rad": dict(zip(motors.MOTOR_NAMES, np.abs(win).max(0).tolist())),
                         "overall_rms_rad": float(np.sqrt((win ** 2).mean())),
                         "overall_max_abs_rad": float(np.abs(win).max())}
+        mode_ok = motor_mode_enable_steps > 0 or args.no_motor_mode_gate or steps == 0
+        status = "executed" if mode_ok else "failed"
+        if mode_ok and ctrl.latched is not None:
+            status = "tripped"  # FSM L4 gate fired: the robot side dropped a motor (item 157); not a clean run
         summary.update({
-            "status": "executed", "steps": steps, "controller_time_s": ctrl_time(st),
+            "status": status, "steps": steps, "controller_time_s": ctrl_time(st),
+            "motor_mode_max": motor_mode_max,
+            "motor_mode_enable_steps": motor_mode_enable_steps,
             "runner_hz_wall": float(1.0 / wall.mean()) if len(wall) else None,
             "step_interval_wall_ms": {"p50": float(np.percentile(wall, 50) * 1e3) if len(wall) else None,
                                       "p99": float(np.percentile(wall, 99) * 1e3) if len(wall) else None},
@@ -330,9 +376,20 @@ def main(argv=None) -> int:
             if compute_ms else None,
             "policy_ms_p50": float(np.percentile(policy_ms, 50)) if policy_ms else None,
             "transitions": transitions, "fall": fall, "hold_tracking": tracking,
+            "motor_mode_gate": {"enabled": bool(cfg.fsm.motor_mode_gate),
+                                "grace_steps": int(cfg.fsm.motor_mode_grace_steps),
+                                "arm_timeout_s": cfg.fsm.motor_mode_arm_timeout_s,
+                                "latched": ctrl.latched, "refused": ctrl.refused},
             "final_fsm": ctrl.state.value, "subscriber": sub.stats, "publisher": pub.stats, "keepalives": keepalives,
             "privileged_terms": ctrl.obs_builder.privileged_terms if ctrl.obs_builder else [],
         })
+        if not mode_ok:
+            summary["error"] = (
+                "LowState.motor.mode never reached ENABLE=1; robot side never armed or every LowCmd was "
+                "refused (e.g. hold_kd > motion-mode kd field 5 — notes/46 F1 / item 156). "
+                f"motor_mode_max={motor_mode_max}, steps={steps}. Pass --no-motor-mode-gate to bypass."
+            )
+            print(f"[runner] FAIL: {summary['error']}", flush=True)
     except Exception:  # noqa: BLE001
         summary["error"] = traceback.format_exc()
         print(summary["error"], file=sys.stderr, flush=True)

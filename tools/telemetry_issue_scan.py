@@ -4,6 +4,9 @@ Input: the ``--telemetry`` npz of ``scripts/play.py`` / ``scripts/play_locomotio
 50 Hz rows plus 200 Hz substep torques. Checks, each with a threshold in ``THRESH``:
 
 * ``thermal``        RMS torque over the rollout / rated (continuous) torque, per motor
+* ``sustained``      worst sliding ``SUSTAIN_S`` (5 s) RMS torque / rated, per motor: a held pose inside a longer rollout
+                     (straight arm raised, ISSUES #10/#28c) that the whole-rollout RMS dilutes. Only on rollouts longer
+                     than 1.5 windows; a quality warning, not in ``HW_GATE`` until a thermal model sets the window
 * ``clipped``        share of policy steps where the PD asked for more than the torque-speed envelope gave
 * ``torque_jump``    share of 5 ms steps whose torque change exceeds 25 % of peak (48 V bus ripple, gear shock)
 * ``speed``          p99 |joint speed| / no-load speed (headroom for the torque-speed line)
@@ -42,6 +45,7 @@ import numpy as np
 
 THRESH = {
     "thermal": (1.0, 1.3),           # RMS / rated: warn, high
+    "sustained": (1.0, 1.3),         # worst SUSTAIN_S-window RMS / rated
     "clipped": (0.05, 0.20),         # share of policy steps
     "torque_jump": (0.05, 0.15),     # share of 5 ms steps with |d tau| > 25 % peak
     "speed": (0.8, 0.95),            # p99 |qd| / no-load
@@ -65,6 +69,7 @@ HW_GATE = ("fall", "stop_load", "stop_rest", "thermal", "clipped", "speed", "tou
 """Checks whose HIGH findings fail the hardware gate: each one breaks or overheats a real part, or slips a foot. The
 rest (jitter, lag, asymmetry, sway, ...) are quality warnings."""
 JUMP_FRAC_OF_PEAK = 0.25
+SUSTAIN_S = 5.0  # s, sliding RMS window of the ``sustained`` check
 CHATTER_S = 0.06
 SETTLE_V = 0.1  # m/s: a landed sole below this planar speed has settled
 LIMIT_MARGIN = np.deg2rad(3.0)
@@ -141,6 +146,15 @@ def scan(path: Path, limits_json: Path = USD_LIMITS_JSON) -> dict:
     rms = np.sqrt((tau ** 2).mean(0))
     for i, n in enumerate(names):
         add("thermal", rms[i] / rated[i], motor=n, detail=f"RMS {rms[i]:.1f} N*m vs rated {rated[i]:.0f}")
+    win = int(round(SUSTAIN_S / dt))
+    if T >= 1.5 * win:
+        c2 = np.vstack([np.zeros((1, tau.shape[1])), np.cumsum(tau ** 2, axis=0)])
+        wr = np.sqrt((c2[win:] - c2[:-win]) / win)
+        worst_t = wr.argmax(0) * dt
+        sus = wr.max(0)
+        for i, n in enumerate(names):
+            add("sustained", sus[i] / rated[i], motor=n,
+                detail=f"{SUSTAIN_S:.0f} s RMS {sus[i]:.1f} N*m vs rated {rated[i]:.0f} from t={worst_t[i]:.1f} s")
     clip = (np.abs(pd - tau) > 1e-3 * peak).mean(0)
     for i, n in enumerate(names):
         add("clipped", clip[i], motor=n, detail="PD demand above the torque-speed envelope")

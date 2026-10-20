@@ -25,6 +25,8 @@ import isaaclab.utils.math as math_utils
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 
+from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -224,7 +226,7 @@ class motor_torque_rate_l2(ManagerTermBase):
             jids = list(range(self.asset.num_joints))[jids] if isinstance(jids, slice) else jids.tolist()
             for k, j in enumerate(jids):
                 if j in ids:
-                    lim = float(act.effort_limit[0, k])
+                    lim = float(actuator_effort_limit(act)[0, k])
                     peak[ids.index(j)] = lim if 0.0 < lim < 1.0e6 else 100.0
         self.peak = peak
         self.prev = self.asset.data.applied_torque[:, self.ids].clone()

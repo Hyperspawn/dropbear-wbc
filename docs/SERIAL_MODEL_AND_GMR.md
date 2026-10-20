@@ -41,6 +41,7 @@ The builder writes these files to `data/robot/`:
 | `dropbear_serial_motionlib.xml` | Same kinematics and dynamics for PHC-style `Humanoid_Batch` parsers (SONIC motion_lib, ProtoMotions). Every non-root body has exactly one hinge; there are no jointless bodies (torso and head become sites); actuators are `<motor>`. |
 | `dropbear_serial_scene.xml` | `dropbear_serial.xml` plus a floor and a light, for viewers. |
 | `dropbear_serial.json` | Metadata: input paths and SHA-256s, frames, per-joint fit residuals, segment assignment of all 90 USD bodies, surrogate actuator parameters, `motionlib_extend_config`, self-check. |
+| `dropbear_serial_hw_{v1,v1_cad,cem6,v4}.{xml,json,urdf}` | Hardware-surrogate variants (`tools/export_serial_hw.py --map <map>`): same kinematics and lumped masses, joint armature / effort / position servos mapped from `hw_motor_specs` (user map 2026-09-25, CAD map, Build A `hw_cem6`, Build B `hw_v4`) through J = dm/ds at the stand; URDF for ROS/rviz/Gazebo consumers (replaces the legacy dropbear_urdf / dropbear_mjcf for dynamics). The motor-mass offsets of `hw_cem6` / `hw_v4` are not applied (CAD masses). |
 | `meshes/mesh_<body>.stl` | One visual mesh per serial body: the union of the convex hulls of its USD members' collision hulls, baked into the body frame. Visual only (`contype 0`). SONIC's `mesh_fk` height fix needs them. |
 | `usd_body_properties_45586414.json` | Per-body mass, COM, inertia and collision-hull subsample, read from the USD with pxr. |
 | `gmr/bvh_lafan1_to_dropbear.json`, `gmr/smplx_to_dropbear.json` | GMR IK configs (section 6). |
@@ -395,11 +396,15 @@ First comparison (2026-09-24 11:00), **superseded** (see above):
   - SONIC's import dependencies were added to `.venv-gmr`: easydict, loguru, lxml, omegaconf, hydra-core, open3d
     (`venv_gmr_install_sonic_deps.log`).
   - Next steps: a SONIC robot and motion config for Dropbear (joint groups, default pose `standing_semantic_pos`,
-    surrogate gains from `surrogate_actuators`), then a motion_lib load and a short training smoke run.
+    surrogate gains from `dropbear_serial_hw_v1.json`, not the legacy `surrogate_actuators`), then a motion_lib load and a short training smoke run.
     **UNVERIFIED.**
 - **mjlab.** Create `asset_zoo/robots/dropbear/` in a copy, modelled on `unitree_g1/g1_constants.py`:
   - the spec from `data/robot/dropbear_serial.xml`;
-  - `BuiltinPositionActuatorCfg` per joint group, with effort and kp from `surrogate_actuators`;
+  - `BuiltinPositionActuatorCfg` per joint group, with effort, kp, kd and armature from the HARDWARE surrogate
+    `data/robot/dropbear_serial_hw_v1.json` `joints` (or `dropbear_serial_hw_v1.xml` directly), NOT from
+    `dropbear_serial.json` `surrogate_actuators`: those map the legacy `DROPBEAR_CFG` groups and are 2.2-5.0x the
+    user's motor map on the legs (knee 167 vs 33.5 N*m, hip roll 224 vs 46 N*m peak at the stand) with 2.8-67x too
+    little armature (`tools/export_serial_hw.py`, `tests/test_serial_hw_actuators.py`);
   - a standing keyframe from `standing_semantic_pos`.
 
   The tracking task needs `anchor_body_name="torso_link"` and body names drawn from the serial links. The

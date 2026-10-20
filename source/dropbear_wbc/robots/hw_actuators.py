@@ -15,6 +15,11 @@ loop) with
 what the motor delivers; ``friction_effort`` holds the friction torque of the last step.
 
 Import only after the Isaac Sim app is running.
+
+Isaac Lab 2.2 and 3.0 are both supported (notes/15 B): 3.0 removed ``ActuatorBase._parse_joint_parameter`` (now the
+module-level ``resolve_joint_parameter``), passes ``joint_vel`` to ``_clip_effort`` and renamed the explicit limits to
+``actuator_effort_limit`` / ``actuator_velocity_limit`` (``effort_limit`` / ``velocity_limit`` are warning aliases until
+3.1). :func:`_resolve_param`, :func:`effort_lim` / :func:`velocity_lim` and :data:`LIMIT_FIELDS` hide the difference.
 """
 from __future__ import annotations
 
@@ -25,13 +30,47 @@ from isaaclab.actuators import IdealPDActuator, IdealPDActuatorCfg, ImplicitActu
 from isaaclab.utils import DelayBuffer, configclass
 from isaaclab.utils.types import ArticulationActions
 
+try:  # Isaac Lab >= 3.0: module-level resolver; 2.2 only has the ActuatorBase._parse_joint_parameter method
+    from isaaclab.actuators.actuator_base import resolve_joint_parameter as _lab_resolve_joint_parameter
+except ImportError:
+    _lab_resolve_joint_parameter = None
+
 from .dropbear_names import ACTUATOR_GROUP_MOTORS, ACTUATOR_PARAMS
+from .hw_introspect import actuator_effort_limit as effort_lim
+from .hw_introspect import actuator_velocity_limit as velocity_lim
 from .hw_motor_specs import (
     FRICTION_SCALE_RANGE,
     LATENCY_STEPS,
     VELOCITY_LIMIT_SIM_FACTOR,
     joint_hw_params,
 )
+
+
+def _cfg_fields(cfg_cls) -> set[str]:
+    return set(getattr(cfg_cls, "__dataclass_fields__", {}) or {})
+
+
+# cfg field names for (actuator effort, actuator velocity, solver effort, solver velocity) limits on this Isaac Lab
+_LAB3_CFG = "actuator_effort_limit" in _cfg_fields(IdealPDActuatorCfg)
+LIMIT_FIELDS: dict[str, str] = (
+    {"effort": "actuator_effort_limit", "velocity": "actuator_velocity_limit",
+     "effort_sim": "joint_effort_limit", "velocity_sim": "joint_velocity_limit"}
+    if _LAB3_CFG else
+    {"effort": "effort_limit", "velocity": "velocity_limit", "effort_sim": "effort_limit_sim",
+     "velocity_sim": "velocity_limit_sim"}
+)
+
+
+def _limit_kwargs(**limits) -> dict:
+    """``effort=..., velocity_sim=...`` -> the cfg keyword names of the running Isaac Lab (no 3.0 alias warnings)."""
+    return {LIMIT_FIELDS[k]: v for k, v in limits.items()}
+
+
+def _resolve_param(act, cfg_value, default):
+    """(num_envs, num_joints) tensor of a scalar / regex-dict cfg value, with the running Isaac Lab's own semantics."""
+    if _lab_resolve_joint_parameter is not None:
+        return _lab_resolve_joint_parameter(cfg_value, default, act.joint_names, act._num_envs, act._device)
+    return act._parse_joint_parameter(cfg_value, default)
 
 
 class DatasheetMotor(IdealPDActuator):
@@ -41,14 +80,16 @@ class DatasheetMotor(IdealPDActuator):
 
     def __init__(self, cfg: DatasheetMotorCfg, *args, **kwargs):
         super().__init__(cfg, *args, **kwargs)
-        self._saturation = self._parse_joint_parameter(cfg.saturation_effort, None)
-        self._coulomb = self._parse_joint_parameter(cfg.coulomb_friction, 0.0)
-        self._viscous = self._parse_joint_parameter(cfg.viscous_friction_coef, 0.0)
-        if torch.any(self._saturation < self.effort_limit):
+        self._saturation = _resolve_param(self, cfg.saturation_effort, None)
+        self._coulomb = _resolve_param(self, cfg.coulomb_friction, 0.0)
+        self._viscous = _resolve_param(self, cfg.viscous_friction_coef, 0.0)
+        if torch.any(self._saturation < effort_lim(self)):
             raise ValueError(f"{self.joint_names}: saturation_effort must be >= effort_limit (peak)")
+        if not torch.all(torch.isfinite(velocity_lim(self))):
+            raise ValueError(f"{self.joint_names}: velocity_limit (no-load speed) must be finite for the envelope")
         # velocity where the torque-speed line meets -effort_limit (DCMotor's clip for back-driven joints)
-        self._vel_at_effort_lim = self.velocity_limit * (1.0 + self.effort_limit / self._saturation)
-        self._joint_vel = torch.zeros_like(self.computed_effort)
+        self._vel_at_effort_lim = velocity_lim(self) * (1.0 + effort_lim(self) / self._saturation)
+        self._joint_vel = torch.zeros_like(self.computed_effort)  # Lab 2.2 calls _clip_effort(effort) without it
         self.friction_effort = torch.zeros_like(self.computed_effort)
         self._friction_scale = torch.ones(self._num_envs, 1, device=self._device)
         self._pos_delay = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
@@ -63,14 +104,14 @@ class DatasheetMotor(IdealPDActuator):
         self.spring_effort = torch.zeros_like(self.computed_effort)
         self._springs = cfg.spring_stiffness is not None
         if self._springs:
-            self._spring_k = self._parse_joint_parameter(cfg.spring_stiffness, 0.0)
-            self._spring_q0 = self._parse_joint_parameter(cfg.spring_engage, 0.0)
+            self._spring_k = _resolve_param(self, cfg.spring_stiffness, 0.0)
+            self._spring_q0 = _resolve_param(self, cfg.spring_engage, 0.0)
         self._stops = cfg.stop_stiffness is not None
         if self._stops:
-            self._stop_lo = self._parse_joint_parameter(cfg.stop_lower, None)
-            self._stop_hi = self._parse_joint_parameter(cfg.stop_upper, None)
-            self._stop_k = self._parse_joint_parameter(cfg.stop_stiffness, None)
-            self._stop_d = self._parse_joint_parameter(cfg.stop_damping, 0.0)
+            self._stop_lo = _resolve_param(self, cfg.stop_lower, None)
+            self._stop_hi = _resolve_param(self, cfg.stop_upper, None)
+            self._stop_k = _resolve_param(self, cfg.stop_stiffness, None)
+            self._stop_d = _resolve_param(self, cfg.stop_damping, 0.0)
 
     def reset(self, env_ids: Sequence[int]):
         super().reset(env_ids)
@@ -129,10 +170,14 @@ class DatasheetMotor(IdealPDActuator):
         self._last_tgt = tgt.clone()
         return self._cmd
 
-    def _clip_effort(self, effort: torch.Tensor) -> torch.Tensor:
-        vel = torch.clip(self._joint_vel, min=-self._vel_at_effort_lim, max=self._vel_at_effort_lim)
-        top = torch.clip(self._saturation * (1.0 - vel / self.velocity_limit), max=self.effort_limit)
-        bottom = torch.clip(self._saturation * (-1.0 - vel / self.velocity_limit), min=-self.effort_limit)
+    def _clip_effort(self, effort: torch.Tensor, joint_vel: torch.Tensor | None = None) -> torch.Tensor:
+        """Torque-speed envelope. Lab 3.0 passes ``joint_vel``; Lab 2.2 does not (the value cached by compute)."""
+        if joint_vel is None:
+            joint_vel = self._joint_vel
+        vlim, elim = velocity_lim(self), effort_lim(self)
+        vel = torch.clip(joint_vel, min=-self._vel_at_effort_lim, max=self._vel_at_effort_lim)
+        top = torch.clip(self._saturation * (1.0 - vel / vlim), max=elim)
+        bottom = torch.clip(self._saturation * (-1.0 - vel / vlim), min=-elim)
         return torch.clip(effort, min=bottom, max=top)
 
 
@@ -170,9 +215,10 @@ class DatasheetMotorCfg(IdealPDActuatorCfg):
 
 
 def make_hw_profile_groups(profile: str, stop_model: bool = False,
-                           knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
+                           knee_band: tuple[float, float] | None = None) -> dict:
     """Motor groups of an ``hw_*`` actuator profile: its motor map plus its options (``HW_PROFILE_OPTIONS``).
-    ``knee_band``: (stiffness N*m/rad, engage deg) of an elastic on each knee crank (see ``make_hw_motor_groups``)."""
+    ``knee_band``: (stiffness N*m/rad, engage deg) of an elastic on each knee crank (see ``make_hw_motor_groups``).
+    Armature-DR profiles (``*_armdr``) mix DatasheetMotor + ImplicitActuator on the notes/13 T3 joints."""
     from .hw_motor_specs import HW_PROFILE_MAPS, HW_PROFILE_OPTIONS
 
     return make_hw_motor_groups(HW_PROFILE_MAPS[profile], stop_model=stop_model, knee_band=knee_band,
@@ -183,36 +229,58 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
                          target_interp_steps: int = 0,
                          gain_overrides: dict[str, tuple[float, float]] | None = None,
                          stop_model: bool = False,
-                         knee_band: tuple[float, float] | None = None) -> dict[str, DatasheetMotorCfg]:
+                         knee_band: tuple[float, float] | None = None,
+                         armature_dr: bool = False,
+                         kd_side: str | None = None) -> dict:
     """One :class:`DatasheetMotorCfg` group per motor model of ``map_name`` (group name ``hw_<model>``).
-    ``gain_overrides``: motor name -> (kp, kd) replacing the role gains (checked against the motion-mode limits)."""
-    from .hw_motor_specs import MOTION_MODE_LIMITS, STOP_MODEL, motor_stop_limits
+    ``gain_overrides``: motor name -> (kp, kd_FIELD) replacing the role gains (checked against the motion-mode limits).
+    ``kd_side``: ``"output"`` (default) or ``"motor"`` — IdealPD ``damping`` uses ``kd_sim`` after the notes/13 T5
+    conversion (field kd, or field kd x gear_ratio). Pass via ``HW_PROFILE_OPTIONS[...]["kd_side"]``.
+    ``armature_dr``: put :data:`ARMATURE_DR_IMPLICIT_JOINTS` on ImplicitActuator (stable at the alt armature under
+    explicit 5 ms PD) and leave the rest on DatasheetMotor; callers must also install the armature DR EventTerm
+    (``DropbearFlatEnvCfg.enable_armature_dr``). The explicit stop model and the knee band act on the DatasheetMotor
+    groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits."""
+    from .hw_motor_specs import (
+        STOP_MODEL,
+        _check_motion_mode_gains,
+        _with_gains,
+        armature_dr_group_plan,
+        motor_stop_limits,
+        normalize_kd_side,
+    )
 
-    params = joint_hw_params(map_name)
+    side = normalize_kd_side(kd_side)
+    params = joint_hw_params(map_name, kd_side=side)
     for name, (kp, kd) in (gain_overrides or {}).items():
         if name not in params:
             raise ValueError(f"gain override for unknown motor {name!r}")
-        if kp > MOTION_MODE_LIMITS["kp_max"] or kd > MOTION_MODE_LIMITS["kd_max"]:
-            raise ValueError(f"{name}: gains {kp}/{kd} outside the motion-mode range {MOTION_MODE_LIMITS}")
-        params[name] = {**params[name], "kp": float(kp), "kd": float(kd)}
+        _check_motion_mode_gains(name, float(kp), float(kd), kd_side=side)
+        params[name] = _with_gains(params[name], float(kp), float(kd), side)
+
+    plan = (armature_dr_group_plan(map_name, gain_overrides=gain_overrides, kd_side=side)
+            if armature_dr else None)
     by_model: dict[str, list[str]] = {}
-    for joint, p in params.items():
-        by_model.setdefault(p["model"], []).append(joint)
-    groups: dict[str, DatasheetMotorCfg] = {}
+    if plan is None:
+        for joint, p in params.items():
+            by_model.setdefault(p["model"], []).append(joint)
+    else:
+        by_model = {m: list(js) for m, js in plan["explicit"].items()}
+
+    groups: dict = {}
     for model, joints in by_model.items():
         key = "hw_" + model.lower().replace("-", "_").replace(":", "_").replace(".", "_")
 
-        def per_joint(field: str, scale: float = 1.0) -> dict[str, float]:
-            return {j: float(params[j][field]) * scale for j in joints}
+        def per_joint(field: str, scale: float = 1.0, _joints=joints) -> dict[str, float]:
+            return {j: float(params[j][field]) * scale for j in _joints}
 
         groups[key] = DatasheetMotorCfg(
             joint_names_expr=list(joints),
-            effort_limit=per_joint("peak_torque"),
-            velocity_limit=per_joint("no_load_speed"),
-            velocity_limit_sim=per_joint("no_load_speed", VELOCITY_LIMIT_SIM_FACTOR),
+            **_limit_kwargs(effort=per_joint("peak_torque"), velocity=per_joint("no_load_speed"),
+                            velocity_sim=per_joint("no_load_speed", VELOCITY_LIMIT_SIM_FACTOR)),
             saturation_effort=per_joint("saturation_effort"),
             stiffness=per_joint("kp"),
-            damping=per_joint("kd"),
+            # IdealPD damping = kd_sim (field kd, or field*N when kd_side="motor"); notes/13 T5 / item 60
+            damping=per_joint("kd_sim"),
             armature=per_joint("armature"),
             friction=0.0,
             coulomb_friction=per_joint("coulomb_friction"),
@@ -248,16 +316,32 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             if knees:  # an elastic beside each knee motor, pulling the crank back toward a straight knee
                 groups[key].spring_stiffness = {j: (float(knee_band[0]) if j in knees else 0.0) for j in joints}
                 groups[key].spring_engage = {j: (math.radians(float(knee_band[1])) if j in knees else 0.0) for j in joints}
+    if plan is not None:
+        # one ImplicitActuator group for the T3-unstable joints (calves + wrist roll)
+        joints = list(plan["implicit"])
+        groups["hw_armdr_implicit"] = ImplicitActuatorCfg(
+            joint_names_expr=joints,
+            effort_limit_sim={j: plan["implicit"][j]["effort"] for j in joints},
+            stiffness={j: plan["implicit"][j]["kp"] for j in joints},
+            damping={j: plan["implicit"][j]["kd"] for j in joints},  # already kd_sim from the plan
+            armature={j: plan["implicit"][j]["armature"] for j in joints},
+        )
     return groups
 
 
-def legacy_motor_groups() -> dict[str, ImplicitActuatorCfg]:
-    """The legacy implicit motor groups (``arms``/``hips``/``knees``/``ankles``) exactly as ``make_dropbear_cfg``."""
+def legacy_motor_groups(armature_map: str | None = None) -> dict[str, ImplicitActuatorCfg]:
+    """The legacy implicit motor groups (``arms``/``hips``/``knees``/``ankles``) exactly as ``make_dropbear_cfg``.
+    ``armature_map``: a motor map name; each motor then gets that map's datasheet armature instead of the legacy 0.01
+    (``hw_motor_specs.LEGACY_HW_ARMATURE_PROFILES``, notes/13 T1). Gains and effort limits stay legacy."""
+    from .hw_motor_specs import legacy_group_armature
+
+    per_motor = legacy_group_armature(armature_map) if armature_map else {}
     groups: dict[str, ImplicitActuatorCfg] = {}
     for group, motors in ACTUATOR_GROUP_MOTORS.items():
         effort, kp, kd, armature = ACTUATOR_PARAMS[group]
         groups[group] = ImplicitActuatorCfg(
-            joint_names_expr=list(motors), effort_limit_sim=effort, stiffness=kp, damping=kd, armature=armature
+            joint_names_expr=list(motors), **_limit_kwargs(effort_sim=effort), stiffness=kp, damping=kd,
+            armature=dict(per_motor[group]) if armature_map else armature,
         )
     return groups
 

@@ -68,6 +68,22 @@ for _task_id, _cfg_name in ((LIBRARY_NOSTATE_TRAIN_ID, "DropbearLibraryNoStateEn
         )
 TASK_IDS = TASK_IDS + (LIBRARY_NOSTATE_TRAIN_ID, LIBRARY_NOSTATE_PLAY_ID)
 
+# Sensor-DR variant (local patch, item 7): NoState + IMU misalignment/bias/heading drift, observation age and
+# joint-reply quantization on the policy group, 0-20 ms command delay on hw_* actuators. Training only (no Play twin:
+# play/eval should use the measured-sensor Newton bridge instead).
+LIBRARY_NOSTATE_SDR_TRAIN_ID = "Dropbear-Tracking-Library-NoState-SensorDR-v0"
+if LIBRARY_NOSTATE_SDR_TRAIN_ID not in gym.registry:
+    gym.register(
+        id=LIBRARY_NOSTATE_SDR_TRAIN_ID,
+        entry_point="isaaclab.envs:ManagerBasedRLEnv",
+        disable_env_checker=True,
+        kwargs={
+            "env_cfg_entry_point": f"{__name__}.library_env_cfg:DropbearLibraryNoStateSensorDREnvCfg",
+            "rsl_rl_cfg_entry_point": _LIBRARY_AGENT,
+        },
+    )
+TASK_IDS = TASK_IDS + (LIBRARY_NOSTATE_SDR_TRAIN_ID,)
+
 # Single-clip no-state variant (added 2026-09-25 evening): the deployable counterpart of Dropbear-Tracking-Flat-v0.
 FLAT_NOSTATE_TRAIN_ID = "Dropbear-Tracking-Flat-NoState-v0"
 FLAT_NOSTATE_PLAY_ID = "Dropbear-Tracking-Flat-NoState-Play-v0"

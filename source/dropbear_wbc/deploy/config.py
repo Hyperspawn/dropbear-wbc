@@ -105,8 +105,74 @@ class MotionCfg:
     :func:`dropbear_wbc.deploy.motion.load_runtime_motion`."""
 
 
+
 MOTION_SOURCE_RUNTIME = "runtime"
 """``motion.source`` of an export that embeds no reference: the runner needs ``--motion <npz|csv>``."""
+
+
+def motion_mode_field_kd(values: Any = None) -> np.ndarray:
+    """SDK-order kd clipped to the motion-mode field (PROTO_V39 / CEM V4.4: 0..5).
+
+    Legacy ``motors.DEFAULT_KD`` puts 12 on both knees (IdealPD plant damping), which the MIT
+    12-bit kd field cannot carry; HAL reject mode then drops every LowCmd (notes/46 F1 / item 156).
+    """
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    arr = np.asarray(motors.DEFAULT_KD if values is None else values, dtype=float).reshape(-1)
+    return np.clip(arr, 0.0, MOTION_MODE_LIMITS["kd_max"])
+
+
+def motion_mode_field_kp(values: Any = None) -> np.ndarray:
+    """SDK- or policy-order kp clipped to the motion-mode field (0..500)."""
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    arr = np.asarray(motors.DEFAULT_KP if values is None else values, dtype=float).reshape(-1)
+    return np.clip(arr, 0.0, MOTION_MODE_LIMITS["kp_max"])
+
+
+def clamp_deploy_motion_mode_gains(cfg: "DeployConfig") -> list[dict]:
+    """Clamp every on-wire gain (policy kp/kd + FSM hold/passive) to :data:`MOTION_MODE_LIMITS`.
+
+    Same numeric gate as :func:`dropbear_wbc.robots.hw_motor_specs._check_motion_mode_gains` /
+    ``make_hw_motor_groups``, but clamps instead of raising so legacy sidecars / ``DEFAULT_KD``
+    still load. Returns a list of ``{name, field, before, after}`` for anything that moved;
+    stored on ``cfg.meta["motion_mode_gains_clamped"]``.
+    """
+    from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+
+    kd_max = float(MOTION_MODE_LIMITS["kd_max"])
+    kp_max = float(MOTION_MODE_LIMITS["kp_max"])
+    log: list[dict] = []
+
+    def _clip_sdk(arr: np.ndarray, hi: float, field: str) -> np.ndarray:
+        out = arr.astype(float, copy=True)
+        for i, name in enumerate(motors.MOTOR_NAMES):
+            before = float(out[i])
+            after = float(np.clip(before, 0.0, hi))
+            if after != before:
+                log.append({"name": name, "field": field, "before": before, "after": after})
+                out[i] = after
+        return out
+
+    def _clip_policy(arr: np.ndarray, hi: float, field: str) -> np.ndarray:
+        out = arr.astype(float, copy=True)
+        for j, name in enumerate(cfg.joint_names):
+            before = float(out[j])
+            after = float(np.clip(before, 0.0, hi))
+            if after != before:
+                log.append({"name": name, "field": field, "before": before, "after": after})
+                out[j] = after
+        return out
+
+    cfg.fsm.passive_kd = _clip_sdk(np.asarray(cfg.fsm.passive_kd, float), kd_max, "fsm.passive_kd")
+    cfg.fsm.hold_kd = _clip_sdk(np.asarray(cfg.fsm.hold_kd, float), kd_max, "fsm.hold_kd")
+    cfg.fsm.hold_kp = _clip_sdk(np.asarray(cfg.fsm.hold_kp, float), kp_max, "fsm.hold_kp")
+    cfg.kp = _clip_policy(np.asarray(cfg.kp, float), kp_max, "kp")
+    cfg.kd = _clip_policy(np.asarray(cfg.kd, float), kd_max, "kd")
+    if log:
+        cfg.meta = dict(cfg.meta or {})
+        cfg.meta["motion_mode_gains_clamped"] = log
+    return log
 
 
 @dataclass
@@ -119,13 +185,41 @@ class FsmCfg:
         hold_kp, hold_kd: gains for MoveToDefault/Hold and for motors outside the policy.
         bad_orientation_rad: Policy -> Passive when the torso tilt exceeds this [rad]
             (unitree_rl_lab ``bad_orientation(1.0)``); ``None`` disables the check.
+        imu_gate: refuse ``POLICY`` and leave it for ``PASSIVE`` when ``LowState.imu.valid != 1`` (item 137;
+            without it a dead IMU's default identity quaternion reads as "upright" forever and the tilt trip can
+            never fire). Disable only for replaying pre-0004 logs that carry no ``valid`` field.
+        imu_max_age_s: ``POLICY`` needs ``imu.age_us`` (+ time the same LowState tick has been re-used) at or
+            below this [s]; ``None`` disables. Default 0.060 s = modelled worst target-path IMU age 33 ms
+            (notes/39) + one missed 50 Hz DBI frame (20 ms), rounded up. A 20 ms gate false-trips on the
+            modelled real path (13.6-33 ms) and on the sim sensor profiles (7-34 ms + up to 18 ms policy-gate hold).
+        imu_frozen_steps: leave/refuse ``POLICY`` when gyro+accel are bit-identical for this many consecutive
+            new-tick control steps (a sensor left in SLEEP returns a constant register image, notes/37). 0 = off
+            (default: a fixed-base noise-free simulation is legitimately constant). Use ~25 (0.5 s) on hardware.
+        motor_mode_gate: L4 gate on ``LowState.motor.mode`` (notes/46 F2, item 157). In MoveToDefault / Hold /
+            Policy, once the robot side has armed a gated motor (reported mode 1), that motor reporting mode != 1
+            for more than ``motor_mode_grace_steps`` consecutive controller steps sends the FSM to Passive and
+            latches it (``request`` refuses every non-Passive state until :meth:`DeployController.clear_latch`).
+        motor_mode_grace_steps: consecutive mode != 1 steps tolerated per motor (1 = "> 1 step" trips).
+        motor_mode_arm_timeout_s: partial arm: once ANY gated motor reported mode 1, every gated motor must have
+            reported mode 1 within this many seconds of entering an active state; ``None`` disables. A source
+            that never reports mode 1 at all (legacy logs, mode-less sims) is not tripped here; policy_runner's
+            item-156 summary gate fails that run instead.
+        motor_mode_mask: SDK-order bool mask of gated motors (``None`` = all 22; every motor is hold- or
+            policy-controlled in the active states).
     """
 
     move_to_default_s: float = 2.0
-    passive_kd: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KD, float))
-    hold_kp: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KP, float))
-    hold_kd: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_KD, float))
+    passive_kd: np.ndarray = field(default_factory=motion_mode_field_kd)
+    hold_kp: np.ndarray = field(default_factory=motion_mode_field_kp)
+    hold_kd: np.ndarray = field(default_factory=motion_mode_field_kd)
     bad_orientation_rad: float | None = 1.0
+    imu_gate: bool = True
+    imu_max_age_s: float | None = 0.060
+    imu_frozen_steps: int = 0
+    motor_mode_gate: bool = True
+    motor_mode_grace_steps: int = 1
+    motor_mode_arm_timeout_s: float | None = 0.5
+    motor_mode_mask: np.ndarray | None = None
 
 
 @dataclass
@@ -180,6 +274,19 @@ class DeployConfig:
             raise ValueError(f"target_clip: expected ({n}, 2) with lo <= hi, got {self.target_clip.shape}")
         if self.target_interp_steps < 0:
             raise ValueError(f"target_interp_steps must be >= 0, got {self.target_interp_steps}")
+        from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
+        kd_max = MOTION_MODE_LIMITS["kd_max"]
+        kp_max = MOTION_MODE_LIMITS["kp_max"]
+        if np.any(np.asarray(self.fsm.passive_kd) > kd_max) or np.any(np.asarray(self.fsm.hold_kd) > kd_max):
+            raise ValueError(
+                f"fsm.passive_kd/hold_kd must be <= motion-mode kd field {kd_max} "
+                f"(call clamp_deploy_motion_mode_gains); knee DEFAULT_KD=12 is not wire-legal"
+            )
+        if np.any(np.asarray(self.fsm.hold_kp) > kp_max) or np.any(np.asarray(self.kp) > kp_max)                 or np.any(np.asarray(self.kd) > kd_max):
+            raise ValueError(
+                f"policy/hold gains must be inside motion-mode limits {MOTION_MODE_LIMITS} "
+                f"(call clamp_deploy_motion_mode_gains before validate)"
+            )
 
 
 def _vec(value: Any, n: int, name: str) -> np.ndarray:
@@ -238,6 +345,32 @@ def _fsm_from(d: dict | None) -> FsmCfg:
             setattr(fsm, key, _vec(d[key], n, f"fsm.{key}"))
     if "bad_orientation_rad" in d:
         fsm.bad_orientation_rad = None if d["bad_orientation_rad"] is None else float(d["bad_orientation_rad"])
+    if "imu_gate" in d:
+        fsm.imu_gate = bool(d["imu_gate"])
+    if "imu_max_age_ms" in d:
+        fsm.imu_max_age_s = None if d["imu_max_age_ms"] is None else float(d["imu_max_age_ms"]) * 1e-3
+    if "imu_frozen_steps" in d:
+        fsm.imu_frozen_steps = int(d["imu_frozen_steps"])
+        if fsm.imu_frozen_steps < 0:
+            raise ValueError(f"fsm.imu_frozen_steps must be >= 0, got {fsm.imu_frozen_steps}")
+    if "motor_mode_gate" in d:
+        fsm.motor_mode_gate = bool(d["motor_mode_gate"])
+    if "motor_mode_grace_steps" in d:
+        fsm.motor_mode_grace_steps = int(d["motor_mode_grace_steps"])
+        if fsm.motor_mode_grace_steps < 0:
+            raise ValueError("fsm.motor_mode_grace_steps must be >= 0")
+    if "motor_mode_arm_timeout_s" in d:
+        v = d["motor_mode_arm_timeout_s"]
+        fsm.motor_mode_arm_timeout_s = None if v is None else float(v)
+    if d.get("motor_mode_mask") is not None:
+        m = d["motor_mode_mask"]
+        if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):  # motor names
+            bad = [x for x in m if x not in motors.MOTOR_NAMES]
+            if bad:
+                raise ValueError(f"fsm.motor_mode_mask: unknown motor names {bad}")
+            fsm.motor_mode_mask = np.isin(np.asarray(motors.MOTOR_NAMES), m)
+        else:
+            fsm.motor_mode_mask = _vec(m, n, "fsm.motor_mode_mask").astype(bool)
     return fsm
 
 
@@ -305,6 +438,7 @@ def load_deploy_yaml(path: Path) -> DeployConfig:
         policy_path=None if d.get("policy") is None else (base / d["policy"]).resolve(),
         motion=_motion_from(d.get("motion"), base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
         source=str(path))
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
@@ -356,16 +490,22 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
         motion=_motion_from(motion or None, base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
         obs_dim=d.get("obs_dim"), source=str(path), meta={k: d[k] for k in ("task", "usd_sha256", "run_path")
                                                             if k in d})
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
 
 def hold_config(default_pose_sdk: np.ndarray | None = None) -> DeployConfig:
-    """A policy-less configuration for the ``hold`` mode (all 22 motors, legacy gains)."""
+    """A policy-less configuration for the ``hold`` mode (all 22 motors, motion-mode-safe gains).
+
+    Legacy ``DEFAULT_KD`` knees are 12 (IdealPD); the MIT kd field max is 5, so hold/passive defaults
+    are clipped via :func:`clamp_deploy_motion_mode_gains` (notes/46 F1 / item 156).
+    """
     full = np.asarray(motors.DEFAULT_POS if default_pose_sdk is None else default_pose_sdk, dtype=float)
     cfg = DeployConfig(joint_names=motors.MOTOR_NAMES, motor_ids=np.arange(motors.NUM_MOTORS), step_dt=0.02,
-                       kp=np.asarray(motors.DEFAULT_KP, float), kd=np.asarray(motors.DEFAULT_KD, float),
+                       kp=motion_mode_field_kp(), kd=motion_mode_field_kd(),
                        default_joint_pos=full.copy(), action_scale=np.zeros(motors.NUM_MOTORS),
                        action_offset=full.copy(), default_pose_sdk=full, source="builtin:hold")
+    clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
