@@ -77,6 +77,7 @@ def main(report: dict) -> int:  # noqa: C901
     import torch
 
     from dropbear_wbc.robots import dropbear_names as N
+    from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
     from dropbear_wbc.tasks.locomotion.config.dropbear import TASK_IDS  # noqa: F401
     from dropbear_wbc.tasks.registry import load_entry_point
 
@@ -130,7 +131,7 @@ def main(report: dict) -> int:  # noqa: C901
         act.stiffness[:] = kp[:, jid]
         act.damping[:] = kd[:, jid]
         if eff is not None:
-            act.effort_limit[:] = eff[:, jid]
+            actuator_effort_limit(act)[:] = eff[:, jid]  # Lab 2.2 effort_limit / 3.0 actuator_effort_limit
     # read back
     got_kp = robot.root_physx_view.get_dof_stiffnesses().to(dev)
     report["sim_gains_readback_knee_kp_per_group"] = [float(got_kp[int(torch.nonzero(gid == i)[0])][knee_ids[0]])
