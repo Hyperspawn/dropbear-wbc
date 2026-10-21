@@ -42,6 +42,8 @@ def main() -> int:
     import torch
 
     from dropbear_wbc.robots import dropbear_names as N
+    from dropbear_wbc.robots.hw_actuators import LIMIT_FIELDS
+    from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
     from dropbear_wbc.tasks.locomotion.config.dropbear import TASK_IDS  # noqa: F401
     from dropbear_wbc.tasks.registry import load_entry_point
 
@@ -51,7 +53,8 @@ def main() -> int:
     if args.unlimited:
         for key, act in env_cfg.scene.robot.actuators.items():
             if key.startswith("hw_"):
-                act.effort_limit = {j: 20.0 * v for j, v in act.effort_limit.items()}
+                field = LIMIT_FIELDS["effort"]  # cfg field: effort_limit (Lab 2.2) / actuator_effort_limit (3.0)
+                setattr(act, field, {j: 20.0 * v for j, v in getattr(act, field).items()})
                 act.saturation_effort = {j: 20.0 * v for j, v in act.saturation_effort.items()}
     env_cfg.set_num_envs(args.num_envs)
     env_cfg.set_solver_iterations(*args.solver_iters)
@@ -66,7 +69,7 @@ def main() -> int:
             for k, n in enumerate(act.joint_names) if n in N.MOTOR_NAMES]
     lim = torch.zeros(len(N.MOTOR_NAMES), device=dev)
     for i, act, k in cols:
-        lim[i] = act.effort_limit[0, k]
+        lim[i] = actuator_effort_limit(act)[0, k]
     env.reset()
     steps = int(round(args.seconds / uw.step_dt))
     win = int(round(args.window_s / uw.step_dt))

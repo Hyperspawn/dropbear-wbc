@@ -70,9 +70,8 @@ def test_latest_message_semantics_and_nonblocking():
         latest = sub.Read(timeout=0.0)
         assert latest is not None and latest.tick == 20  # newest wins
         burst = sub.stats["received"] - before["received"]
-        # A burst above the PUB high-water mark (16) may lose frames in ZMQ; every frame that did
-        # arrive except the newest is drained and counted as skipped.
-        assert burst >= 2 and sub.stats["skipped"] - before["skipped"] == burst - 1
+        # CONFLATE keeps only the newest frame on both sides: one frame reaches the reader, none skipped.
+        assert burst == 1 and sub.stats["skipped"] == before["skipped"]
         t0 = time.perf_counter()
         assert sub.Read(timeout=0.0) is None
         assert time.perf_counter() - t0 < 0.01
@@ -122,3 +121,58 @@ def test_topic_filtering():
     finally:
         stray.close()
         sub.close()
+
+
+def test_latest_wins_is_deterministic_on_bursts():
+    """20-frame burst > SNDHWM: the newest frame must win every time (was 62-74 % before CONFLATE, notes/202)."""
+    for i in range(25):
+        ep = _endpoints(40 + i)
+        pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
+        sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
+        pub.Init()
+        sub.Init()
+        try:
+            _wait_connected(pub, sub, lambda: LowState(tick=0))
+            for tick in range(1, 21):
+                pub.Write(LowState(tick=tick))
+            time.sleep(0.05)
+            latest = sub.Read(timeout=0.0)
+            assert latest is not None and latest.tick == 20, (i, latest and latest.tick)
+        finally:
+            pub.Close()
+            sub.Close()
+
+
+def test_reader_stall_does_not_return_stale_state():
+    """Publisher at 500 Hz, reader stalls 400 ms: the next Read must be fresh (was 286 ms old, notes/202)."""
+    import threading
+
+    ep = _endpoints(80)
+    pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
+    sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
+    pub.Init()
+    sub.Init()
+    stop = threading.Event()
+    sent = [0]
+
+    def run():
+        while not stop.is_set():
+            sent[0] += 1
+            pub.Write(LowState(tick=sent[0]))
+            time.sleep(0.002)
+
+    try:
+        _wait_connected(pub, sub, lambda: LowState(tick=0))
+        th = threading.Thread(target=run, daemon=True)
+        th.start()
+        time.sleep(0.1)
+        sub.Read(timeout=0.0)
+        time.sleep(0.4)  # reader stall: > (SNDHWM + RCVHWM) / 500 Hz
+        st = sub.Read(timeout=0.0)
+        assert st is not None
+        age_ms = (time.perf_counter_ns() - st.stamp_ns) * 1e-6
+        assert age_ms < 50.0 and sent[0] - st.tick <= 25, (age_ms, sent[0] - st.tick)
+    finally:
+        stop.set()
+        pub.Close()
+        sub.Close()

@@ -18,6 +18,7 @@ touchdowns per foot per second, single/double-support and flight fractions, anch
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import json
 import math
@@ -54,6 +55,8 @@ parser.add_argument("--stop_model", action="store_true",
                     help="model the motor joints' end stops explicitly so the stop loads are measured (hw_* profiles)")
 parser.add_argument("--actuator_profile", default=None,
                     help="ACTUATOR_PROFILES key; default: the loaded run's run_info.json value ('legacy' if absent)")
+parser.add_argument("--robot_mass_kg", type=float, default=None,
+                    help="measured total robot mass [kg] (see train.py); default: the run's run_info value (none: CAD + motors)")
 parser.add_argument("--seed", type=int, default=None)
 parser.add_argument("--export", action="store_true")
 parser.add_argument("--export_dir", type=Path, default=None, help="default: <run>/exported")
@@ -130,11 +133,19 @@ def main() -> int:  # noqa: C901
         if infos:  # the newest chunk's profile: a resumed run can change it (run_info_resume_<stamp>.json sort last)
             profile = json.loads(infos[-1].read_text(encoding="utf-8")).get("actuator_profile") or "legacy"
     env_cfg.set_actuator_profile(profile)
+    robot_mass_kg = args.robot_mass_kg
+    if robot_mass_kg is None:
+        from dropbear_wbc.robots.mass_dr import run_robot_mass_kg
+
+        robot_mass_kg = run_robot_mass_kg(json.loads(p.read_text(encoding="utf-8"))
+                                          for p in sorted(run_dir.glob("run_info*.json")))
+    env_cfg.set_robot_mass(robot_mass_kg)
     if args.stop_model:
         env_cfg.enable_stop_model()
     if args.knee_band:
         env_cfg.enable_knee_band(*(float(x) for x in args.knee_band.split(",")))
-    print(f"[play_locomotion] actuator profile: {profile}", flush=True)
+    print(f"[play_locomotion] actuator profile: {profile}; robot mass: "
+          f"{'default plant' if robot_mass_kg is None else f'{robot_mass_kg:.2f} kg'}", flush=True)
     # a run trained with gait shaping clamps the motor targets to the joint limits: evaluate with the same clamp
     infos = sorted(run_dir.glob("run_info*.json"))
     trained_terrain = next((json.loads(i.read_text(encoding="utf-8")).get("terrain") for i in infos
@@ -165,7 +176,8 @@ def main() -> int:  # noqa: C901
     if args.perturbed:
         train_cfg = load_entry_point("Dropbear-Velocity-Flat-v0", "env_cfg_entry_point")
         env_cfg.events.physics_material = train_cfg.events.physics_material
-        env_cfg.events.add_base_mass = train_cfg.events.add_base_mass
+        env_cfg.events.add_base_mass = copy.deepcopy(train_cfg.events.add_base_mass)
+        env_cfg.set_robot_mass(env_cfg.robot_mass_kg)  # add_base_mass band of THIS run, not the train-config default
         env_cfg.events.scale_limb_mass = train_cfg.events.scale_limb_mass
         env_cfg.events.reset_robot.params.update({k: train_cfg.events.reset_robot.params[k]
                                                   for k in ("frame_mode", "pose_range", "leg_serial_noise", "arm_serial_noise")})
@@ -218,7 +230,7 @@ def main() -> int:  # noqa: C901
                                 resolution=parse_resolution(args.video_res), caption=caption.replace("\\n", "\n"))
     summary: dict = {"tool": "scripts/play_locomotion.py", "task": args.task, "checkpoint": str(ckpt),
                      "checkpoint_sha256": sha256_file(ckpt), "num_envs": num_envs, "steps": args.steps,
-                     "actuator_profile": profile,
+                     "actuator_profile": profile, "robot_mass_kg": robot_mass_kg,
                      "solver_iterations": [env_cfg.scene.robot.spawn.articulation_props.solver_position_iteration_count,
                                            env_cfg.scene.robot.spawn.articulation_props.solver_velocity_iteration_count],
                      "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds")}

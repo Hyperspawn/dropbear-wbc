@@ -13,6 +13,7 @@ A JSON summary (tracking errors, terminations, finiteness) is written to ``<run>
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import json
 import math
@@ -52,6 +53,8 @@ parser.add_argument("--stop_model", action="store_true",
                     help="model the motor joints' end stops explicitly so the stop loads are measured (hw_* profiles)")
 parser.add_argument("--actuator_profile", default=None,
                     help="legacy / hw_v1 / hw_v1_cad; default: the run's run_info.json value (legacy if absent)")
+parser.add_argument("--robot_mass_kg", type=float, default=None,
+                    help="measured total robot mass [kg] (see train.py); default: the run's run_info value (none: CAD + motors)")
 parser.add_argument("--export", action="store_true", help="write ONNX / TorchScript / JSON sidecar")
 parser.add_argument("--export_dir", type=Path, default=None, help="default: <checkpoint dir>/exported")
 parser.add_argument("--video", action="store_true", help="record an mp4 (headless: sets --enable_cameras)")
@@ -174,11 +177,19 @@ def main() -> int:  # noqa: C901
         profile = (json.loads(info_path.read_text(encoding="utf-8")).get("actuator_profile") if info_path.is_file()
                    else None) or "legacy"
     env_cfg.set_actuator_profile(profile)
+    robot_mass_kg = args.robot_mass_kg
+    if robot_mass_kg is None:
+        from dropbear_wbc.robots.mass_dr import run_robot_mass_kg
+
+        robot_mass_kg = run_robot_mass_kg(json.loads(p.read_text(encoding="utf-8"))
+                                          for p in sorted(run_dir.glob("run_info*.json")))
+    env_cfg.set_robot_mass(robot_mass_kg)
     if args.stop_model:
         env_cfg.enable_stop_model()
     if args.knee_band:
         env_cfg.enable_knee_band(*(float(x) for x in args.knee_band.split(",")))
-    print(f"[INFO] actuator profile: {profile}", flush=True)
+    print(f"[INFO] actuator profile: {profile}; robot mass: "
+          f"{'default plant' if robot_mass_kg is None else f'{robot_mass_kg:.2f} kg'}", flush=True)
     # replay with the target clamp the run was trained with (docs/ISSUES.md #25)
     info_path = run_dir / "run_info.json"
     clamp = json.loads(info_path.read_text(encoding="utf-8")).get("target_clamp_margin_deg") if info_path.is_file() else None
@@ -211,8 +222,9 @@ def main() -> int:  # noqa: C901
         train_cfg = load_entry_point(args.task.replace("-Play", ""), "env_cfg_entry_point")
         perturb_events = ("push_robot", "physics_material", "add_joint_default_pos", "base_com",
                           "add_base_mass", "scale_limb_mass")
-        for name in perturb_events:
-            setattr(env_cfg.events, name, getattr(train_cfg.events, name))
+        for name in perturb_events:  # copies: the train config's terms must not be shared and then edited
+            setattr(env_cfg.events, name, copy.deepcopy(getattr(train_cfg.events, name)))
+        env_cfg.set_robot_mass(env_cfg.robot_mass_kg)  # add_base_mass band of THIS run, not the train-config default
         env_cfg.observations.policy.enable_corruption = train_cfg.observations.policy.enable_corruption
         randomization = ("training-level: " + ", ".join(
             n for n in perturb_events
@@ -263,7 +275,7 @@ def main() -> int:  # noqa: C901
         _mterm._update_metrics = _sampled_metrics
 
     summary: dict = {"checkpoint": str(ckpt), "motion_file": str(motion), "task": args.task, "num_envs": env.num_envs,
-                     "actuator_profile": profile,
+                     "actuator_profile": profile, "robot_mass_kg": robot_mass_kg,
                      "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
                      "default_pose_source": env_cfg.default_pose_source, "default_pose_note": pose_note}
     cmd_term = env.unwrapped.command_manager.get_term("motion")

@@ -43,6 +43,87 @@ ROOT_MASS_ADD_LOCOMOTION: tuple[float, float] = (-1.0, 6.0)
 LIMB_MASS_SCALE: tuple[float, float] = (0.9, 1.1)
 """Per-limb mass scale (one draw per limb per env, notes/13 T4)."""
 
+# ---------------------------------------------------------------------------------------------
+# Measured robot mass (opt-in: ``--robot_mass_kg`` on train / play / robustness_bench)
+# ---------------------------------------------------------------------------------------------
+# ``hw_motor_specs.motor_mass_offsets`` swaps the CAD's X10-S2 for each twin-v3 build's motors (hw_cem6 -4.62 kg), and
+# the root ranges above were sized for the CAD plant (56.17 kg), so hw_cem6 samples 48.8-60.3 kg and play / eval
+# (``add_base_mass`` off) run at the nominal 51.55 kg. Nothing here changes that by default. Given a measured (or
+# agreed) total mass, the gap to "CAD + this profile's motor swap" goes on ``world`` as a fixed plant offset (kept in
+# play, like the motor masses) and the root DR becomes a band around it.
+
+ROOT_MASS_BAND_TRACKING: tuple[float, float] = (-3.0, 3.0)
+"""Tracking root DR [kg] around a given ``robot_mass_kg`` (scale error, battery state, cabling)."""
+ROOT_MASS_BAND_LOCOMOTION: tuple[float, float] = (-4.0, 3.0)
+"""Velocity root DR [kg] around a given ``robot_mass_kg``; keeps locomotion's 1 kg lower floor relative to tracking."""
+ROBOT_MASS_LIMITS_KG: tuple[float, float] = (40.0, 90.0)
+"""Plausible total mass [kg]; a value outside fails (catches lb / g / typo inputs)."""
+
+
+def cad_total_mass_kg() -> float:
+    """Articulation mass of the plant USD [kg] (orphan bearings dropped): 56.17."""
+    return float(sum(body_masses_from_json().values()))
+
+
+def motor_swap_delta_kg(profile: str) -> float:
+    """Total mass change [kg] of ``profile``'s motors vs the CAD (0 for profiles without a motor-mass swap)."""
+    from dropbear_wbc.robots.hw_motor_specs import motor_mass_offsets
+
+    return float(sum(motor_mass_offsets(profile).values()))
+
+
+def check_robot_mass_kg(robot_mass_kg: float | None) -> float | None:
+    """``None`` passes through; a number must be finite and inside :data:`ROBOT_MASS_LIMITS_KG`."""
+    if robot_mass_kg is None:
+        return None
+    m = float(robot_mass_kg)
+    lo, hi = ROBOT_MASS_LIMITS_KG
+    if not (lo <= m <= hi):  # also rejects nan
+        raise ValueError(f"robot_mass_kg {robot_mass_kg!r} outside {ROBOT_MASS_LIMITS_KG} kg")
+    return m
+
+
+def unmodelled_mass_kg(profile: str, robot_mass_kg: float) -> float:
+    """Mass the CAD + the profile's motor swap does not explain [kg]: ``robot_mass_kg`` - (CAD + swap delta)."""
+    return float(check_robot_mass_kg(robot_mass_kg)) - cad_total_mass_kg() - motor_swap_delta_kg(profile)
+
+
+def plant_mass_offsets(profile: str, robot_mass_kg: float | None = None) -> dict[str, float]:
+    """Fixed per-body mass change [kg] of the plant: the profile's motor swap, plus (only when ``robot_mass_kg`` is
+    given) the unmodelled mass on ``world``. Without ``robot_mass_kg`` this equals ``motor_mass_offsets(profile)``."""
+    from dropbear_wbc.robots.hw_motor_specs import motor_mass_offsets
+
+    out = dict(motor_mass_offsets(profile))
+    if robot_mass_kg is not None:
+        out[ROOT_BODY] = round(out.get(ROOT_BODY, 0.0) + unmodelled_mass_kg(profile, robot_mass_kg), 4)
+    return out
+
+
+def predicted_mass_kg(profile: str, robot_mass_kg: float | None = None) -> float:
+    """Nominal total mass [kg] of the profile's plant before DR."""
+    return cad_total_mass_kg() + float(sum(plant_mass_offsets(profile, robot_mass_kg).values()))
+
+
+def root_mass_add_range(task: str, robot_mass_kg: float | None = None) -> tuple[float, float]:
+    """``add_base_mass`` range [kg] on ``world`` for ``task`` (``tracking`` / ``locomotion``): the unchanged defaults
+    without ``robot_mass_kg``, the band around the measured mass with it."""
+    if task not in ("tracking", "locomotion"):
+        raise ValueError(f"unknown task {task!r}")
+    if robot_mass_kg is None:
+        return ROOT_MASS_ADD_TRACKING if task == "tracking" else ROOT_MASS_ADD_LOCOMOTION
+    check_robot_mass_kg(robot_mass_kg)
+    return ROOT_MASS_BAND_TRACKING if task == "tracking" else ROOT_MASS_BAND_LOCOMOTION
+
+
+def run_robot_mass_kg(run_infos) -> float | None:
+    """``robot_mass_kg`` a run was trained with: the newest chunk's non-null value of ``run_infos`` (oldest first), or
+    ``None`` (runs before the option, or trained without it). Play / eval default to it so they replay that plant."""
+    for info in reversed(list(run_infos)):
+        if info.get("robot_mass_kg") is not None:
+            return float(info["robot_mass_kg"])
+    return None
+
+
 LIMB_NAMES: tuple[str, ...] = ("left_leg", "right_leg", "left_arm", "right_arm")
 LIMB_PREFIXES: dict[str, tuple[str, ...]] = {
     "left_leg": ("LL_",),

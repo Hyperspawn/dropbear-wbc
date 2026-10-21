@@ -34,6 +34,7 @@ RUN_SETTING_KEYS: tuple[str, ...] = (
     "end_threshold_m",
     "anchor_height_weight",
     "feet_height_weight",
+    "robot_mass_kg",
 )
 """Settings that define the plant / reward a run is trained on (all recorded in run_info.json by scripts/train.py)."""
 
@@ -54,6 +55,7 @@ CLI_DEFAULTS: dict[str, object] = {
     "end_threshold_m": None,
     "anchor_height_weight": 0.0,
     "feet_height_weight": 0.0,
+    "robot_mass_kg": None,  # None = CAD + the profile's motor swap (mass_dr.plant_mass_offsets)
 }
 """Value of a setting on a fresh run when the command line leaves it out."""
 

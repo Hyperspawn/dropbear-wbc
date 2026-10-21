@@ -33,6 +33,8 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
         self.default_pose_info = dict(pose.info)
         self.scene.robot = make_dropbear_cfg(prim_path="{ENV_REGEX_NS}/Robot", default_pose=pose)
 
+    robot_mass_kg: float | None = None
+    """Measured total robot mass [kg] the plant is re-centred on (:meth:`set_robot_mass`); ``None`` = CAD + motor swap."""
     actuator_profile: str = "legacy"
     """``legacy`` (the implicit groups of the state-observing tracking tasks), ``legacy_hwarm`` (legacy gains + the
     datasheet armature, an A/B control) or a real-actuator twin profile of ``robots.hw_motor_specs.HW_PROFILE_MAPS``
@@ -266,17 +268,31 @@ class DropbearFlatEnvCfg(TrackingEnvCfg):
 
     def _set_motor_mass_offsets(self, profile: str) -> None:
         """Startup term ``motor_mass``: the plant mass change of the profile's motors vs the CAD (twin v3 profiles
-        only; ``hw_motor_specs.motor_mass_offsets``). Kept in play: it is the plant, not a randomization."""
+        only; ``hw_motor_specs.motor_mass_offsets``), plus the unmodelled mass on ``world`` when :meth:`set_robot_mass`
+        gave one (``mass_dr.plant_mass_offsets``). Kept in play: it is the plant, not a randomization."""
         from isaaclab.managers import EventTermCfg as EventTerm
         from isaaclab.managers import SceneEntityCfg
 
-        from dropbear_wbc.robots.hw_motor_specs import motor_mass_offsets
+        from dropbear_wbc.robots.mass_dr import plant_mass_offsets
         from dropbear_wbc.tasks.mass_events import apply_body_mass_offsets
 
-        offsets = motor_mass_offsets(profile)
+        offsets = plant_mass_offsets(profile, self.robot_mass_kg)
         self.events.motor_mass = (EventTerm(func=apply_body_mass_offsets, mode="startup",
                                             params={"asset_cfg": SceneEntityCfg("robot"), "offsets": offsets})
                                   if offsets else None)
+
+    def set_robot_mass(self, robot_mass_kg: float | None) -> None:
+        """Re-centre the plant on a measured total mass [kg] (``--robot_mass_kg``): the gap to CAD + the profile's
+        motor swap becomes a fixed offset on ``world`` (kept in play) and ``add_base_mass`` a band around it
+        (``mass_dr.root_mass_add_range``). ``None`` keeps the default plant and ranges. Order-independent with
+        :meth:`set_actuator_profile` (the offset is recomputed there)."""
+        from dropbear_wbc.robots.mass_dr import check_robot_mass_kg, root_mass_add_range
+
+        self.robot_mass_kg = check_robot_mass_kg(robot_mass_kg)
+        if getattr(self.events, "add_base_mass", None) is not None:
+            self.events.add_base_mass.params["mass_distribution_params"] = root_mass_add_range("tracking",
+                                                                                                self.robot_mass_kg)
+        self._set_motor_mass_offsets(self.actuator_profile)
 
 
 @configclass

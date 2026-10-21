@@ -78,6 +78,10 @@ parser.add_argument("--actuator_profile", default=None,
                     "(docs/ACTUATORS.md). Default: the task's (legacy; hw_v1ie for the NoState tasks). With "
                     "--continue_run every unset run setting (profile, hw regularizers + penalties, target clamp, action "
                     "rate, stop model, knee band, safety penalties, tracking strictness, height rewards) is inherited from the run's latest run_info")
+parser.add_argument("--robot_mass_kg", type=float, default=None,
+                    help="measured total robot mass [kg]: re-centres the fixed plant mass and the add_base_mass band on "
+                    "it (mass_dr.plant_mass_offsets / root_mass_add_range). Default: unchanged plant and ranges. "
+                    "Recorded in run_info; inherited by --continue_run and by play / robustness_bench")
 parser.add_argument("--allow_settings_change", action="store_true",
                     help="with --continue_run: allow a run setting that differs from the run's recorded one")
 parser.add_argument("--logger", choices=("tensorboard", "wandb", "neptune"), default=None)
@@ -156,6 +160,12 @@ def main() -> int:
     if rs["actuator_profile"] is not None:
         env_cfg.set_actuator_profile(rs["actuator_profile"])
     print(f"[INFO] actuator profile: {getattr(env_cfg, 'actuator_profile', 'legacy')}", flush=True)
+    if rs["robot_mass_kg"] is not None:
+        from dropbear_wbc.robots.mass_dr import predicted_mass_kg
+
+        env_cfg.set_robot_mass(rs["robot_mass_kg"])
+        print(f"[INFO] robot mass: {float(rs['robot_mass_kg']):.2f} kg (plant nominal "
+              f"{predicted_mass_kg(env_cfg.actuator_profile, env_cfg.robot_mass_kg):.2f} kg)", flush=True)
     if rs["stop_model"] or rs["stop_load_penalty"]:
         env_cfg.enable_stop_model()
     if rs["knee_band"]:
@@ -288,6 +298,7 @@ def main() -> int:
         "feet_height_weight": float(rs["feet_height_weight"]),
         "target_clamp_margin_deg": rs["target_clamp_margin_deg"],
         "action_rate_weight": rs["action_rate_weight"],
+        "robot_mass_kg": rs["robot_mass_kg"],
         "run_settings_notes": rs_notes,
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},

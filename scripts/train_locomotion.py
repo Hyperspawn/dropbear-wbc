@@ -89,6 +89,9 @@ parser.add_argument("--load_run", default=None, help="run dir name under <log_ro
 parser.add_argument("--checkpoint", default=None, help="checkpoint file name (default: latest model_*.pt)")
 parser.add_argument("--continue_run", action="store_true",
                     help="with --resume: keep writing into the loaded run directory (chunked training)")
+parser.add_argument("--robot_mass_kg", type=float, default=None,
+                    help="measured total robot mass [kg]: re-centres the fixed plant mass and the add_base_mass band on "
+                    "it. Default: unchanged. Recorded in run_info; --continue_run inherits it when not given")
 parser.add_argument("--restore_train_state", choices=("on", "off"), default="on",
                     help="restore learning rate + command-curriculum ranges from the checkpoint on --resume")
 AppLauncher.add_app_launcher_args(parser)
@@ -130,6 +133,16 @@ def main() -> int:
                               **({} if args.push_interval is None else {"interval_s": tuple(args.push_interval)}))
     if args.actuator_profile is not None:
         env_cfg.set_actuator_profile(args.actuator_profile)
+    robot_mass_kg = args.robot_mass_kg
+    if robot_mass_kg is None and args.continue_run and args.load_run:  # a chunk keeps the plant mass of its run
+        from dropbear_wbc.robots.mass_dr import run_robot_mass_kg
+
+        prev = sorted(((args.log_root / (args.experiment_name or agent_cfg.experiment_name) / args.load_run)
+                       .resolve()).glob("run_info*.json"))
+        robot_mass_kg = run_robot_mass_kg(json.loads(f.read_text(encoding="utf-8")) for f in prev)
+    if robot_mass_kg is not None:
+        env_cfg.set_robot_mass(robot_mass_kg)
+        print(f"[INFO] robot mass: {robot_mass_kg:.2f} kg", flush=True)
     if args.thermal_penalty is not None:
         env_cfg.enable_thermal_penalty(args.thermal_penalty)
     if args.arm_action_scale is not None or args.arm_deviation_weight is not None:
@@ -222,6 +235,7 @@ def main() -> int:
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         "actuator_profile": env_cfg.actuator_profile,
+        "robot_mass_kg": env_cfg.robot_mass_kg,
         "thermal_penalty": args.thermal_penalty,
         "knee_stop_penalty": float(args.knee_stop_penalty),
         "stop_model": bool(args.stop_model or args.stop_load_penalty), "stop_load_penalty": float(args.stop_load_penalty),
