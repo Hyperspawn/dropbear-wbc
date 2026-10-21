@@ -1,0 +1,14 @@
+[
+ {"name": "push_left_step", "prompt": "a person standing is pushed from the left side, takes a quick step to the right and catches their balance with their arms", "duration": 4},
+ {"name": "push_right_step", "prompt": "a person standing is pushed from the right side, takes a quick step to the left and catches their balance with their arms", "duration": 4},
+ {"name": "push_back_step", "prompt": "a person standing is pushed from behind, stumbles one step forward and catches their balance, arms reaching forward", "duration": 4},
+ {"name": "push_front_step", "prompt": "a person standing is pushed in the chest, steps backward and regains balance, arms coming forward", "duration": 4},
+ {"name": "push_left_sway", "prompt": "a person gets a light shove from the left, sways and shifts their weight, arms lifting out briefly, then stands still", "duration": 4},
+ {"name": "push_right_sway", "prompt": "a person gets a light shove from the right, sways and shifts their weight, arms lifting out briefly, then stands still", "duration": 4},
+ {"name": "walk_bump_left", "prompt": "a person walking forward is bumped from the left, stumbles sideways, recovers their balance and keeps walking", "duration": 6},
+ {"name": "walk_bump_right", "prompt": "a person walking forward is bumped from the right, stumbles sideways, recovers their balance and keeps walking", "duration": 6},
+ {"name": "walk_trip", "prompt": "a person walking forward trips, takes two quick steps and catches their balance with their arms, then keeps walking", "duration": 6},
+ {"name": "windmill_recover", "prompt": "a person loses their balance backward and swings their arms to recover, then stands upright", "duration": 4},
+ {"name": "lean_recover_side", "prompt": "a person leans too far to the side, steps out with one foot and raises the opposite arm to recover balance", "duration": 4},
+ {"name": "slip_recover", "prompt": "a person slips slightly, bends their knees, spreads their arms and steadies themselves", "duration": 4}
+]
