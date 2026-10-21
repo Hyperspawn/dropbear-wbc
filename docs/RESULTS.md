@@ -301,3 +301,33 @@ Push survival is the mean of 3 runs of `scripts/robustness_bench.py`. One run va
   counter-swing; natural arm swing would need its own reward or a reference gait.
 - **Tracker** `lib_v4_cool3/35000` (motor-heat -5e-4): motion score 0.27, hardware gate 3 / 14. The lighter heat
   penalty lost the gate without recovering motion quality.
+
+## Cloud session 10 (2026-10-21): natural arm swing
+
+4× L40S. Brev removed the instance about 20:00, so training ran about 5.5 h (iteration ~25,300 per job, last pull
+19:56). New walker terms (`enable_arm_swing`):
+- `arm_swing_counter_phase`: each shoulder pitch follows 0.45× the opposite hip pitch while walking. The ratio and signs
+  come from the retargeted human clips: correlation +0.78..+0.93, k 0.40-0.55.
+- An L1 pull of the shoulder rolls back to the stand pose.
+
+Push survival is over 3 repeats per cell (`--repeats 3`); session 9 values are the means of 3 runs. Video:
+`logs/reels/dropbear_s10_arm_swing.mp4`.
+
+| Walker | Standing / walking | Hardest shoves (1.2 m/s), walking / standing | Terrain | Arm swing vs opposite hip (corr, swing range R/L) | Shoulder out to the side |
+|---|---|---|---:|---|---|
+| Session 9, arms held | 85 / 91 % | 58 / 38 % | 23 | none | 1-2° |
+| Session 9, X8-120, arms free | 90 / 97 % | 85 / 60 % | 26 | +0.52 / +0.39, 7 / 28° | **89°** (arm held out) |
+| `vel_swing_x8` (abduction -0.3) | 83 / 90 % | 60 / 35 % | 26 | **+0.98 / +0.99, 13 / 14°** | 5-8° |
+| `vel_swing_x8_lite` (abduction -0.1) | 82 / 91 % | 52 / 19 % | 24 | +0.99 / +0.99, 13 / 17° | 1-8° |
+| `vel_swing_x8_heavy` (65.2 kg) | 84 / 88 % | 38 / 35 % | 23 | +0.99 / +0.99, 15 / 16° | 4-8° |
+| `vel_swing_v4` (stock shoulders) | 87 / 94 % | 62 / 48 % | 26 | +0.57 / +0.38, 14 / 32° | 9° (one arm lifted forward) |
+
+- **The swing term works on the X8-120 shoulders.** The arms now move in counter-phase with the legs (correlation
+  0.98-0.99) at about half the hip range, and stay at the sides. The arm motors are cool: elbow 0.14× rated.
+- **The cost:** the extra push survival came from the held-out arm. With natural arms, survival is back to the
+  arms-held level. Next: gate the arm-style terms off for a moment after a disturbance (natural when calm, free when
+  shoved).
+- **The 65 kg robot** is clearly weaker against the hardest walking shoves (38 % vs 60 %). The real mass matters; weigh
+  the robot.
+- **Stock shoulders + swing:** the swing is only half learned. One arm is lifted forward and the left elbow runs at
+  0.84× rated.

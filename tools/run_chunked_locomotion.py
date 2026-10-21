@@ -124,6 +124,8 @@ def main() -> int:  # noqa: C901
     ap.add_argument("--robot_mass_kg", type=float, default=None, help="scripts/train_locomotion.py --robot_mass_kg")
     ap.add_argument("--arm_swing_weight", type=float, default=None, help="scripts/train_locomotion.py --arm_swing_weight")
     ap.add_argument("--arm_swing_k", type=float, default=None, help="scripts/train_locomotion.py --arm_swing_k")
+    ap.add_argument("--arm_gate_tilt_rate", type=float, default=None,
+                    help="scripts/train_locomotion.py --arm_gate_tilt_rate")
     ap.add_argument("--arm_abduction_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_abduction_weight")
     ap.add_argument("--arm_deviation_weight", type=float, default=None,
@@ -250,6 +252,8 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--arm_swing_k={args.arm_swing_k}"]
             if args.arm_abduction_weight is not None:
                 cmd += [f"--arm_abduction_weight={args.arm_abduction_weight}"]
+            if args.arm_gate_tilt_rate is not None:
+                cmd += [f"--arm_gate_tilt_rate={args.arm_gate_tilt_rate}"]
             if args.actuator_profile:
                 cmd += ["--actuator_profile", args.actuator_profile]
             if args.thermal_penalty is not None:

@@ -60,6 +60,10 @@ parser.add_argument("--arm_action_scale", type=float, default=None,
 parser.add_argument("--arm_swing_weight", type=float, default=None,
                     help="reward on natural counter-phase arm swing while moving (e.g. 0.5; enable_arm_swing)")
 parser.add_argument("--arm_swing_k", type=float, default=0.45, help="shoulder / opposite-hip pitch ratio (human 0.40-0.55)")
+parser.add_argument("--arm_gate_tilt_rate", type=float, default=None,
+                    help="arm-style terms off while the base roll/pitch rate exceeds this [rad/s] and for "
+                         "--arm_gate_hold_s after: natural when calm, free when shoved (e.g. 0.8)")
+parser.add_argument("--arm_gate_hold_s", type=float, default=1.0)
 parser.add_argument("--arm_abduction_weight", type=float, default=0.0,
                     help="L1 pull of the shoulder-roll motors to the standing pose (< 0, e.g. -0.3)")
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
@@ -148,7 +152,8 @@ def main() -> int:
     if args.arm_action_scale is not None or args.arm_deviation_weight is not None:
         env_cfg.set_arm_freedom(args.arm_action_scale, args.arm_deviation_weight)
     if args.arm_swing_weight:
-        env_cfg.enable_arm_swing(args.arm_swing_weight, k=args.arm_swing_k, abduction=args.arm_abduction_weight)
+        env_cfg.enable_arm_swing(args.arm_swing_weight, k=args.arm_swing_k, abduction=args.arm_abduction_weight,
+                                 gate_tilt_rate=args.arm_gate_tilt_rate, gate_hold_s=args.arm_gate_hold_s)
     if args.gait_v3:
         # weights sized so the new penalties stay well below the tracking reward (at -20 / -5 / -1.0 the warm-started
         # run learned that falling early is cheaper than walking: episode length 990 -> 49 in 70 iterations)
@@ -262,7 +267,8 @@ def main() -> int:
         "push_velocity": args.push_velocity, "push_interval": args.push_interval,
         "arm_action_scale": args.arm_action_scale, "arm_deviation_weight": args.arm_deviation_weight,
         "arm_swing_weight": args.arm_swing_weight, "arm_swing_k": args.arm_swing_k,
-        "arm_abduction_weight": args.arm_abduction_weight,
+        "arm_abduction_weight": args.arm_abduction_weight, "arm_gate_tilt_rate": args.arm_gate_tilt_rate,
+        "arm_gate_hold_s": args.arm_gate_hold_s,
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

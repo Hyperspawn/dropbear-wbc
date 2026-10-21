@@ -335,3 +335,37 @@ def arm_swing_counter_phase(env: ManagerBasedRLEnv, command_name: str, asset_cfg
     hip_l, hip_r, sh_l_motor, sh_r_motor = (dq[:, i] for i in range(4))
     err = torch.square(sh_r_motor - k * HIP_PITCH_SCALE * hip_l) + torch.square(-sh_l_motor - k * HIP_PITCH_SCALE * hip_r)
     return torch.exp(-err / std**2) * _moving_command(env, command_name).float()
+
+
+def calm_gate(env: ManagerBasedRLEnv, tilt_rate_threshold: float = 0.8, hold_s: float = 1.0) -> torch.Tensor:
+    """1 while the robot is undisturbed, 0 from the moment its base roll/pitch rate exceeds ``tilt_rate_threshold``
+    [rad/s] (a shove, a stumble) until ``hold_s`` seconds after it falls back below. Arm-style terms multiplied by this
+    shape the arms when calm and leave them free when the robot is fighting for balance (session 10: natural swing
+    everywhere cost the push survival the held-out arm had bought). Updated once per env step."""
+    step = int(env.common_step_counter)
+    timer = getattr(env, "_calm_gate_timer", None)
+    if timer is None or timer.shape[0] != env.num_envs:
+        timer = torch.zeros(env.num_envs, device=env.device)
+        env._calm_gate_timer, env._calm_gate_step = timer, -1
+    if env._calm_gate_step != step:
+        rate = torch.norm(env.scene["robot"].data.root_ang_vel_b[:, :2], dim=1)
+        timer = torch.where(rate > tilt_rate_threshold, torch.full_like(timer, hold_s),
+                            torch.clamp(timer - env.step_dt, min=0.0))
+        timer[env.episode_length_buf <= 1] = 0.0
+        env._calm_gate_timer, env._calm_gate_step = timer, step
+    return (env._calm_gate_timer <= 0.0).float()
+
+
+def arm_swing_counter_phase_gated(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg, k: float = 0.45,
+                                  std: float = 0.12, tilt_rate_threshold: float = 0.8, hold_s: float = 1.0) -> torch.Tensor:
+    """:func:`arm_swing_counter_phase` x :func:`calm_gate`."""
+    return arm_swing_counter_phase(env, command_name, asset_cfg, k, std) * calm_gate(env, tilt_rate_threshold, hold_s)
+
+
+def joint_deviation_l1_gated(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, tilt_rate_threshold: float = 0.8,
+                             hold_s: float = 1.0) -> torch.Tensor:
+    """L1 distance of the selected joints from their standing angles x :func:`calm_gate`."""
+    asset = env.scene[asset_cfg.name]
+    ids = asset_cfg.joint_ids
+    dev = torch.sum(torch.abs(asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]), dim=1)
+    return dev * calm_gate(env, tilt_rate_threshold, hold_s)

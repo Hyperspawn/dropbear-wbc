@@ -393,7 +393,8 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
             else:
                 self.rewards.joint_deviation_arms.weight = float(deviation_weight)
 
-    def enable_arm_swing(self, weight: float = 0.5, k: float = 0.45, std: float = 0.12, abduction: float = 0.0) -> None:
+    def enable_arm_swing(self, weight: float = 0.5, k: float = 0.45, std: float = 0.12, abduction: float = 0.0,
+                         gate_tilt_rate: float | None = None, gate_hold_s: float = 1.0) -> None:
         """Natural walking arms: ``arm_swing`` rewards each shoulder pitch following ``k`` x the opposite hip pitch while
         moving (``mdp.arm_swing_counter_phase``; k 0.40-0.55 in the retargeted human walking clips); ``abduction`` (< 0)
         adds an L1 pull of both shoulder-roll motors back to the standing pose, against the tightrope-walker arm the free-
@@ -402,16 +403,23 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         from isaaclab.managers import RewardTermCfg as RewTerm
         from isaaclab.managers import SceneEntityCfg
 
-        from dropbear_wbc.tasks.locomotion.mdp.rewards import ARM_SWING_JOINTS, arm_swing_counter_phase
+        from dropbear_wbc.tasks.locomotion.mdp import rewards as R
 
-        self.rewards.arm_swing = RewTerm(
-            func=arm_swing_counter_phase, weight=float(weight),
-            params={"command_name": "base_velocity", "k": float(k), "std": float(std),
-                    "asset_cfg": SceneEntityCfg("robot", joint_names=list(ARM_SWING_JOINTS), preserve_order=True)})
-        if abduction:
-            self.rewards.arm_abduction = RewTerm(
-                func=il_mdp.joint_deviation_l1, weight=float(abduction),
-                params={"asset_cfg": SceneEntityCfg("robot", joint_names=["LH_pitch", "RH_pitch"])})
+        swing_cfg = SceneEntityCfg("robot", joint_names=list(R.ARM_SWING_JOINTS), preserve_order=True)
+        roll_cfg = SceneEntityCfg("robot", joint_names=["LH_pitch", "RH_pitch"])
+        swing = {"command_name": "base_velocity", "k": float(k), "std": float(std), "asset_cfg": swing_cfg}
+        if gate_tilt_rate is None:  # always on (session 10)
+            self.rewards.arm_swing = RewTerm(func=R.arm_swing_counter_phase, weight=float(weight), params=swing)
+            if abduction:
+                self.rewards.arm_abduction = RewTerm(func=il_mdp.joint_deviation_l1, weight=float(abduction),
+                                                     params={"asset_cfg": roll_cfg})
+        else:  # natural when calm, free when shoved (mdp.calm_gate)
+            gate = {"tilt_rate_threshold": float(gate_tilt_rate), "hold_s": float(gate_hold_s)}
+            self.rewards.arm_swing = RewTerm(func=R.arm_swing_counter_phase_gated, weight=float(weight),
+                                             params={**swing, **gate})
+            if abduction:
+                self.rewards.arm_abduction = RewTerm(func=R.joint_deviation_l1_gated, weight=float(abduction),
+                                                     params={"asset_cfg": roll_cfg, **gate})
 
     def enable_pushes(self, velocity_xy: float = 0.3, interval_s: tuple[float, float] = (8.0, 12.0)) -> None:
         from isaaclab.managers import EventTermCfg as EventTerm
