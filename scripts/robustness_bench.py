@@ -54,6 +54,10 @@ parser.add_argument("--push_s", type=float, default=0.1, help="push duration [s]
 parser.add_argument("--push_at_s", type=float, default=3.0)
 parser.add_argument("--offsets", default="0,0.25", help="extra push delays [s] (different gait phases)")
 parser.add_argument("--after_s", type=float, default=5.0, help="survival window after the push [s]")
+parser.add_argument("--repeats", type=int, default=1,
+                    help="run every push cell N times, the push moved by k * --repeat_jitter_s (k = 0..N-1); the "
+                    "summary adds majority max dv and the share of cells whose repeats disagree")
+parser.add_argument("--repeat_jitter_s", type=float, default=0.02, help="push-time step between repeats [s] (1 policy step)")
 # terrain mode
 parser.add_argument("--levels", type=int, default=6)
 parser.add_argument("--stair_max_m", type=float, default=0.20)
@@ -163,15 +167,14 @@ def main() -> int:  # noqa: C901
     step_dt = env_cfg.sim.dt * env_cfg.decimation
     cases: list[dict] = []
     if args.mode == "push":
+        from dropbear_wbc.tasks.locomotion.push_bench import push_cases
+
         phases = _parse_cmds(args.phases)
         dvs = [float(x) for x in args.push_dv.split(",")]
         offs = [float(x) for x in args.offsets.split(",")]
-        for ph, c in phases:
-            for d in range(args.directions):
-                for dv in dvs:
-                    for o in offs:
-                        cases.append({"phase": ph, "cmd": c, "dir_deg": 360.0 * d / args.directions, "dv": dv, "offset_s": o})
-        steps = int(round((args.push_at_s + max(offs) + args.push_s + args.after_s) / step_dt))
+        cases = push_cases(phases, args.directions, dvs, offs, args.repeats, args.repeat_jitter_s)
+        last = max(c["offset_s"] for c in cases)
+        steps = int(round((args.push_at_s + last + args.push_s + args.after_s) / step_dt))
         env_cfg.scene.env_spacing = max(float(env_cfg.scene.env_spacing), 5.0)
     else:
         env_cfg.enable_rough_terrain()
@@ -187,7 +190,9 @@ def main() -> int:  # noqa: C901
 
         def _key(c):
             if args.mode == "push":
-                return f"{c['phase']}:{c['dir_deg']:g}:{c['dv']:g}:{c['offset_s']:g}"
+                from dropbear_wbc.tasks.locomotion.push_bench import case_key
+
+                return case_key(c)
             return f"{c['terrain']}:{c['level']}"
         cases = [c for c in cases if _key(c) in keys]
         if not cases:
@@ -309,21 +314,9 @@ def main() -> int:  # noqa: C901
 
     summary: dict = {}
     if args.mode == "push":
-        for ph, _ in _parse_cmds(args.phases):
-            per_dir = {}
-            for d in range(args.directions):
-                deg = 360.0 * d / args.directions
-                best = 0.0
-                for dv in sorted({c["dv"] for c in cases}):
-                    rows = [r for r in results if r["phase"] == ph and r["dir_deg"] == deg and r["dv"] == dv]
-                    if rows and all(r["survived"] for r in rows):
-                        best = dv
-                    else:
-                        break
-                per_dir[f"{deg:g}"] = best
-            summary[ph] = {"max_dv_survived_by_dir": per_dir, "worst_dir_dv": min(per_dir.values()),
-                           "survival_rate": sum(r["survived"] for r in results if r["phase"] == ph)
-                           / max(1, sum(1 for r in results if r["phase"] == ph))}
+        from dropbear_wbc.tasks.locomotion.push_bench import push_summary
+
+        summary = push_summary(results, [ph for ph, _ in _parse_cmds(args.phases)], args.directions)
         print(json.dumps({"mass_kg": mass, **summary}, indent=1), flush=True)
     else:
         for name in TERRAIN_COLS:
@@ -337,6 +330,7 @@ def main() -> int:  # noqa: C901
            "checkpoint_sha256": sha256_file(ckpt), "actuator_profile": profile, "robot_mass_kg": robot_mass_kg,
            "stop_model": bool(args.stop_model),
            "knee_band": args.knee_band, "solver_iterations": args.solver_iters, "mass_kg": mass,
+           "repeats": args.repeats, "repeat_jitter_s": args.repeat_jitter_s,
            "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"), "args": {k: str(v) for k, v in vars(args).items()},
            "summary": summary, "cases": results}
     args.out.parent.mkdir(parents=True, exist_ok=True)
