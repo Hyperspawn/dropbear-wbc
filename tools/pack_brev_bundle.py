@@ -3,7 +3,8 @@
 Stdlib only (any Python 3.10+, Windows or WSL). Contents:
 
 * code: ``source/ scripts/ tools/ third_party/pydeps/ docs/ requirements/`` (no ``__pycache__``/``*.pyc``);
-* ``data/calibration/`` (the default calibration and its pinned snapshots);
+* ``data/calibration/`` (the default calibration and its pinned snapshots) and ``data/robot/`` (USD body
+  properties for ``--robot_mass_kg``, serial surrogates);
 * for every ``--manifest`` (``dropbear-motion-library-v1``): the manifest, every clip NPZ it lists and the clip's
   ``<clip>.validation.json`` verdict (the library refuses clips without an accepted verdict, CONTRACTS 5.3);
 * ``--extra`` files/dirs (e.g. ``data/motions/smoke/dropbear_static_stand.npz`` for locomotion resets);
@@ -28,7 +29,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 CODE_DIRS = ("source", "scripts", "tools", "third_party/pydeps", "docs", "requirements")
-DATA_DIRS = ("data/calibration",)
+DATA_DIRS = ("data/calibration", "data/robot")  # data/robot: USD body masses (--robot_mass_kg), serial surrogates
 SKIP_PARTS = {"__pycache__", ".pytest_cache", ".git"}
 
 
