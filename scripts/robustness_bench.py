@@ -40,6 +40,8 @@ parser.add_argument("--mode", choices=("push", "terrain"), required=True)
 parser.add_argument("--task", default="Dropbear-Velocity-Flat-Play-v0")
 parser.add_argument("--checkpoint", type=Path, required=True, help="model_*.pt of a velocity walker")
 parser.add_argument("--actuator_profile", default=None, help="default: the run's run_info")
+parser.add_argument("--robot_mass_kg", type=float, default=None,
+                    help="measured total robot mass [kg] (see train.py); default: the run's run_info value (none: CAD + motors)")
 parser.add_argument("--stop_model", action="store_true", help="explicit end-stop springs (policies trained with it)")
 parser.add_argument("--knee_band", default=None, help="'stiffness,engage_deg' knee elastic (see train.py)")
 parser.add_argument("--solver_iters", type=int, nargs=2, default=[32, 4], metavar=("POS", "VEL"))
@@ -142,6 +144,10 @@ def main() -> int:  # noqa: C901
     env_cfg = load_entry_point(args.task, "env_cfg_entry_point")
     agent_cfg = load_entry_point(args.task, "rsl_rl_cfg_entry_point")
     env_cfg.set_actuator_profile(profile)
+    from dropbear_wbc.robots.mass_dr import run_robot_mass_kg
+
+    robot_mass_kg = args.robot_mass_kg if args.robot_mass_kg is not None else run_robot_mass_kg(infos[::-1])
+    env_cfg.set_robot_mass(robot_mass_kg)
     if args.stop_model:
         env_cfg.enable_stop_model()
     if args.knee_band:
@@ -328,7 +334,8 @@ def main() -> int:  # noqa: C901
                   flush=True)
 
     out = {"tool": "scripts/robustness_bench.py", "mode": args.mode, "checkpoint": str(ckpt),
-           "checkpoint_sha256": sha256_file(ckpt), "actuator_profile": profile, "stop_model": bool(args.stop_model),
+           "checkpoint_sha256": sha256_file(ckpt), "actuator_profile": profile, "robot_mass_kg": robot_mass_kg,
+           "stop_model": bool(args.stop_model),
            "knee_band": args.knee_band, "solver_iterations": args.solver_iters, "mass_kg": mass,
            "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"), "args": {k: str(v) for k, v in vars(args).items()},
            "summary": summary, "cases": results}
