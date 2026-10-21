@@ -252,14 +252,14 @@ class DeployController:
             q_des, kp, kd = q_meas.copy(), np.zeros(n), cfg.fsm.passive_kd.copy()
         elif self.state == FsmState.MOVE_TO_DEFAULT:
             ratio = float(np.clip((t - self._t_enter) / max(cfg.fsm.move_to_default_s, 1e-6), 0.0, 1.0))
-            q_des = self._q_start + ratio * (cfg.default_pose_sdk - self._q_start)
+            q_des = self._q_start + ratio * (cfg.hold_target_sdk - self._q_start)
             kp, kd = cfg.fsm.hold_kp.copy(), cfg.fsm.hold_kd.copy()
             info.extra["ratio"] = ratio
             if ratio >= 1.0:
                 self.state = FsmState.HOLD
                 self._pending = "move_to_default->hold"
         elif self.state == FsmState.HOLD:
-            q_des = cfg.default_pose_sdk.copy()
+            q_des = cfg.hold_target_sdk.copy()
             kp, kd = cfg.fsm.hold_kp.copy(), cfg.fsm.hold_kd.copy()
         else:  # POLICY
             q_des = self._policy_step_q(low_state, info)

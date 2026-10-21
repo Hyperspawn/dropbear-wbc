@@ -249,9 +249,18 @@ class DeployConfig:
     motion: MotionCfg | None = None
     fsm: FsmCfg = field(default_factory=FsmCfg)
     default_pose_sdk: np.ndarray = field(default_factory=lambda: np.asarray(motors.DEFAULT_POS, float))
+    hold_pose_sdk: np.ndarray | None = None
+    """MoveToDefault / Hold target (22, SDK order). ``None`` = ``default_pose_sdk`` (the pre-item-241 behaviour). The
+    policy action offset and the motors outside the policy keep using the defaults; only the FSM stand target moves.
+    Set from ``data/calibration/dropbear_loaded_stand.json`` (:func:`load_loaded_stand_pose`, item 241)."""
     obs_dim: int | None = None
     source: str = ""
     meta: dict = field(default_factory=dict)
+
+    @property
+    def hold_target_sdk(self) -> np.ndarray:
+        """FSM MoveToDefault / Hold target (SDK order)."""
+        return self.default_pose_sdk if self.hold_pose_sdk is None else self.hold_pose_sdk
 
     @property
     def num_actions(self) -> int:
@@ -267,6 +276,9 @@ class DeployConfig:
             raise ValueError(f"joint_names must be distinct motor-contract names: {self.joint_names}")
         if self.default_pose_sdk.shape != (motors.NUM_MOTORS,):
             raise ValueError("default_pose_sdk must have 22 entries")
+        if self.hold_pose_sdk is not None and (self.hold_pose_sdk.shape != (motors.NUM_MOTORS,)
+                                               or not np.all(np.isfinite(self.hold_pose_sdk))):
+            raise ValueError("hold_pose_sdk must have 22 finite entries")
         if not 0.001 <= self.step_dt <= 0.1:
             raise ValueError(f"implausible step_dt {self.step_dt}")
         if self.target_clip is not None and (self.target_clip.shape != (n, 2)
@@ -316,6 +328,40 @@ def load_standing_pose(calibration_path: Path) -> np.ndarray:
     if pose.shape != (motors.NUM_MOTORS,):
         raise ValueError(f"standing_motor_pos in {calibration_path} has shape {pose.shape}")
     return pose
+
+
+LOADED_STAND_SCHEMA = "dropbear-loaded-stand-v1"
+
+
+def load_loaded_stand_pose(path: Path, calibration_path: Path | None = None) -> np.ndarray:
+    """``loaded_standing_motor_pos`` (22, SDK order) from ``dropbear-loaded-stand-v1`` (tools/derive_loaded_stand.py).
+
+    With ``calibration_path`` the record's ``calibration_sha256`` must match that file: a loaded stand derived from
+    another calibration puts the knees and ankles at the wrong motor angles.
+    """
+    import hashlib
+
+    rec = json.loads(Path(path).read_text(encoding="utf-8"))
+    if rec.get("schema") != LOADED_STAND_SCHEMA:
+        raise ValueError(f"{path}: schema {rec.get('schema')!r}, expected {LOADED_STAND_SCHEMA!r}")
+    if calibration_path is not None:
+        sha = hashlib.sha256(Path(calibration_path).read_bytes()).hexdigest()
+        if sha != rec.get("calibration_sha256"):
+            raise ValueError(f"{path} was derived from calibration {str(rec.get('calibration_sha256'))[:8]}, "
+                             f"not {calibration_path} ({sha[:8]}); re-run tools/derive_loaded_stand.py")
+    pose = np.asarray(rec["loaded_standing_motor_pos"], dtype=float)
+    if pose.shape != (motors.NUM_MOTORS,):
+        raise ValueError(f"loaded_standing_motor_pos in {path} has shape {pose.shape}")
+    return pose
+
+
+def _resolve_hold_pose(value: Any, base: Path) -> np.ndarray | None:
+    """YAML / sidecar ``hold_pose``: absent or ``"default"`` -> None; ``{"loaded_stand": <path>}`` -> that pose."""
+    if value is None or value == "default":
+        return None
+    if isinstance(value, dict) and "loaded_stand" in value:
+        return load_loaded_stand_pose((base / value["loaded_stand"]).resolve())
+    raise ValueError(f"hold_pose: expected 'default' or {{'loaded_stand': <path>}}, got {value!r}")
 
 
 def _resolve_default(value: Any, joint_names: tuple[str, ...], base: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -437,7 +483,7 @@ def load_deploy_yaml(path: Path) -> DeployConfig:
         observations=_obs_from_mapping(d.get("observations")),
         policy_path=None if d.get("policy") is None else (base / d["policy"]).resolve(),
         motion=_motion_from(d.get("motion"), base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
-        source=str(path))
+        hold_pose_sdk=_resolve_hold_pose(d.get("hold_pose"), base), source=str(path))
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
@@ -488,14 +534,14 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
         policy_path=None if d.get("policy_onnx") is None else (base / d["policy_onnx"]).resolve(),
         onnx_obs_input=onnx_in.get("obs"), onnx_time_input=onnx_in.get("time_step"),
         motion=_motion_from(motion or None, base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
-        obs_dim=d.get("obs_dim"), source=str(path), meta={k: d[k] for k in ("task", "usd_sha256", "run_path")
+        hold_pose_sdk=_resolve_hold_pose(d.get("hold_pose"), base), obs_dim=d.get("obs_dim"), source=str(path), meta={k: d[k] for k in ("task", "usd_sha256", "run_path")
                                                             if k in d})
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
 
-def hold_config(default_pose_sdk: np.ndarray | None = None) -> DeployConfig:
+def hold_config(default_pose_sdk: np.ndarray | None = None, hold_pose_sdk: np.ndarray | None = None) -> DeployConfig:
     """A policy-less configuration for the ``hold`` mode (all 22 motors, motion-mode-safe gains).
 
     Legacy ``DEFAULT_KD`` knees are 12 (IdealPD); the MIT kd field max is 5, so hold/passive defaults
@@ -505,7 +551,8 @@ def hold_config(default_pose_sdk: np.ndarray | None = None) -> DeployConfig:
     cfg = DeployConfig(joint_names=motors.MOTOR_NAMES, motor_ids=np.arange(motors.NUM_MOTORS), step_dt=0.02,
                        kp=motion_mode_field_kp(), kd=motion_mode_field_kd(),
                        default_joint_pos=full.copy(), action_scale=np.zeros(motors.NUM_MOTORS),
-                       action_offset=full.copy(), default_pose_sdk=full, source="builtin:hold")
+                       action_offset=full.copy(), default_pose_sdk=full, source="builtin:hold",
+                       hold_pose_sdk=None if hold_pose_sdk is None else np.asarray(hold_pose_sdk, dtype=float))
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
