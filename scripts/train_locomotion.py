@@ -66,6 +66,10 @@ parser.add_argument("--arm_gate_tilt_rate", type=float, default=None,
 parser.add_argument("--arm_gate_hold_s", type=float, default=1.0)
 parser.add_argument("--arm_abduction_weight", type=float, default=0.0,
                     help="L1 pull of the shoulder-roll motors to the standing pose (< 0, e.g. -0.3)")
+parser.add_argument("--amp_weight", type=float, default=None,
+                    help="adversarial motion prior: style reward from a discriminator trained against retargeted human "
+                         "walking/stepping/balance clips (tasks/locomotion/amp.py; e.g. 1.0). Saved as amp_disc.pt in the run dir")
+parser.add_argument("--amp_grad_penalty", type=float, default=5.0)
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
@@ -205,6 +209,8 @@ def main() -> int:
         log_dir = log_root / (f"{stamp}_{args.run_name}" if args.run_name else stamp)
     log_dir.mkdir(parents=True, exist_ok=True)
     print(f"[INFO] log dir: {log_dir}", flush=True)
+    if args.amp_weight:  # needs the run dir: the discriminator lives beside the policy and carries over between chunks
+        env_cfg.enable_amp(args.amp_weight, ckpt_path=str(log_dir / "amp_disc.pt"), grad_penalty=args.amp_grad_penalty)
 
     env = gym.make(args.task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
@@ -269,6 +275,7 @@ def main() -> int:
         "arm_swing_weight": args.arm_swing_weight, "arm_swing_k": args.arm_swing_k,
         "arm_abduction_weight": args.arm_abduction_weight, "arm_gate_tilt_rate": args.arm_gate_tilt_rate,
         "arm_gate_hold_s": args.arm_gate_hold_s,
+        "amp_weight": args.amp_weight, "amp_grad_penalty": args.amp_grad_penalty,
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

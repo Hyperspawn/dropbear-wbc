@@ -128,6 +128,7 @@ def main() -> int:  # noqa: C901
                     help="scripts/train_locomotion.py --arm_gate_tilt_rate")
     ap.add_argument("--arm_abduction_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_abduction_weight")
+    ap.add_argument("--amp_weight", type=float, default=None, help="scripts/train_locomotion.py --amp_weight")
     ap.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_deviation_weight")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train_locomotion.py --actuator_profile")
@@ -254,6 +255,8 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--arm_abduction_weight={args.arm_abduction_weight}"]
             if args.arm_gate_tilt_rate is not None:
                 cmd += [f"--arm_gate_tilt_rate={args.arm_gate_tilt_rate}"]
+            if args.amp_weight is not None:
+                cmd += [f"--amp_weight={args.amp_weight}"]
             if args.actuator_profile:
                 cmd += ["--actuator_profile", args.actuator_profile]
             if args.thermal_penalty is not None:
