@@ -422,7 +422,7 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
                                                      params={"asset_cfg": roll_cfg, **gate})
 
     def enable_amp(self, weight: float = 1.0, ckpt_path: str | None = None, library: str | None = None,
-                   grad_penalty: float = 5.0, lr: float = 1e-4) -> None:
+                   grad_penalty: float = 10.0, lr: float = 1e-4) -> None:
         """Adversarial motion prior (``tasks.locomotion.amp``): a discriminator trained online against retargeted
         human walking/stepping/balance clips rewards human-like whole-body motion, so arm swing and balance reactions
         are learned from data instead of hand-written arm terms. ``ckpt_path`` keeps the discriminator across the

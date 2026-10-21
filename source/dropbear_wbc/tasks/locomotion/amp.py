@@ -10,10 +10,15 @@ It is a reward TERM (:class:`AmpStyleReward`) that owns the discriminator and tr
 the robot's transitions, so the rsl-rl runner is unchanged. The discriminator is saved next to the policy
 (``ckpt_path``, every update) and reloaded by the next chunk of a chunked run.
 
-Features of one state (66 values; the same function for the robot and the clips): the 22 motor angles relative to the
-standing pose and their velocities, the root height above the lower foot (negative: the USD root frame sits below
-the soles; only its change matters), gravity, linear and angular velocity in the
-root frame, and the feet and hands relative to the root in the root frame. A transition is two consecutive 50 Hz states.
+Features of one state (62 values; the same function for the robot and the clips): the 20 motor angles relative to the
+standing pose and their velocities (``AMP_MOTORS``: the wrist rolls are left out, their simulated speed jitters at ~20x
+the clips' and says nothing about gait), the root height above the lower foot (negative: the USD root frame sits below
+the soles; only its change matters), gravity, linear and angular velocity in the root frame, and the feet and hands
+relative to the root in the root frame. A transition is two consecutive 50 Hz states.
+
+Start from a walker whose arms already hang near the human posture: from the session-9 walker (one arm held out at
+~90 deg) the discriminator separated robot from human on arm posture alone within ~50 updates, D(robot) saturated
+near -1 and the style reward carried no signal (logs/amp/amp_local1_c*.log).
 """
 from __future__ import annotations
 
@@ -41,6 +46,14 @@ AMP_CLIPS: tuple[str, ...] = (
     *(f"motions_raw_tairantestbed_smpl_video_single_foot_balance_level{i}_filter_amass_ts1.19_v6" for i in (1, 2, 3, 4)),
 )
 DEFAULT_LIBRARY = "data/motions_v6ts/libraries/accepted_v7gen.json"
+AMP_MOTORS: tuple[str, ...] = (
+    "PG_left_leg_pitch", "PG_left_leg_roll", "LL_hip_joint", "LL_knee_actuator_joint", "LL_Revolute67", "LL_Revolute81",
+    "PG_right_leg_pitch", "PG_right_leg_roll", "RL_hip_joint", "RL_knee_actuator_joint", "RL_Revolute67", "RL_Revolute81",
+    "LH_yaw", "LH_pitch", "LH_roll", "LH_elbow_joint",
+    "RH_yaw", "RH_pitch", "RH_roll", "RH_elbow_joint",
+)
+"""The motors in the style features: all 22 except the wrist rolls."""
+STATE_DIM = 2 * len(AMP_MOTORS) + 22
 FEET = ("LL_skateboard_bearing_left_2", "RL_skateboard_bearing_left_2")
 HANDS = ("LH_shoulder_ex_al_interface_1", "RH_shoulder_ex_al_interface_1")
 
@@ -55,7 +68,7 @@ def _quat_rotate_inverse(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 def amp_features(dq: torch.Tensor, qd: torch.Tensor, root_pos: torch.Tensor, root_quat: torch.Tensor,
                  root_lin_vel_w: torch.Tensor, root_ang_vel_w: torch.Tensor, feet_pos: torch.Tensor,
                  hands_pos: torch.Tensor) -> torch.Tensor:
-    """(N, 66) state features. ``dq``/``qd`` (N, 22): motor angles from the standing pose and velocities;
+    """(N, STATE_DIM) state features. ``dq``/``qd`` (N, 20): ``AMP_MOTORS`` angles from the standing pose and velocities;
     ``root_*`` world frame (quat wxyz); ``feet_pos``/``hands_pos`` (N, 2, 3) world positions."""
     n = dq.shape[0]
     height = root_pos[:, 2:3] - torch.min(feet_pos[:, :, 2], dim=1, keepdim=True).values
@@ -69,7 +82,7 @@ def amp_features(dq: torch.Tensor, qd: torch.Tensor, root_pos: torch.Tensor, roo
 
 def load_reference_transitions(motor_names, default_motor_pos: np.ndarray, library: Path, clips=AMP_CLIPS,
                                fps: float = 50.0, device: str = "cpu") -> tuple[torch.Tensor, dict]:
-    """(M, 132) reference transitions (state_t, state_t+1) from the library clips, plus a short report."""
+    """(M, 2 STATE_DIM) reference transitions (state_t, state_t+1) from the library clips, plus a short report."""
     lib = json.loads(library.read_text(encoding="utf-8"))
     by_name = {c["name"]: (library.parent / c["npz"]).resolve() for c in lib["clips"]}
     out, used = [], {}
@@ -127,17 +140,15 @@ class AmpStyleReward(ManagerTermBase):
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        from dropbear_wbc.robots.dropbear_names import MOTOR_NAMES
-
         p = cfg.params
         self._robot = env.scene["robot"]
-        self._motor_ids = self._robot.find_joints(list(MOTOR_NAMES), preserve_order=True)[0]
+        self._motor_ids = self._robot.find_joints(list(AMP_MOTORS), preserve_order=True)[0]
         self._feet = self._robot.find_bodies(list(FEET), preserve_order=True)[0]
         self._hands = self._robot.find_bodies(list(HANDS), preserve_order=True)[0]
         self._default = self._robot.data.default_joint_pos[0, self._motor_ids].clone()
         lib = Path(p.get("library", DEFAULT_LIBRARY))
         lib = lib if lib.is_absolute() else Path(__file__).resolve().parents[4] / lib
-        self._ref, report = load_reference_transitions(list(MOTOR_NAMES), self._default.cpu().numpy(), lib, device=env.device)
+        self._ref, report = load_reference_transitions(list(AMP_MOTORS), self._default.cpu().numpy(), lib, device=env.device)
         mean, std = self._ref.mean(0), self._ref.std(0).clamp_min(1e-3)
         self._disc = Discriminator(self._ref.shape[1], mean=mean, std=std).to(env.device)
         self._opt = torch.optim.Adam(self._disc.parameters(), lr=float(p.get("lr", 1e-4)))
@@ -187,11 +198,14 @@ class AmpStyleReward(ManagerTermBase):
         if self._ckpt is not None:
             self._ckpt.parent.mkdir(parents=True, exist_ok=True)
             torch.save({"disc": self._disc.state_dict(), "opt": self._opt.state_dict(), "updates": self._updates}, self._ckpt)
+            if self._updates % 20 == 0:  # recent robot transitions, to see which features give the robot away
+                idx = (self._buf_i - 1 - torch.arange(min(8192, self._buf_n), device=self._buf.device)) % self._buf.shape[0]
+                torch.save(self._buf[idx].cpu(), self._ckpt.with_name("amp_robot_sample.pt"))
         s = np.mean(np.array(stats), axis=0)
         return {"loss": round(float(s[0]), 4), "d_ref": round(float(s[1]), 3), "d_robot": round(float(s[2]), 3)}
 
     def __call__(self, env, library: str = DEFAULT_LIBRARY, ckpt_path: str | None = None, update_every: int = 24,
-                 num_updates: int = 4, batch: int = 4096, lr: float = 1e-4, grad_penalty: float = 5.0,
+                 num_updates: int = 4, batch: int = 4096, lr: float = 1e-4, grad_penalty: float = 10.0,
                  buffer_size: int = 500_000) -> torch.Tensor:
         s1 = self._state()
         reward = torch.zeros(env.num_envs, device=env.device)

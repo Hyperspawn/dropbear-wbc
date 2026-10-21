@@ -69,7 +69,7 @@ parser.add_argument("--arm_abduction_weight", type=float, default=0.0,
 parser.add_argument("--amp_weight", type=float, default=None,
                     help="adversarial motion prior: style reward from a discriminator trained against retargeted human "
                          "walking/stepping/balance clips (tasks/locomotion/amp.py; e.g. 1.0). Saved as amp_disc.pt in the run dir")
-parser.add_argument("--amp_grad_penalty", type=float, default=5.0)
+parser.add_argument("--amp_grad_penalty", type=float, default=10.0)
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
