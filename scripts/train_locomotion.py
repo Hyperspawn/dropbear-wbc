@@ -57,6 +57,11 @@ parser.add_argument("--terrain", choices=("flat", "rough"), default="flat",
 parser.add_argument("--stair_max_m", type=float, default=None, help="rough terrain: hardest step height [m] (default 0.10)")
 parser.add_argument("--arm_action_scale", type=float, default=None,
                     help="arm action scale [rad per unit action] (default 0.1; legs 0.25-0.375): let the arms help balance")
+parser.add_argument("--arm_swing_weight", type=float, default=None,
+                    help="reward on natural counter-phase arm swing while moving (e.g. 0.5; enable_arm_swing)")
+parser.add_argument("--arm_swing_k", type=float, default=0.45, help="shoulder / opposite-hip pitch ratio (human 0.40-0.55)")
+parser.add_argument("--arm_abduction_weight", type=float, default=0.0,
+                    help="L1 pull of the shoulder-roll motors to the standing pose (< 0, e.g. -0.3)")
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
@@ -129,6 +134,8 @@ def main() -> int:
         env_cfg.enable_thermal_penalty(args.thermal_penalty)
     if args.arm_action_scale is not None or args.arm_deviation_weight is not None:
         env_cfg.set_arm_freedom(args.arm_action_scale, args.arm_deviation_weight)
+    if args.arm_swing_weight:
+        env_cfg.enable_arm_swing(args.arm_swing_weight, k=args.arm_swing_k, abduction=args.arm_abduction_weight)
     if args.gait_v3:
         # weights sized so the new penalties stay well below the tracking reward (at -20 / -5 / -1.0 the warm-started
         # run learned that falling early is cheaper than walking: episode length 990 -> 49 in 70 iterations)
@@ -240,6 +247,8 @@ def main() -> int:
         "pushes": env_cfg.events.push_robot is not None,
         "push_velocity": args.push_velocity, "push_interval": args.push_interval,
         "arm_action_scale": args.arm_action_scale, "arm_deviation_weight": args.arm_deviation_weight,
+        "arm_swing_weight": args.arm_swing_weight, "arm_swing_k": args.arm_swing_k,
+        "arm_abduction_weight": args.arm_abduction_weight,
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

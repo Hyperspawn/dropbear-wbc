@@ -275,3 +275,29 @@ least half of the commanded 4 m. Charts: `logs/reports/s8_push_final.png`, `logs
 **Tracker `lib_v4_cool2/30600`** (motor-heat recipe, about 3,600 more iterations): the hardware gate passes on 11 of 14
 motions, the best yet (8 at 27,000; 6 before the safety work). But the motion score fell to 0.25 (from 0.29 and 0.31).
 At ×10 the motor-heat term makes it track lazily, so it needs a lighter weight or fidelity-based motion sampling.
+
+## Cloud session 9 (2026-10-20/21): arms for balance
+
+4× RTX 6000 Ada, about 12 h including about 3 h of overrun while this PC slept (estimated $56). All three walkers
+continued `vel_push_v4/16050` with the same pushes, terrain and safety terms to iteration 22,200:
+- control: arms held as before;
+- `--arm_action_scale=0.3 --arm_deviation_weight=-0.02` (arms free);
+- the same on `hw_v4_arms` (X8-120 at shoulder pitch and roll, +1.9 kg).
+
+Push survival is the mean of 3 runs of `scripts/robustness_bench.py`. One run varies by ±3–5 points
+(`logs/bench/s9_push_repeats.json`, chart `logs/reports/s9_arms_final.png`, video `logs/reels/dropbear_s9_arms.mp4`).
+
+| Walker | Standing: all / 1.0 / 1.2 m/s | Walking: all / 1.0 / 1.2 m/s | Terrain cells | Busiest arm motor while walking (× rated) |
+|---|---|---|---:|---|
+| Arms held (`vel_ctrl_v4`) | 85 / 75 / 38 % | 91 / 90 / 58 % | 23 / 36 | ≤ 0.13 |
+| Arms free, stock motors (`vel_arms_v4`) | 78 / 65 / 21 % | 91 / 90 / 56 % | 24 / 36 | right shoulder roll (X8 Pro) 1.02, left elbow 0.79 |
+| **Arms free, X8-120 shoulders (`vel_arms_x8_v4`)** | **90 / 88 / 60 %** | **97 / 94 / 85 %** | **26 / 36** | left elbow (X8 Pro) 0.65; shoulders ≤ 0.24 |
+
+- **Stronger shoulders are what make the arms useful.** With X8-120s, walking survives 85 % of the hardest shoves
+  (control 58 %), and standing and terrain improve too.
+- **On the stock shoulder motors, free arms don't help.** Standing gets worse, and the X8 Pro shoulder roll runs at its
+  rated torque.
+- **How the arms are used:** the policy holds one arm out sideways like a tightrope walker. It does not use a human
+  counter-swing; natural arm swing would need its own reward or a reference gait.
+- **Tracker** `lib_v4_cool3/35000` (motor-heat -5e-4): motion score 0.27, hardware gate 3 / 14. The lighter heat
+  penalty lost the gate without recovering motion quality.

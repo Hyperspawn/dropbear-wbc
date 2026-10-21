@@ -313,3 +313,25 @@ def stop_load_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, knee_safe_nm
                             device=stop.device)
         out += torch.sum(torch.square(torch.clamp(torch.abs(stop) - safe, min=0.0) / safe), dim=1).to(env.device)
     return out
+
+
+# Counter-phase arm swing (natural walking arms). Semantic convention (calibration e51033d4, G1 order, x forward / y left):
+# hip and shoulder pitch are rotations about +y, so negative = limb forward. In a person the right arm swings forward with
+# the left leg: shoulder_pitch_R ~ k * hip_pitch_L and shoulder_pitch_L ~ k * hip_pitch_R. Motor side: hip pitch =
+# 0.984 * LL/RL_hip_joint, shoulder pitch = -LH_yaw / +RH_yaw. Checked on the retargeted human clips walk_turn / march:
+# corr(RH_yaw, LL_hip_joint) = +0.78 / +0.93, corr(LH_yaw, -RL_hip_joint) = +0.85 / +0.89, k = 0.40-0.55.
+ARM_SWING_JOINTS: tuple[str, ...] = ("LL_hip_joint", "RL_hip_joint", "LH_yaw", "RH_yaw")
+HIP_PITCH_SCALE: float = 0.984
+
+
+def arm_swing_counter_phase(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg, k: float = 0.45,
+                            std: float = 0.12) -> torch.Tensor:
+    """``exp(-err / std^2)`` while the robot is commanded to move, else 0: each shoulder pitch (from its standing angle)
+    follows ``k`` times the OPPOSITE hip pitch, i.e. the arms swing like a person's. ``asset_cfg.joint_names`` must be
+    :data:`ARM_SWING_JOINTS` in that order (``preserve_order=True``)."""
+    asset = env.scene[asset_cfg.name]
+    ids = asset_cfg.joint_ids
+    dq = asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]
+    hip_l, hip_r, sh_l_motor, sh_r_motor = (dq[:, i] for i in range(4))
+    err = torch.square(sh_r_motor - k * HIP_PITCH_SCALE * hip_l) + torch.square(-sh_l_motor - k * HIP_PITCH_SCALE * hip_r)
+    return torch.exp(-err / std**2) * _moving_command(env, command_name).float()

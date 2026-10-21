@@ -377,6 +377,26 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
             else:
                 self.rewards.joint_deviation_arms.weight = float(deviation_weight)
 
+    def enable_arm_swing(self, weight: float = 0.5, k: float = 0.45, std: float = 0.12, abduction: float = 0.0) -> None:
+        """Natural walking arms: ``arm_swing`` rewards each shoulder pitch following ``k`` x the opposite hip pitch while
+        moving (``mdp.arm_swing_counter_phase``; k 0.40-0.55 in the retargeted human walking clips); ``abduction`` (< 0)
+        adds an L1 pull of both shoulder-roll motors back to the standing pose, against the tightrope-walker arm the free-
+        arm walkers learned (session 9). Use with :meth:`set_arm_freedom`."""
+        from isaaclab.envs import mdp as il_mdp
+        from isaaclab.managers import RewardTermCfg as RewTerm
+        from isaaclab.managers import SceneEntityCfg
+
+        from dropbear_wbc.tasks.locomotion.mdp.rewards import ARM_SWING_JOINTS, arm_swing_counter_phase
+
+        self.rewards.arm_swing = RewTerm(
+            func=arm_swing_counter_phase, weight=float(weight),
+            params={"command_name": "base_velocity", "k": float(k), "std": float(std),
+                    "asset_cfg": SceneEntityCfg("robot", joint_names=list(ARM_SWING_JOINTS), preserve_order=True)})
+        if abduction:
+            self.rewards.arm_abduction = RewTerm(
+                func=il_mdp.joint_deviation_l1, weight=float(abduction),
+                params={"asset_cfg": SceneEntityCfg("robot", joint_names=["LH_pitch", "RH_pitch"])})
+
     def enable_pushes(self, velocity_xy: float = 0.3, interval_s: tuple[float, float] = (8.0, 12.0)) -> None:
         from isaaclab.managers import EventTermCfg as EventTerm
 
