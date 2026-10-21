@@ -90,6 +90,13 @@ MOTOR_MODELS: dict[str, MotorModel] = {
         # the same with the drawing's 50:1 reduction (armature 0.175 instead of 0.063 kg*m^2): sensitivity only
         MotorModel("EPS-CEM-60-V2-50to1", 50, 75.0, 60.0, 80.0 * 2.0 * math.pi / 60.0, 240.0, 0.7e-4, 2.0, 0.30, 0.93,
                    "vendor"),
+        # POWER-CONSISTENT reading of the same motor (2026-10-20, notes/213): the V2 line puts the rated point at
+        # 60 N*m @ 60 rpm = 377 W at the shaft, above the 330 W rating before any loss. The drawing's 60 N*m @ 40 rpm
+        # (251 W) fits it. Line through 60 N*m @ 40 rpm to the 80 rpm no-load: saturation 60 / (1 - 40/80) = 120 N*m,
+        # so the 75 N*m peak holds only to 30 rpm and the knee's 55 rpm p99 gets 37.5 N*m (V2: 75). Use this for any
+        # sim that is meant to bound the CEM-60 from below until the vendor 48 V T-N curve or a bench sweep exists.
+        MotorModel("EPS-CEM-60-V2-P330", 30, 75.0, 60.0, 80.0 * 2.0 * math.pi / 60.0, 120.0, 0.7e-4, 2.0, 0.30, 0.93,
+                   "vendor-power-consistent"),
         # CANDIDATES for the hip roll / hip pitch / knee (2026-10-16, the user's MyActuator V4 datasheets in
         # hyperspawn-web data/actuators/datasheets/myactuator/x8-120details.json and x10-200-details.json):
         # RMD-X8-P20-120 (V4): 19.61:1, 43 N*m rated at 127 rpm, 120 N*m peak, 158 rpm no-load, 1.40 kg, back-drive
@@ -200,6 +207,14 @@ JOINT_MOTOR_MAPS["cem6_2026_10_16"] = {
     **{f"{p}_hip_joint": "EPS-CEM-60-V2" for p in ("LL", "RL")},
     **{f"{p}_knee_actuator_joint": "EPS-CEM-60-V2" for p in ("LL", "RL")},
 }
+# Build A and the vendor-knee map with the power-consistent CEM-60 envelope (notes/213): the same motors, masses and
+# gains; only the torque-speed line changes (saturation 240 -> 120 N*m)
+JOINT_MOTOR_MAPS["cem6_p330_2026_10_20"] = {
+    j: ("EPS-CEM-60-V2-P330" if m == "EPS-CEM-60-V2" else m) for j, m in JOINT_MOTOR_MAPS["cem6_2026_10_16"].items()
+}
+JOINT_MOTOR_MAPS["vendor_p330_2026_10_20"] = {
+    j: ("EPS-CEM-60-V2-P330" if m == "EPS-CEM-60-V2" else m) for j, m in JOINT_MOTOR_MAPS["vendor_2026_10_14"].items()
+}
 # "v4": X8-120 (V4) at hip roll and hip pitch, X10-200 (V4.1) at the knee
 JOINT_MOTOR_MAPS["v4_2026_10_16"] = {
     **JOINT_MOTOR_MAPS["user_2026_09_25"],
@@ -271,6 +286,9 @@ HW_PROFILE_MAPS: dict[str, str] = {
     "hw_cem6": "cem6_2026_10_16",
     "hw_v4": "v4_2026_10_16",
     "hw_v4_arms": "v4_arms_2026_10_20",  # Build B + X8-120 shoulders (sim study)
+    # the same two profiles with the power-consistent CEM-60 line (notes/213): replay hw_cem6 / hw_v2ie policies here
+    "hw_cem6_p330": "cem6_p330_2026_10_20",
+    "hw_v2ie_p330": "vendor_p330_2026_10_20",
 }
 HW_PROFILE_OPTIONS: dict[str, dict] = {
     "hw_v1i": {"target_interp_steps": 4},
@@ -291,6 +309,8 @@ HW_PROFILE_OPTIONS["hw_v2ie_r50"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_cem6"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_v4"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
 HW_PROFILE_OPTIONS["hw_v4_arms"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v1ie"])
+HW_PROFILE_OPTIONS["hw_cem6_p330"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_cem6"])
+HW_PROFILE_OPTIONS["hw_v2ie_p330"] = copy.deepcopy(HW_PROFILE_OPTIONS["hw_v2ie"])
 """Extra ``make_hw_motor_groups`` options per profile (docs/ISSUES.md #11: 50 Hz targets stepped into a 200 Hz PD
 make torque spikes; the motor-side firmware can ramp each new target over the 4 control ticks instead)."""
 """Actuator-profile name (tasks' ``set_actuator_profile``) -> :data:`JOINT_MOTOR_MAPS` key."""
@@ -314,15 +334,36 @@ ARM_MOTOR_BODY: dict[str, str] = {
 }
 BASE_ARM_MAP = "user_2026_09_25"
 """The arm motors the plant USD and the real robot have (X10 1:7 shoulder pitch, X8 Pro elsewhere)."""
+MASS_OFFSET_PROFILES: tuple[str, ...] = ("hw_cem6", "hw_v4", "hw_v4_arms", "hw_cem6_p330")
+"""Profiles whose plant mass carries the real motors (twin v3). hw_v2ie_p330 stays on the hw_v2ie plant mass."""
+
+RATED_POWER_W: dict[str, float] = {"EPS-CEM-60-V2": 330.0, "EPS-CEM-60-V2-50to1": 330.0, "EPS-CEM-60-V2-P330": 330.0}
+"""Stated rated power [W] where the vendor/user gave one (48 V). Shaft power at the modeled rated point must not
+exceed it (:func:`rated_point_shaft_power`)."""
+
+
+def rated_point_speed(model: MotorModel) -> float:
+    """Output speed [rad/s] where the modeled torque-speed line reaches the rated torque."""
+    return model.no_load_speed * (1.0 - model.rated_torque / model.saturation_effort)
+
+
+def rated_point_shaft_power(model: MotorModel) -> float:
+    """Shaft power [W] at the modeled rated point (rated torque x :func:`rated_point_speed`)."""
+    return model.rated_torque * rated_point_speed(model)
+
+
+def envelope_torque(model: MotorModel, speed: float) -> float:
+    """Available output torque [N*m] at |speed| [rad/s] in the motoring quadrant (DatasheetMotor law)."""
+    return max(0.0, min(model.peak_torque, model.saturation_effort * (1.0 - abs(speed) / model.no_load_speed)))
 
 
 def motor_mass_offsets(profile: str) -> dict[str, float]:
     """Per-body mass change [kg] that swaps the CAD's X10-S2 (vendor 1.70 kg) for the profile's motor at the 6 heavy
     joints, the whole difference on the stator body (the CAD part masses are not separable; first-order).
 
-    Only the twin-v3 profiles (``hw_cem6``, ``hw_v4``, ``hw_v4_arms``) change the plant mass; every older profile returns ``{}`` so
+    Only the twin-v3 profiles (:data:`MASS_OFFSET_PROFILES`) change the plant mass; every older profile returns ``{}`` so
     published policies replay on the plant they were trained on."""
-    if profile not in ("hw_cem6", "hw_v4", "hw_v4_arms"):
+    if profile not in MASS_OFFSET_PROFILES:
         return {}
     jm = JOINT_MOTOR_MAPS[HW_PROFILE_MAPS[profile]]
     cad = MOTOR_MODELS[CAD_MOTOR_MODEL].mass_kg
