@@ -12,10 +12,14 @@ rt/lowcmd   :class:`LowCmd`   ``tcp://127.0.0.1:5555``  SUB bind / PUB connect
 
 Every message is one ZMQ frame ``b"<channel>\\0" + msgpack payload`` so SUB-side
 prefix filtering works. Sends never block (a full queue drops the message and
-counts it). Reads have *latest-message* semantics: all queued frames are drained
-and only the newest is decoded; the number of skipped frames is counted. (ZMQ's
-``CONFLATE`` option is not used because it is incompatible with multipart and
-unreliable with topic filtering.)
+counts it). Reads have *latest-message* semantics. Both sockets set ``ZMQ_CONFLATE``
+(queue depth 1), so a burst or a reader stall can never leave older frames queued
+ahead of the newest one. Without it, PUB tail-drops the *newest* frames once
+SNDHWM+RCVHWM are full (a 20-frame burst returned tick 15 in 26-38 % of trials) and a
+reader stall >~160 ms at 500 Hz made the next 1-7 reads return LowState 87-713 ms old
+(notes/202). CONFLATE is safe here because every message is a single frame and each
+channel has its own port, so the prefix filter never sees a second topic.
+``conflate=False`` restores the old drain-the-queue behaviour (diagnostics only).
 
 The ``ChannelFactoryInitialize`` / ``ChannelPublisher`` / ``ChannelSubscriber``
 API mirrors ``unitree_sdk2py.core.channel`` so Unitree example code ports with
@@ -77,10 +81,12 @@ class ZmqPublisher:
     """
 
     def __init__(self, endpoint: str, channel: str, bind: bool, sndhwm: int = 16,
-                 context: zmq.Context | None = None):
+                 context: zmq.Context | None = None, conflate: bool = True):
         self.endpoint, self.channel = endpoint, channel
         self._prefix = _prefix(channel)
         self._sock = (context or zmq.Context.instance()).socket(zmq.PUB)
+        if conflate:
+            self._sock.setsockopt(zmq.CONFLATE, 1)  # must precede bind/connect
         self._sock.setsockopt(zmq.SNDHWM, sndhwm)
         self._sock.setsockopt(zmq.LINGER, 0)
         (self._sock.bind if bind else self._sock.connect)(endpoint)
@@ -112,17 +118,20 @@ class ZmqSubscriber:
     """
 
     def __init__(self, endpoint: str, channel: str, bind: bool, rcvhwm: int = 64,
-                 context: zmq.Context | None = None):
+                 context: zmq.Context | None = None, conflate: bool = True):
         self.endpoint, self.channel = endpoint, channel
         self._prefix = _prefix(channel)
         self._sock = (context or zmq.Context.instance()).socket(zmq.SUB)
+        if conflate:
+            self._sock.setsockopt(zmq.CONFLATE, 1)  # must precede bind/connect
         self._sock.setsockopt(zmq.RCVHWM, rcvhwm)
         self._sock.setsockopt(zmq.LINGER, 0)
         self._sock.setsockopt(zmq.SUBSCRIBE, self._prefix)
         (self._sock.bind if bind else self._sock.connect)(endpoint)
         self.received = 0
         self.skipped = 0
-        """Frames drained without being returned because a newer one was queued."""
+        """Frames drained without being returned because a newer one was queued (always 0 with conflate;
+        use LowState.tick / LowCmd.tick gaps to count frames the reader never saw)."""
 
     def recv_latest(self, timeout_ms: float = 0.0) -> bytes | None:
         """Return the newest queued payload, waiting up to ``timeout_ms`` for the first one.
@@ -139,6 +148,8 @@ class ZmqSubscriber:
                 break
             if latest is not None:
                 self.skipped += 1
+            if not frame.startswith(self._prefix):
+                continue  # defensive: wrong-topic frame on a conflated socket
             latest = frame
             self.received += 1
         if latest is None:
