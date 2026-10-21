@@ -42,7 +42,7 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy import quat as Q  # noqa: E402
-from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_yaml, load_sidecar,  # noqa: E402
+from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_yaml, load_loaded_stand_pose, load_sidecar,  # noqa: E402
                                         load_standing_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
@@ -57,6 +57,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--sidecar", type=Path)
     ap.add_argument("--onnx", type=Path, help="override the policy path of the yaml/sidecar")
     ap.add_argument("--default-pose", default="legacy", help="'legacy' or a semantic calibration JSON (hold mode)")
+    ap.add_argument("--hold-pose", default="loaded",
+                    help="MoveToDefault/Hold target: 'loaded' (default; data/calibration/dropbear_loaded_stand.json, "
+                         "knee crank ~3 deg, static knee ~0.35x rated, item 241), 'default' (the config's default pose "
+                         "= pre-241 behaviour; calibration standing_motor_pos holds ~80 N*m on each knee crank), or a "
+                         "dropbear-loaded-stand-v1 JSON path. Overrides a yaml/sidecar hold_pose.")
     ap.add_argument("--allow-privileged", action="store_true", help="allow sim-only observation terms")
     ap.add_argument("--live_dir", type=Path, default=None,
                     help="LIVE reference (deploy.motion.LiveMotion): --motion plays first and is the idle clip; every "
@@ -102,10 +107,25 @@ def parse_args(argv=None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+LOADED_STAND_JSON = ROOT / "data/calibration/dropbear_loaded_stand.json"
+
+
+def resolve_hold_pose(args) -> np.ndarray | None:
+    """``--hold-pose`` -> SDK-order hold target (None = the config's default pose)."""
+    choice = getattr(args, "hold_pose", "default")
+    if choice in (None, "default"):
+        return None
+    path = LOADED_STAND_JSON if choice == "loaded" else Path(choice)
+    calib = None
+    if getattr(args, "mode", None) == "hold" and getattr(args, "default_pose", "legacy") != "legacy":
+        calib = Path(args.default_pose)  # the loaded stand must come from the same calibration
+    return load_loaded_stand_pose(path, calib)
+
+
 def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode == "hold":
         pose = None if args.default_pose == "legacy" else load_standing_pose(Path(args.default_pose))
-        cfg = hold_config(pose)
+        cfg = hold_config(pose, resolve_hold_pose(args))
         policy = motion = None
     else:
         from dropbear_wbc.deploy.motion import OnnxMotion, load_motion
@@ -189,6 +209,11 @@ def build(args) -> tuple[DeployConfig, DeployController]:
               flush=True)
     if cfg.target_clip is not None:
         print("[runner] motor targets clipped to the sidecar's target_clip (as in training)", flush=True)
+    if args.mode != "hold":
+        cfg.hold_pose_sdk = resolve_hold_pose(args)
+        cfg.validate()
+    print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
+          f"(--hold-pose {args.hold_pose})", flush=True)
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
@@ -216,6 +241,7 @@ def main(argv=None) -> int:
         summary["config"] = {"source": cfg.source, "runtime_motion": cfg.meta.get("runtime_motion"),
                              "joint_names": list(cfg.joint_names), "step_dt": cfg.step_dt,
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
+                             "hold_target_sdk": cfg.hold_target_sdk.tolist(),
                              "hold_kp": cfg.fsm.hold_kp.tolist(), "hold_kd": cfg.fsm.hold_kd.tolist(),
                              "move_to_default_s": cfg.fsm.move_to_default_s,
                              "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
