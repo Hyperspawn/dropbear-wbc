@@ -331,3 +331,44 @@ Push survival is over 3 repeats per cell (`--repeats 3`); session 9 values are t
   the robot.
 - **Stock shoulders + swing:** the swing is only half learned. One arm is lifted forward and the left elbow runs at
   0.84× rated.
+
+## 2026-10-22: adversarial motion prior, first local test
+
+The session-10 swing looked forced. Measured against the retargeted human walking clips, it is:
+
+| | Arm vs opposite hip (corr) | Swing range | Elbow range | Shoulder out to the side |
+|---|---|---|---|---|
+| Human clips (walk_normal, walk_brisk, LAFAN1 walk) | 0.43-0.89 | 19-81° | 5-24° | 13-19° |
+| `vel_swing_x8` (session 10) | 0.99 / 1.00 | 14 / 15° | **< 1°** | 5-9° |
+
+The hand-written rule locks the shoulders to the legs and leaves the elbows straight. The new approach is an
+adversarial motion prior (`--amp_weight`, `tasks/locomotion/amp.py`). A discriminator learns to tell the robot's
+50 Hz state transitions from those of 30 retargeted human clips (walk, turn, stop, back, step, single-foot balance;
+210 s). The policy is rewarded for motion it takes for human. No arm rule is set by hand.
+
+Local runs on the RTX 4080 laptop (512 envs, 50-iteration chunks with cooldowns; Brev balance was $0):
+- **`amp_local1`, from session 9:** failed. That walker holds one arm out at about 90°. The discriminator separated it
+  on arm posture alone (a linear probe on arm angles: 100 %), its score went to -0.95 and the style reward to 0.07.
+  The policy got almost no signal. Wrist-roll speed also jittered at about 20× the clips', so the wrist rolls were taken
+  out of the features (d91224f).
+- **`amp_local2`, from session 10** (arms already at the sides): 490 iterations. The style reward held at 0.17-0.33 and
+  velocity tracking at 0.75-0.83 with almost no falls. From chunk 6 the discriminator's loss rose (0.34 → 0.38): the
+  policy was starting to fool it.
+
+| Walking 0.5 m/s | Arm vs opposite hip (corr R / L) | Swing range R / L | Elbow range | Shoulder out L / R |
+|---|---|---|---|---|
+| `vel_swing_x8` (start) | 0.99 / 1.00 | 14 / 15° | < 1° | 9 / 5° |
+| `amp_local2` (+490 it) | 0.98 / 0.97 | 14 / 19° | < 1° | 9 / **29°** |
+
+- **What this shows:** AMP trains and moves the arms toward the clips. The right shoulder rolled out into (past) the
+  human range, and the left swing ratio rose 0.42 → 0.56.
+- **What it doesn't show:** a more natural walk. 490 iterations at 512 envs is far too short. The elbows are still
+  straight, the coupling is still locked, and the right arm overshoots. Neither walker survives a 1.2 m/s standing
+  side shove in the filmed case.
+- **Left/right:** only one arm has moved so far. The discriminator still finds the left arm frozen (shoulder roll, elbow
+  and hand at 10-20 % of the human variation). The mirror-symmetry augmentation (Brief's 0022) should carry what the
+  policy learns on one side to the other.
+- **Next:** cloud session 11 (`tools/brev/run_session11.sh`). Four style weights / builds from the session-10 walkers,
+  with symmetry, at 4096 envs for several thousand iterations.
+
+Video: `logs/reels/dropbear_amp_local.mp4`.
