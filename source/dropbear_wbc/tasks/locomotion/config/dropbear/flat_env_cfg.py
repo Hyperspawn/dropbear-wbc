@@ -422,11 +422,12 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
                                                      params={"asset_cfg": roll_cfg, **gate})
 
     def enable_amp(self, weight: float = 1.0, ckpt_path: str | None = None, library: str | None = None,
-                   grad_penalty: float = 10.0, lr: float = 1e-4) -> None:
+                   grad_penalty: float = 10.0, lr: float = 1e-4, mirror: bool = False) -> None:
         """Adversarial motion prior (``tasks.locomotion.amp``): a discriminator trained online against retargeted
         human walking/stepping/balance clips rewards human-like whole-body motion, so arm swing and balance reactions
         are learned from data instead of hand-written arm terms. ``ckpt_path`` keeps the discriminator across the
-        chunks of a chunked run (the run dir's ``amp_disc.pt``)."""
+        chunks of a chunked run (the run dir's ``amp_disc.pt``). ``mirror``: left/right symmetric discriminator and
+        reward (needed with PPO symmetry augmentation)."""
         from isaaclab.managers import RewardTermCfg as RewTerm
 
         from dropbear_wbc.tasks.locomotion.amp import DEFAULT_LIBRARY, AmpStyleReward
@@ -434,7 +435,7 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         self.rewards.amp_style = RewTerm(
             func=AmpStyleReward, weight=float(weight),
             params={"library": library or DEFAULT_LIBRARY, "ckpt_path": ckpt_path, "grad_penalty": float(grad_penalty),
-                    "lr": float(lr)})
+                    "lr": float(lr), "mirror": bool(mirror)})
 
     def enable_pushes(self, velocity_xy: float = 0.3, interval_s: tuple[float, float] = (8.0, 12.0)) -> None:
         from isaaclab.managers import EventTermCfg as EventTerm

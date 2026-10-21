@@ -111,3 +111,38 @@ def test_amp_motors_are_the_motors_without_wrist_rolls():
     from dropbear_wbc.robots.dropbear_names import MOTOR_NAMES
 
     assert AMP_MOTORS == tuple(m for m in MOTOR_NAMES if not m.endswith("wrist_roll"))
+
+
+def test_feature_mirror_is_an_involution_and_reflects_about_the_midline():
+    from dropbear_wbc.tasks.locomotion.amp import FeatureMirror, amp_motor_mirror
+
+    m = amp_motor_mirror()
+    np.testing.assert_allclose(m @ m, np.eye(len(AMP_MOTORS)), atol=1e-6)
+    mir = FeatureMirror(m, mid_y=-0.1)
+    x = torch.randn(7, 2 * STATE_DIM)
+    torch.testing.assert_close(mir(mir(x)), x, atol=1e-4, rtol=1e-4)
+    s = torch.zeros(1, STATE_DIM)
+    key = 2 * len(AMP_MOTORS) + 10
+    s[0, key:key + 6] = torch.tensor([0.07, -0.015, 0.16, 0.07, -0.185, 0.16])  # left / right foot 8.5 cm each side of -0.1
+    out = mir.state(s)[0, key:key + 6]
+    torch.testing.assert_close(out, torch.tensor([0.07, -0.015, 0.16, 0.07, -0.185, 0.16]), atol=1e-6, rtol=0)
+
+
+@pytest.mark.skipif(not LIBRARY.exists(), reason="motion library not present")
+def test_mirrored_human_clips_look_like_human_clips():
+    from dropbear_wbc.tasks.locomotion.amp import FeatureMirror, amp_motor_mirror
+
+    try:
+        ref, _ = load_reference_transitions(list(AMP_MOTORS), np.zeros(len(AMP_MOTORS), np.float32), LIBRARY)
+    except FileNotFoundError:
+        pytest.skip("motion clips not present")
+    mid = FeatureMirror.midline_y()
+    assert -0.075 < mid < -0.065  # the USD root frame sits 0.07 m left of the robot's midline
+    mref = FeatureMirror(amp_motor_mirror(), mid)(ref)[:, :STATE_DIM]
+    r = ref[:, :STATE_DIM]
+    gap = ((mref.mean(0) - r.mean(0)) / r.std(0).clamp_min(1e-3)).abs()
+    # walking data are left/right balanced on average: the mirror moves no joint or key-point mean by > 0.5 std
+    assert float(gap[: 2 * len(AMP_MOTORS)].max()) < 0.5, gap[: 2 * len(AMP_MOTORS)]
+    # feet / hands: the retargeted gaits drift ~1.4 cm to one side of the robot's midline (0.52 std); a wrong sign or
+    # mirror plane gives several std
+    assert float(gap[2 * len(AMP_MOTORS) + 10:].max()) < 0.75, gap[2 * len(AMP_MOTORS) + 10:]

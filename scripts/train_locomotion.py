@@ -219,7 +219,8 @@ def main() -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     print(f"[INFO] log dir: {log_dir}", flush=True)
     if args.amp_weight:  # needs the run dir: the discriminator lives beside the policy and carries over between chunks
-        env_cfg.enable_amp(args.amp_weight, ckpt_path=str(log_dir / "amp_disc.pt"), grad_penalty=args.amp_grad_penalty)
+        env_cfg.enable_amp(args.amp_weight, ckpt_path=str(log_dir / "amp_disc.pt"), grad_penalty=args.amp_grad_penalty,
+                           mirror=args.symmetry)  # symmetry augmentation needs a left/right symmetric style reward
 
     env = gym.make(args.task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)

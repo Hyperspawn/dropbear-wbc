@@ -109,6 +109,59 @@ def load_reference_transitions(motor_names, default_motor_pos: np.ndarray, libra
     return torch.cat(out, dim=0), {"clips": used, "transitions": int(sum(v - 1 for v in used.values()))}
 
 
+def amp_motor_mirror(calibration=None) -> np.ndarray:
+    """(20, 20) left/right mirror of the ``AMP_MOTORS`` angles relative to the stand: the calibration-derived 22-motor map
+    of :func:`tasks.locomotion.symmetry.motor_mirror_matrix` without the wrist rolls (they couple to nothing else)."""
+    from dropbear_wbc.robots.dropbear_names import MOTOR_NAMES
+    from dropbear_wbc.tasks.locomotion.symmetry import motor_mirror_matrix
+
+    full = motor_mirror_matrix() if calibration is None else motor_mirror_matrix(calibration)
+    idx = [MOTOR_NAMES.index(m) for m in AMP_MOTORS]
+    return np.asarray(full)[np.ix_(idx, idx)]
+
+
+class FeatureMirror:
+    """Left/right mirror of AMP transitions about the robot's sagittal plane.
+
+    Motors through the calibration-derived map; root terms as in ``symmetry.BASE_TERM_SIGNS`` (gravity and linear
+    velocity flip y; angular velocity flips x and z); feet and hands swap sides and reflect about ``mid_y``, the
+    midline in the root frame. The USD root frame sits 0.07 m to the left of the midline, so reflecting about y = 0
+    would put the mirrored feet 0.14 m off."""
+
+    BASE_SIGNS = (1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0)  # height, gravity, lin vel, ang vel
+
+    def __init__(self, motor_mirror: np.ndarray, mid_y: float, device="cpu"):
+        self.m = torch.as_tensor(np.asarray(motor_mirror), dtype=torch.float32, device=device)
+        self.sign = torch.tensor(self.BASE_SIGNS, device=device)
+        self.mid_y = float(mid_y)
+
+    def state(self, s: torch.Tensor) -> torch.Tensor:
+        n = self.m.shape[0]
+        key = s[:, 2 * n + 10:].reshape(-1, 4, 3)[:, [1, 0, 3, 2]]  # (left foot, right foot, left hand, right hand)
+        key = torch.cat([key[..., :1], 2.0 * self.mid_y - key[..., 1:2], key[..., 2:]], dim=-1)
+        return torch.cat([s[:, :n] @ self.m.T, s[:, n:2 * n] @ self.m.T, s[:, 2 * n:2 * n + 10] * self.sign,
+                          key.reshape(-1, 12)], dim=1)
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """(N, 2 STATE_DIM) transitions -> their mirror images."""
+        return torch.cat([self.state(x[:, :STATE_DIM]), self.state(x[:, STATE_DIM:])], dim=1)
+
+    @staticmethod
+    def midline_y(stand_npz: Path | None = None) -> float:
+        """The robot's sagittal plane in the root frame (y): the mean of the left/right midpoints of the feet and hands in
+        the standing pose. -0.0698 m for USD 45586414 (feet, hands and shoulder motors agree to 0.1 mm); the walking
+        clips' feet average -0.056 (the retargeted gaits drift sideways), so the geometry is used, not the data."""
+        from dropbear_wbc.tasks.locomotion.stand import DEFAULT_STAND_NPZ
+
+        z = np.load(stand_npz or DEFAULT_STAND_NPZ, allow_pickle=True)
+        bn = [str(b) for b in z["body_names"]]
+        pos = torch.as_tensor(np.asarray(z["body_pos_w"][0], dtype=np.float32))
+        quat = torch.as_tensor(np.asarray(z["body_quat_w"][0, 0], dtype=np.float32))
+        key = pos[[bn.index(b) for b in FEET + HANDS]] - pos[0]
+        y = _quat_rotate_inverse(quat.expand(4, 4), key)[:, 1]
+        return float(0.25 * y.sum())
+
+
 class Discriminator(nn.Module):
     def __init__(self, dim: int, hidden=(1024, 512), mean: torch.Tensor | None = None, std: torch.Tensor | None = None):
         super().__init__()
@@ -136,7 +189,12 @@ class AmpStyleReward(ManagerTermBase):
 
     params: ``library`` (manifest path), ``ckpt_path`` (save / resume the discriminator; None = in memory only),
     ``update_every`` (env steps between discriminator updates; 24 = one rsl-rl rollout), ``num_updates`` and
-    ``batch`` (per update), ``lr``, ``grad_penalty``, ``buffer_size`` (robot transitions kept)."""
+    ``batch`` (per update), ``lr``, ``grad_penalty``, ``buffer_size`` (robot transitions kept), ``mirror``.
+
+    ``mirror`` (use with PPO symmetry augmentation, ``--symmetry``): the discriminator also learns from the mirror
+    images of the clips and of the robot's transitions, and the reward is the mean over a transition and its mirror,
+    so the style reward is left/right symmetric. Augmentation assumes a symmetric reward; with a one-sided
+    discriminator the policy's asymmetry grew (rsl-rl symmetry loss 2.3 -> 6.4 over 600 local iterations)."""
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
@@ -149,6 +207,12 @@ class AmpStyleReward(ManagerTermBase):
         lib = Path(p.get("library", DEFAULT_LIBRARY))
         lib = lib if lib.is_absolute() else Path(__file__).resolve().parents[4] / lib
         self._ref, report = load_reference_transitions(list(AMP_MOTORS), self._default.cpu().numpy(), lib, device=env.device)
+        self._mirror = None
+        if p.get("mirror"):
+            mid_y = FeatureMirror.midline_y()
+            self._mirror = FeatureMirror(amp_motor_mirror(), mid_y, device=env.device)
+            self._ref = torch.cat([self._ref, self._mirror(self._ref)], dim=0)
+            report["mirror"] = {"midline_y_m": round(mid_y, 4)}
         mean, std = self._ref.mean(0), self._ref.std(0).clamp_min(1e-3)
         self._disc = Discriminator(self._ref.shape[1], mean=mean, std=std).to(env.device)
         self._opt = torch.optim.Adam(self._disc.parameters(), lr=float(p.get("lr", 1e-4)))
@@ -206,17 +270,22 @@ class AmpStyleReward(ManagerTermBase):
 
     def __call__(self, env, library: str = DEFAULT_LIBRARY, ckpt_path: str | None = None, update_every: int = 24,
                  num_updates: int = 4, batch: int = 4096, lr: float = 1e-4, grad_penalty: float = 10.0,
-                 buffer_size: int = 500_000) -> torch.Tensor:
+                 buffer_size: int = 500_000, mirror: bool = False) -> torch.Tensor:
         s1 = self._state()
         reward = torch.zeros(env.num_envs, device=env.device)
         if self._prev is not None:
             valid = env.episode_length_buf > 1  # the stored state of a just-reset env is the pre-reset state
             trans = torch.cat([self._prev, s1], dim=1)
             with torch.no_grad():
-                d = self._disc(trans)
-            reward = torch.clamp(1.0 - 0.25 * (d - 1.0) ** 2, min=0.0) * valid.float()
+                reward = torch.clamp(1.0 - 0.25 * (self._disc(trans) - 1.0) ** 2, min=0.0)
+                if self._mirror is not None:
+                    mirrored = self._mirror(trans)
+                    reward = 0.5 * (reward + torch.clamp(1.0 - 0.25 * (self._disc(mirrored) - 1.0) ** 2, min=0.0))
+            reward = reward * valid.float()
             if bool(valid.any()):
                 self._store(trans[valid].detach())
+                if self._mirror is not None:
+                    self._store(mirrored[valid].detach())
         self._prev = s1.detach()
         self._calls += 1
         if self._calls % int(update_every) == 0 and self._buf_n >= batch:
