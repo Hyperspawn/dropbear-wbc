@@ -372,3 +372,26 @@ Local runs on the RTX 4080 laptop (512 envs, 50-iteration chunks with cooldowns;
   with symmetry, at 4096 envs for several thousand iterations.
 
 Video: `logs/reels/dropbear_amp_local.mp4`.
+
+**Continued (chunks 11-22, with `--symmetry`), stopped at iteration 26,407:**
+- **Symmetry made it worse at first.** The rsl-rl symmetry loss rose 2.3 → 6.4, and the style reward fell 0.17 → 0.10.
+  - Cause: the discriminator was one-sided, so the style reward wasn't mirror symmetric, which the augmentation
+    assumes.
+  - First, the 22-motor mirror map itself was checked against data (session-10 walking telemetry and three human
+    walking clips at a half-gait shift). It is right for every joint in the features.
+  - Fixed in c06416a: under `--symmetry`, the discriminator learns from mirrored clips and robot transitions, and the
+    reward averages a transition and its mirror. The robot's midline is y = −0.0698 m in the root frame.
+- **Arms at 26,407:** right shoulder 17° from the side (the human clips: 13-19°; at 490 iterations it overshot to
+  29°). Arm coupling corr 0.94-0.96 (was 0.99). The elbows are still straight.
+- **Push and terrain benchmark** (3 repeats; terrain cells need no fall and half the distance):
+
+| Walker | Standing / walking | 1.2 m/s, walking / standing | Terrain |
+|---|---|---|---:|
+| `vel_swing_x8` (start) | 83 / 90 % | 60 / 35 % | 26 |
+| `amp_local2/26407` | 77 / 91 % | 60 / **17 %** | 26 (better downhill and on stairs down, worse up stairs) |
+
+  - The filmed walking shove that the AMP walker survived (`logs/reels/dropbear_amp_local2.mp4`) was a lucky case:
+    walking survival is unchanged.
+  - Standing push recovery is worse. The 30 reference clips show no reaction to a shove, so the style reward penalizes
+    the recovery moves the old walker used. Push-recovery reference clips (`data/motions_gen/prompts/push_recovery_v1.json`,
+    text-to-motion) are being built for that.
