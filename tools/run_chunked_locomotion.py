@@ -121,6 +121,7 @@ def main() -> int:  # noqa: C901
     ap.add_argument("--stair_max_m", type=float, default=None, help="scripts/train_locomotion.py --stair_max_m")
     ap.add_argument("--slope_max", type=float, default=None, help="scripts/train_locomotion.py --slope_max")
     ap.add_argument("--arm_action_scale", type=float, default=None, help="scripts/train_locomotion.py --arm_action_scale")
+    ap.add_argument("--robot_mass_kg", type=float, default=None, help="scripts/train_locomotion.py --robot_mass_kg")
     ap.add_argument("--arm_swing_weight", type=float, default=None, help="scripts/train_locomotion.py --arm_swing_weight")
     ap.add_argument("--arm_swing_k", type=float, default=None, help="scripts/train_locomotion.py --arm_swing_k")
     ap.add_argument("--arm_abduction_weight", type=float, default=None,
@@ -241,6 +242,8 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--arm_action_scale={args.arm_action_scale}"]
             if args.arm_deviation_weight is not None:
                 cmd += [f"--arm_deviation_weight={args.arm_deviation_weight}"]
+            if args.robot_mass_kg is not None:
+                cmd += [f"--robot_mass_kg={args.robot_mass_kg}"]
             if args.arm_swing_weight is not None:
                 cmd += [f"--arm_swing_weight={args.arm_swing_weight}"]
             if args.arm_swing_k is not None:
