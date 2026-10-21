@@ -1,7 +1,7 @@
 """Adversarial Motion Prior (AMP) style reward for the velocity walker.
 
 A discriminator learns to tell short transitions of the robot's own motion apart from transitions of retargeted human
-motion clips (walking, turning, stepping, balancing; ``AMP_CLIPS``). The policy is rewarded for motion the
+motion clips (walking, turning, stepping, balancing, recovering from shoves; ``AMP_CLIPS``). The policy is rewarded for motion the
 discriminator takes for human, so arm swing, weight shift and balance reactions come from the data instead of
 hand-written gait terms (Peng et al. 2021, "AMP: Adversarial Motion Priors for Stylized Physics-Based Character
 Control"; the least-squares GAN form with a gradient penalty on the reference samples).
@@ -44,8 +44,13 @@ AMP_CLIPS: tuple[str, ...] = (
     *(f"motions_raw_tairantestbed_smpl_video_step_forward_{d}_level{i}_filter_amass_ts1.19_v6"
       for d in ("back", "forward") for i in (1, 2, 3, 4)),
     *(f"motions_raw_tairantestbed_smpl_video_single_foot_balance_level{i}_filter_amass_ts1.19_v6" for i in (1, 2, 3, 4)),
+    # recovering from shoves, bumps, a trip and a slip (generated from data/motions_gen/prompts/push_recovery_v1.json):
+    # without them the prior has no human reaction to a shove and standing push survival fell (docs/RESULTS.md)
+    *(f"{n}_ts1.19_v6" for n in ("push_left_step", "push_right_step", "push_back_step", "push_front_step",
+                                  "push_left_sway", "push_right_sway", "walk_bump_left", "walk_bump_right", "walk_trip",
+                                  "windmill_recover", "lean_recover_side", "slip_recover")),
 )
-DEFAULT_LIBRARY = "data/motions_v6ts/libraries/accepted_v7gen.json"
+DEFAULT_LIBRARY = "data/motions_v6ts/libraries/accepted_v8push.json"
 AMP_MOTORS: tuple[str, ...] = (
     "PG_left_leg_pitch", "PG_left_leg_roll", "LL_hip_joint", "LL_knee_actuator_joint", "LL_Revolute67", "LL_Revolute81",
     "PG_right_leg_pitch", "PG_right_leg_roll", "RL_hip_joint", "RL_knee_actuator_joint", "RL_Revolute67", "RL_Revolute81",

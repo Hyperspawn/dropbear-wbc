@@ -10,7 +10,7 @@
 #   GPU1  amp_x8         the same without symmetry, same seed (the A/B)
 #   GPU2  amp_x8_w2_sym  style weight 2.0 (style vs velocity tracking), symmetry
 #   GPU3  amp_v4_sym     stock shoulders (vel_swing_v4 final, hw_v4), style weight 1.0, symmetry
-# The bundle must ship the clips: pack_brev_bundle.py --manifest data/motions_v6ts/libraries/accepted_v7gen.json.
+# The bundle must ship the clips: pack_brev_bundle.py --manifest data/motions_v6ts/libraries/accepted_v8push.json (42 AMP clips incl. 12 push-recovery).
 # Usage on the box, after setup_instance.sh and unpacking s11_init.tgz into every ~/dbw<g>:  bash run_session11.sh
 set -u
 mkdir -p ~/runs
