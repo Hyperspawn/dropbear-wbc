@@ -129,6 +129,7 @@ def main() -> int:  # noqa: C901
     ap.add_argument("--arm_abduction_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_abduction_weight")
     ap.add_argument("--amp_weight", type=float, default=None, help="scripts/train_locomotion.py --amp_weight")
+    ap.add_argument("--symmetry", action="store_true", help="scripts/train_locomotion.py --symmetry")
     ap.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_deviation_weight")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train_locomotion.py --actuator_profile")
@@ -257,6 +258,8 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--arm_gate_tilt_rate={args.arm_gate_tilt_rate}"]
             if args.amp_weight is not None:
                 cmd += [f"--amp_weight={args.amp_weight}"]
+            if args.symmetry:
+                cmd += ["--symmetry"]
             if args.actuator_profile:
                 cmd += ["--actuator_profile", args.actuator_profile]
             if args.thermal_penalty is not None:
