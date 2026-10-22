@@ -15,6 +15,16 @@ COMMAND_NAME = "base_velocity"
 
 
 class LocomotionOnPolicyRunner(DropbearOnPolicyRunner):
+    def __init__(self, env, train_cfg: dict, log_dir: str | None = None, device: str = "cpu"):
+        super().__init__(env, train_cfg, log_dir, device)
+        if self.alg_cfg.get("symmetry_cfg"):  # the augmentation sees normalized observations (symmetry.py)
+            from dropbear_wbc.tasks.locomotion import symmetry
+
+            critic = self.privileged_obs_normalizer if self.privileged_obs_type is not None else self.obs_normalizer
+            symmetry.set_observation_normalizers(self.obs_normalizer, critic)
+            print(f"[LocomotionOnPolicyRunner] symmetry augmentation mirrors raw observations (normalizers: "
+                  f"{type(self.obs_normalizer).__name__} / {type(critic).__name__})", flush=True)
+
     def _command_cfg(self):
         try:
             return self.env.unwrapped.command_manager.get_term(COMMAND_NAME).cfg

@@ -100,3 +100,30 @@ def test_compute_symmetric_states_torch():
     torch.testing.assert_close(a4[5:], act, atol=1e-5, rtol=0)
     _, none = sym.compute_symmetric_states(obs=obs, actions=None)
     assert none is None
+
+
+def test_mirror_respects_the_observation_normalizer():
+    """rsl-rl stores normalized observations: the augmentation must un-normalize, mirror and re-normalize."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from dropbear_wbc.tasks.locomotion.symmetry import (DEFAULT_POLICY_LAYOUT, compute_symmetric_states,
+                                                        observation_mirror_matrix, set_observation_normalizers)
+
+    g = torch.Generator().manual_seed(0)
+    n = sum(d for _, d in DEFAULT_POLICY_LAYOUT)
+    norm = SimpleNamespace(_mean=torch.randn(1, n, generator=g), _std=torch.rand(1, n, generator=g) + 0.5, eps=1e-2)
+    m = torch.tensor(observation_mirror_matrix(DEFAULT_POLICY_LAYOUT), dtype=torch.float32)
+    raw = torch.randn(5, n, generator=g)
+    x = (raw - norm._mean) / (norm._std + norm.eps)
+    try:
+        set_observation_normalizers(policy=norm)
+        aug, _ = compute_symmetric_states(obs=x)
+        expected = (raw @ m.T - norm._mean) / (norm._std + norm.eps)
+        torch.testing.assert_close(aug[5:], expected, atol=1e-5, rtol=1e-5)
+        set_observation_normalizers()  # without a normalizer: the plain mirror of what it is given
+        aug, _ = compute_symmetric_states(obs=x)
+        torch.testing.assert_close(aug[5:], x @ m.T, atol=1e-5, rtol=1e-5)
+    finally:
+        set_observation_normalizers()

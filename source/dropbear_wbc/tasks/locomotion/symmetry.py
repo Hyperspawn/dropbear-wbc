@@ -153,6 +153,34 @@ def _mirror(x, mat: np.ndarray):
     return x @ t.T
 
 
+_NORMALIZERS: dict[str, object] = {}
+
+
+def set_observation_normalizers(policy=None, critic=None) -> None:
+    """Register the runner's rsl-rl ``EmpiricalNormalization`` modules (None clears).
+
+    rsl-rl stores NORMALIZED observations in the rollout and hands those to the augmentation. Mirroring a normalized
+    vector is only right if the running mean is itself mirror symmetric: M (x - mu) / s != (M x - mu) / s otherwise.
+    The walkers hold their arms asymmetrically, so the mirrored samples were wrong and the asymmetry fed on itself
+    (local AMP runs: rsl-rl symmetry loss 4 -> 10 in 500 iterations). With a normalizer registered the observation
+    is un-normalized, mirrored and re-normalized."""
+    _NORMALIZERS.clear()
+    if policy is not None:
+        _NORMALIZERS["policy"] = policy
+    if critic is not None:
+        _NORMALIZERS["critic"] = critic
+
+
+def _mirror_obs(x, mat: np.ndarray, obs_type: str):
+    norm = _NORMALIZERS.get(obs_type)
+    mean, std = getattr(norm, "_mean", None), getattr(norm, "_std", None)
+    if mean is None or std is None:  # no normalizer (or torch.nn.Identity)
+        return _mirror(x, mat)
+    scale = std.to(x.dtype) + float(getattr(norm, "eps", 0.0))
+    mean = mean.to(x.dtype)
+    return (_mirror(x * scale + mean, mat) - mean) / scale
+
+
 def compute_symmetric_states(obs=None, actions=None, env=None, obs_type: str = "policy"):
     """rsl-rl 2.3.3 ``data_augmentation_func``: returns ``cat([x, mirror(x)])`` for obs and actions."""
     import torch
@@ -164,7 +192,7 @@ def compute_symmetric_states(obs=None, actions=None, env=None, obs_type: str = "
         layout, scale = DEFAULT_POLICY_LAYOUT, None
     obs_aug = act_aug = None
     if obs is not None:
-        obs_aug = torch.cat([obs, _mirror(obs, observation_mirror_matrix(tuple(layout), scale))], dim=0)
+        obs_aug = torch.cat([obs, _mirror_obs(obs, observation_mirror_matrix(tuple(layout), scale), obs_type)], dim=0)
     if actions is not None:
         act_aug = torch.cat([actions, _mirror(actions, action_mirror_matrix(scale))], dim=0)
     return obs_aug, act_aug
