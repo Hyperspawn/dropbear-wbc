@@ -426,3 +426,12 @@ Video: `logs/reels/dropbear_amp_local.mp4`.
   --symmetry_mirror_loss=1.0`, `--clip_excess_arms=-1.0`, plus a style-weight-2 job.
   - Leg targets on the clamp (`--clip_excess_legs`) are untested; they matter for the stops on the real robot.
 - Videos: `logs/reels/dropbear_amp_elbows.mp4`.
+- **Leg targets on the clamp (run 5c: run 5b + `--clip_excess_legs=-0.5`, 490 iterations):**
+  - Ankle B (Revolute81) clamp time went to 0 %. Knee cranks went 38-40 % → 28-29 %.
+  - Push survival: standing 84 %, walking 88 %; at 1.2 m/s, walking 46 % and standing **27 %** (run 5b: 50 %).
+    Terrain 23.
+  - In walking, the explicit stop model measures **0 N·m** on the knee and ankle stops for all three walkers
+    (session 10, 5b, 5c). A target on the clamp is not a joint on its stop: the joint never gets there.
+  - Session 11 therefore keeps the arm penalty only.
+  - Arm-hip coupling fell to 0.1-0.3 in 5c (human 0.43-0.89) while the elbows moved 6-8°. Five hundred local
+    iterations are noisy; the cloud runs decide.
