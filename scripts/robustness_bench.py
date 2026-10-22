@@ -159,6 +159,9 @@ def main() -> int:  # noqa: C901
     if any(i.get("gait_shaping") for i in infos):
         margin = float(next((i["target_clamp_margin_deg"] for i in infos if i.get("target_clamp_margin_deg") is not None), 3.0))
         env_cfg.clamp_targets_to_limits(margin)
+    bind = next((i["ankle_roll_bind"] for i in reversed(infos) if i.get("ankle_roll_bind")), None)
+    if bind:  # the semantic ankle-roll clamp the policy was trained with
+        env_cfg.enable_ankle_roll_bind(bind["roll_limit_deg"], bind["margin_deg"])
     env_cfg.set_solver_iterations(*args.solver_iters)
     arm = {k: next((i[k] for i in infos if i.get(k) is not None), None) for k in ("arm_action_scale", "arm_deviation_weight")}
     if any(v is not None for v in arm.values()):  # the arm freedom the policy was trained with

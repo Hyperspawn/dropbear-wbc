@@ -238,6 +238,9 @@ class DeployConfig:
     target_clip: np.ndarray | None = None
     """(n, 2) motor position-target limits [rad] applied after scale + offset (sidecar ``target_clip``; the policy was
     trained with them). ``None`` = unclipped."""
+    ankle_roll_bind: dict | None = None
+    """Sidecar ``ankle_roll_bind`` ({roll_limit_deg, margin_deg}): after ``target_clip``, each ankle's calf-motor targets
+    are clamped to semantic |roll| <= limit - margin (``kinematics.ankle_bind``; pinned tie rods). ``None`` = off."""
     target_interp_steps: int = 0
     """Sidecar ``target_interp_steps``: the policy was trained with each new target ramped linearly over this many
     5 ms physics steps. The 50 Hz FSM cannot do it; the motor-side loop must (``tools/newton_bridge.py --target-ramp-ms``;
@@ -284,6 +287,11 @@ class DeployConfig:
         if self.target_clip is not None and (self.target_clip.shape != (n, 2)
                                              or np.any(self.target_clip[:, 0] > self.target_clip[:, 1])):
             raise ValueError(f"target_clip: expected ({n}, 2) with lo <= hi, got {self.target_clip.shape}")
+        if self.ankle_roll_bind is not None:
+            b = self.ankle_roll_bind
+            if not (isinstance(b, dict) and {"roll_limit_deg", "margin_deg"} <= set(b)
+                    and 0.0 < float(b["roll_limit_deg"]) - float(b["margin_deg"]) < 45.0):
+                raise ValueError(f"ankle_roll_bind: expected {{roll_limit_deg, margin_deg}} with 0 < limit - margin < 45, got {b}")
         if self.target_interp_steps < 0:
             raise ValueError(f"target_interp_steps must be >= 0, got {self.target_interp_steps}")
         from ..robots.hw_motor_specs import MOTION_MODE_LIMITS
@@ -529,6 +537,7 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
         action_offset=default_pol.copy() if offset is None else _vec(offset, n, "action_offset"),
         action_clip=None if d.get("action_clip") is None else float(d["action_clip"]),
         target_clip=None if d.get("target_clip") is None else np.asarray(d["target_clip"], dtype=float).reshape(-1, 2),
+        ankle_roll_bind=d.get("ankle_roll_bind") or None,
         target_interp_steps=int(d.get("target_interp_steps") or 0),
         observations=terms,
         policy_path=None if d.get("policy_onnx") is None else (base / d["policy_onnx"]).resolve(),

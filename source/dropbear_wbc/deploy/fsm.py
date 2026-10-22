@@ -295,6 +295,15 @@ class DeployController:
         if cfg.target_clip is not None:  # the training-time target clamp (sidecar ``target_clip``)
             q_pol = np.clip(q_pol, cfg.target_clip[:, 0], cfg.target_clip[:, 1])
         q_des[cfg.motor_ids] = q_pol
+        if cfg.ankle_roll_bind:  # pinned tie-rod ankle: semantic roll clamp, as in training (sidecar ankle_roll_bind)
+            if getattr(self, "_ankle_bind", None) is None:
+                from dropbear_wbc.kinematics.ankle_bind import AnkleRollBind
+
+                self._ankle_bind = AnkleRollBind(roll_limit_deg=cfg.ankle_roll_bind["roll_limit_deg"],
+                                                 margin_deg=cfg.ankle_roll_bind["margin_deg"])
+            q_des, hit = self._ankle_bind.clamp(q_des, return_mask=True)
+            if hit.any():
+                info.extra["ankle_roll_bind"] = hit.tolist()
         self._last_action = action
         info.policy_ms = 1e3 * (time.perf_counter() - t0)
         info.obs, info.action, info.motion_frame = obs, action, frame

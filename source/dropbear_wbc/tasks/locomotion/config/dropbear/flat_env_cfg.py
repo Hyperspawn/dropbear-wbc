@@ -421,6 +421,23 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
                 self.rewards.arm_abduction = RewTerm(func=R.joint_deviation_l1_gated, weight=float(abduction),
                                                      params={"asset_cfg": roll_cfg, **gate})
 
+    def enable_ankle_roll_bind(self, roll_limit_deg: float = 8.0, margin_deg: float = 1.0) -> None:
+        """Clamp the two calf-motor targets of each ankle so the semantic ankle roll stays within
+        ``roll_limit_deg - margin_deg`` (pinned tie-rod top ends bind at about +-8 deg; docs/ROADMAP.md). Applied after
+        the per-motor clip, pitch kept (``kinematics.ankle_bind``). Deploy applies the same clamp from the sidecar's
+        ``ankle_roll_bind``; play_locomotion / robustness_bench re-apply it from run_info."""
+        import dataclasses
+
+        from dropbear_wbc.tasks.locomotion.mdp.actions import AnkleBindJointPositionActionCfg
+
+        old = self.actions.joint_pos
+        new = AnkleBindJointPositionActionCfg(asset_name=old.asset_name, joint_names=old.joint_names)
+        for f in dataclasses.fields(old):
+            if f.name != "class_type":
+                setattr(new, f.name, getattr(old, f.name))
+        new.ankle_roll_limit_deg, new.ankle_roll_margin_deg = float(roll_limit_deg), float(margin_deg)
+        self.actions.joint_pos = new
+
     def enable_clip_excess_penalty(self, arms: float = 0.0, legs: float = 0.0) -> None:
         """Penalise motor position targets beyond the target clamp (``mdp.target_beyond_clip``, rad; weights <= 0) on the
         10 arm motors and the 12 leg motors. Needs the clamp (gait shaping with ``clamp_targets``)."""

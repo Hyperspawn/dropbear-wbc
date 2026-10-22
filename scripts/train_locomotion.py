@@ -83,6 +83,10 @@ parser.add_argument("--symmetry_mirror_loss", type=float, default=0.0,
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
+parser.add_argument("--ankle_roll_bind_deg", type=float, default=0.0,
+                    help="> 0: clamp each ankle's calf-motor targets to semantic |roll| <= this - --ankle_roll_bind_margin_deg "
+                         "(pinned tie rods bind at about 8; kinematics.ankle_bind). Applied after the per-motor clamp.")
+parser.add_argument("--ankle_roll_bind_margin_deg", type=float, default=1.0, help="margin inside --ankle_roll_bind_deg")
 parser.add_argument("--target_clamp_margin_deg", type=float, default=3.0,
                     help="gait-shaped runs: motor targets clipped to the hard limits +- this [deg]; 3 pressed the knees "
                          "into their stops at 26 N*m (docs/ISSUES.md #23), use 0 for new runs")
@@ -177,6 +181,8 @@ def main() -> int:
         env_cfg.enable_gait_shaping(knee_stance=-1.0 if args.gait_v2 else 0.0, clamp_margin_deg=args.target_clamp_margin_deg)
     if args.clip_excess_arms or args.clip_excess_legs:  # after gait shaping, which sets the clamp
         env_cfg.enable_clip_excess_penalty(arms=args.clip_excess_arms, legs=args.clip_excess_legs)
+    if args.ankle_roll_bind_deg > 0:  # after gait shaping, which sets the per-motor clamp
+        env_cfg.enable_ankle_roll_bind(args.ankle_roll_bind_deg, args.ankle_roll_bind_margin_deg)
     if args.terrain == "rough":
         env_cfg.enable_rough_terrain(  # after gait shaping: re-points the swing-height term to the ground scan
             **({} if args.stair_max_m is None else {"stair_max_m": float(args.stair_max_m)}),
@@ -298,6 +304,8 @@ def main() -> int:
         "amp_weight": args.amp_weight, "amp_grad_penalty": args.amp_grad_penalty, "symmetry": bool(args.symmetry),
         "symmetry_mirror_loss": float(args.symmetry_mirror_loss),
         "clip_excess_arms": float(args.clip_excess_arms), "clip_excess_legs": float(args.clip_excess_legs),
+        "ankle_roll_bind": ({"roll_limit_deg": float(args.ankle_roll_bind_deg), "margin_deg": float(args.ankle_roll_bind_margin_deg)}
+                            if args.ankle_roll_bind_deg > 0 else None),
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

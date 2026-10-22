@@ -101,6 +101,10 @@ def export_velocity_policy(env, runner, out_dir: str | Path, *, task: str, check
         # motor position-target clamp [rad] per joint (lo, hi), applied AFTER scale + offset (gait-shaped runs)
         "target_clip": ([[float(term._clip[0, i, 0]), float(term._clip[0, i, 1])] for i in range(len(motor_names))]
                         if getattr(getattr(term, "cfg", None), "clip", None) is not None else None),
+        # semantic ankle-roll clamp on the calf-motor targets, applied after target_clip (kinematics.ankle_bind)
+        "ankle_roll_bind": ({"roll_limit_deg": float(term.cfg.ankle_roll_limit_deg),
+                             "margin_deg": float(term.cfg.ankle_roll_margin_deg)}
+                            if hasattr(getattr(term, "cfg", None), "ankle_roll_limit_deg") else None),
         "observations": [
             {"name": t["name"], "func": OBS_FUNC[t["name"]], "dim": t["dim"], "scale": 1.0, "clip": None,
              "history_length": 1, "params": {}}
