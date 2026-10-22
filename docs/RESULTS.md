@@ -395,3 +395,34 @@ Video: `logs/reels/dropbear_amp_local.mp4`.
   - Standing push recovery is worse. The 30 reference clips show no reaction to a shove, so the style reward penalizes
     the recovery moves the old walker used. Push-recovery reference clips (`data/motions_gen/prompts/push_recovery_v1.json`,
     text-to-motion) are being built for that.
+
+**Runs 3-5 (2026-10-22 05:00-10:15, local, from the session-10 swing walker, 42 clips incl. 12 push recoveries):**
+- **Symmetry needed three fixes:**
+  - a symmetric discriminator (c06416a);
+  - mirroring raw rather than normalized observations: rsl-rl stores normalized ones (c3e64f7);
+  - the mirror loss (e405a59): augmentation alone cannot repair a lopsided warm start, because the mirrored samples
+    are clipped by PPO.
+  - With all three (run 5), the gait asymmetry index (mirrored motors vs half a gait later, relative to each joint's
+    motion) went legs 0.36 → 0.26, arms 1.6 → 0.4-0.8.
+- **The arms were never free.** In every session-10 walker both elbow targets sit on the clamp's 0° bound and both
+  shoulder-roll targets on its +10° bound on 100 % of steps. A target past the clamp carries no gradient, so no style
+  reward could reach those joints. The legs do it part of the time: knee cranks on +30° on 29-48 % of steps,
+  Revolute81 on -50° on 30-43 %.
+  - Fix: `--clip_excess_arms` (efcc1ec), a penalty on targets past the clamp.
+
+| Walker | Standing / walking | 1.2 m/s walking / standing | Terrain | Asymmetry legs / arms | Elbow motion | Shoulder out | Arm vs hip corr |
+|---|---|---|---:|---|---|---|---|
+| Human walking clips | | | | | 5-7° | 13-19° | 0.43-0.89 |
+| `vel_swing_x8` (start) | 83 / 90 % | 60 / 35 % | 26 | 0.36 / 1.6 | < 1° | 9 / 5° | 0.99 |
+| run 5, 26064 (symmetric, arms pinned) | 75 / 86 % | 44 / 35 % | 25 | 0.26 / 0.38 | < 1° | 9 / 9° | 0.80-0.93 |
+| run 5b, 26799 (+ arm limit fix) | **88** / 88 % | 46 / **50** % | 23 | 0.26 / 0.76 | **4.5-5.7°** | 30 / 34° | **0.66-0.70** |
+
+- **What this shows:** freeing the arms helps balance. Standing push survival is the best so far. Elbow motion and
+  arm-leg coupling are now in the human range.
+- **What it doesn't show:** a natural posture. The arms are held too wide (30-34° vs 13-19°) and swing only 4-6°.
+  Locally the discriminator dominates (style reward ~0.1), so the style signal is weak. Walking-shove survival and
+  terrain are lower than at the start.
+- **Session 11** (`tools/brev/run_session11.sh`) uses every fix: symmetric AMP, push clips, `--symmetry
+  --symmetry_mirror_loss=1.0`, `--clip_excess_arms=-1.0`, plus a style-weight-2 job.
+  - Leg targets on the clamp (`--clip_excess_legs`) are untested; they matter for the stops on the real robot.
+- Videos: `logs/reels/dropbear_amp_elbows.mp4`.

@@ -11,6 +11,8 @@
 #   GPU1  amp_x8         the same without symmetry, same seed (the A/B)
 #   GPU2  amp_x8_w2_sym  style weight 2.0 (style vs velocity tracking), symmetry
 #   GPU3  amp_v4_sym     stock shoulders (vel_swing_v4 final, hw_v4), style weight 1.0, symmetry
+# --clip_excess_arms=-1.0 (efcc1ec): the session-10 elbows and shoulder rolls command past their hard limits on every
+# step and sit frozen on the target clamp; locally the penalty freed them (elbows 4-9 deg, moving 5 deg per stride).
 # The bundle must ship the clips: pack_brev_bundle.py --manifest data/motions_v6ts/libraries/accepted_v8push.json (42 AMP clips incl. 12 push-recovery).
 # Usage on the box, after setup_instance.sh and unpacking s11_init.tgz into every ~/dbw<g>:  bash run_session11.sh
 set -u
@@ -38,7 +40,7 @@ queue() {  # gpu, then job lines on stdin; several jobs on one GPU run in parall
 }
 ARMS="--arm_action_scale=0.3 --arm_deviation_weight=-0.02"
 X8LOCO=$(echo $LOCO | sed 's/--actuator_profile hw_v4/--actuator_profile hw_v4_arms/')
-COMMON="$SAFE --thermal_penalty=-2e-4 --push_velocity=0.6 $ARMS"
+COMMON="$SAFE --thermal_penalty=-2e-4 --push_velocity=0.6 $ARMS --clip_excess_arms=-1.0"
 line dbw0 amp_x8_sym $L --run_name amp_x8_sym --resume_run 2026-10-22_00-00-00_amp_x8_sym --seed 1101 $X8LOCO $COMMON --amp_weight=1.0 --symmetry --symmetry_mirror_loss=1.0 | queue 0
 line dbw1 amp_x8 $L --run_name amp_x8 --resume_run 2026-10-22_00-00-01_amp_x8 --seed 1101 $X8LOCO $COMMON --amp_weight=1.0 | queue 1
 line dbw2 amp_x8_w2_sym $L --run_name amp_x8_w2_sym --resume_run 2026-10-22_00-00-02_amp_x8_w2_sym --seed 1121 $X8LOCO $COMMON --amp_weight=2.0 --symmetry --symmetry_mirror_loss=1.0 | queue 2
