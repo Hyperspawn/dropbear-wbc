@@ -73,6 +73,10 @@ parser.add_argument("--amp_grad_penalty", type=float, default=10.0)
 parser.add_argument("--symmetry", action="store_true",
                     help="left/right mirror data augmentation in PPO (tasks/locomotion/symmetry.py, calibration-derived "
                          "motor mirror): what the policy learns on one side it also learns on the other")
+parser.add_argument("--symmetry_mirror_loss", type=float, default=0.0,
+                    help="with --symmetry: weight of rsl-rl's mirror loss, MSE(pi(mirror o), mirror pi(o)) (e.g. 1.0). "
+                         "Augmentation alone keeps a symmetric policy symmetric but cannot repair an asymmetric warm "
+                         "start: the mirrored samples reuse the original action's old log-prob and get clipped")
 parser.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="joint_deviation_arms weight (default -0.2; 0 removes it); pass as --arm_deviation_weight=-0.02")
 parser.add_argument("--slope_max", type=float, default=None, help="rough terrain: steepest slope, rise/run (default 0.2)")
@@ -201,7 +205,8 @@ def main() -> int:
         from isaaclab_rl.rsl_rl import RslRlSymmetryCfg
 
         agent_cfg.algorithm.symmetry_cfg = RslRlSymmetryCfg(
-            use_data_augmentation=True,
+            use_data_augmentation=True, use_mirror_loss=args.symmetry_mirror_loss > 0,
+            mirror_loss_coeff=float(args.symmetry_mirror_loss),
             data_augmentation_func="dropbear_wbc.tasks.locomotion.symmetry:compute_symmetric_states")
     agent_cfg.run_name = args.run_name
     agent_cfg.device = args.device
@@ -286,6 +291,7 @@ def main() -> int:
         "arm_abduction_weight": args.arm_abduction_weight, "arm_gate_tilt_rate": args.arm_gate_tilt_rate,
         "arm_gate_hold_s": args.arm_gate_hold_s,
         "amp_weight": args.amp_weight, "amp_grad_penalty": args.amp_grad_penalty, "symmetry": bool(args.symmetry),
+        "symmetry_mirror_loss": float(args.symmetry_mirror_loss),
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),
