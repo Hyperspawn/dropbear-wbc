@@ -130,6 +130,8 @@ def main() -> int:  # noqa: C901
                     help="scripts/train_locomotion.py --arm_abduction_weight")
     ap.add_argument("--amp_weight", type=float, default=None, help="scripts/train_locomotion.py --amp_weight")
     ap.add_argument("--symmetry", action="store_true", help="scripts/train_locomotion.py --symmetry")
+    ap.add_argument("--clip_excess_arms", type=float, default=None, help="scripts/train_locomotion.py --clip_excess_arms")
+    ap.add_argument("--clip_excess_legs", type=float, default=None, help="scripts/train_locomotion.py --clip_excess_legs")
     ap.add_argument("--symmetry_mirror_loss", type=float, default=None,
                     help="scripts/train_locomotion.py --symmetry_mirror_loss")
     ap.add_argument("--arm_deviation_weight", type=float, default=None,
@@ -262,6 +264,9 @@ def main() -> int:  # noqa: C901
                 cmd += [f"--amp_weight={args.amp_weight}"]
             if args.symmetry:
                 cmd += ["--symmetry"]
+            for k in ("clip_excess_arms", "clip_excess_legs"):
+                if getattr(args, k) is not None:
+                    cmd += [f"--{k}={getattr(args, k)}"]
             if args.symmetry_mirror_loss is not None:
                 cmd += [f"--symmetry_mirror_loss={args.symmetry_mirror_loss}"]
             if args.actuator_profile:

@@ -73,6 +73,9 @@ parser.add_argument("--amp_grad_penalty", type=float, default=10.0)
 parser.add_argument("--symmetry", action="store_true",
                     help="left/right mirror data augmentation in PPO (tasks/locomotion/symmetry.py, calibration-derived "
                          "motor mirror): what the policy learns on one side it also learns on the other")
+parser.add_argument("--clip_excess_arms", type=float, default=0.0,
+                    help="weight (<= 0) on arm motor targets beyond the target clamp [rad] (mdp.target_beyond_clip): the session-10 arms sat past their stops on every step; pass as --clip_excess_arms=-1")
+parser.add_argument("--clip_excess_legs", type=float, default=0.0, help="the same for the 12 leg motors")
 parser.add_argument("--symmetry_mirror_loss", type=float, default=0.0,
                     help="with --symmetry: weight of rsl-rl's mirror loss, MSE(pi(mirror o), mirror pi(o)) (e.g. 1.0). "
                          "Augmentation alone keeps a symmetric policy symmetric but cannot repair an asymmetric warm "
@@ -172,6 +175,8 @@ def main() -> int:
                                     clamp_margin_deg=args.target_clamp_margin_deg)
     elif args.gait_shaping or args.gait_v2:
         env_cfg.enable_gait_shaping(knee_stance=-1.0 if args.gait_v2 else 0.0, clamp_margin_deg=args.target_clamp_margin_deg)
+    if args.clip_excess_arms or args.clip_excess_legs:  # after gait shaping, which sets the clamp
+        env_cfg.enable_clip_excess_penalty(arms=args.clip_excess_arms, legs=args.clip_excess_legs)
     if args.terrain == "rough":
         env_cfg.enable_rough_terrain(  # after gait shaping: re-points the swing-height term to the ground scan
             **({} if args.stair_max_m is None else {"stair_max_m": float(args.stair_max_m)}),
@@ -292,6 +297,7 @@ def main() -> int:
         "arm_gate_hold_s": args.arm_gate_hold_s,
         "amp_weight": args.amp_weight, "amp_grad_penalty": args.amp_grad_penalty, "symmetry": bool(args.symmetry),
         "symmetry_mirror_loss": float(args.symmetry_mirror_loss),
+        "clip_excess_arms": float(args.clip_excess_arms), "clip_excess_legs": float(args.clip_excess_legs),
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),

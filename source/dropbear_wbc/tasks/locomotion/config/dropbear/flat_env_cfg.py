@@ -421,6 +421,24 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
                 self.rewards.arm_abduction = RewTerm(func=R.joint_deviation_l1_gated, weight=float(abduction),
                                                      params={"asset_cfg": roll_cfg, **gate})
 
+    def enable_clip_excess_penalty(self, arms: float = 0.0, legs: float = 0.0) -> None:
+        """Penalise motor position targets beyond the target clamp (``mdp.target_beyond_clip``, rad; weights <= 0) on the
+        10 arm motors and the 12 leg motors. Needs the clamp (gait shaping with ``clamp_targets``)."""
+        from isaaclab.managers import RewardTermCfg as RewTerm
+
+        from dropbear_wbc.robots.dropbear_names import ARM_MOTORS, MOTOR_NAMES
+        from dropbear_wbc.tasks.locomotion.mdp import rewards as R
+
+        if not getattr(self.actions.joint_pos, "clip", None):
+            raise ValueError("enable_clip_excess_penalty needs the target clamp (clamp_targets_to_limits)")
+        legs_ = tuple(n for n in MOTOR_NAMES if n not in ARM_MOTORS)
+        if arms:
+            self.rewards.arm_target_beyond_clip = RewTerm(func=R.target_beyond_clip, weight=float(arms),
+                                                          params={"joint_names": tuple(ARM_MOTORS)})
+        if legs:
+            self.rewards.leg_target_beyond_clip = RewTerm(func=R.target_beyond_clip, weight=float(legs),
+                                                          params={"joint_names": legs_})
+
     def enable_amp(self, weight: float = 1.0, ckpt_path: str | None = None, library: str | None = None,
                    grad_penalty: float = 10.0, lr: float = 1e-4, mirror: bool = False) -> None:
         """Adversarial motion prior (``tasks.locomotion.amp``): a discriminator trained online against retargeted

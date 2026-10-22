@@ -369,3 +369,28 @@ def joint_deviation_l1_gated(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, 
     ids = asset_cfg.joint_ids
     dev = torch.sum(torch.abs(asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]), dim=1)
     return dev * calm_gate(env, tilt_rate_threshold, hold_s)
+
+
+def target_beyond_clip(env: ManagerBasedRLEnv, joint_names: tuple[str, ...] | None = None,
+                       action_name: str = "joint_pos") -> torch.Tensor:
+    """Sum over the selected motors of how far [rad] the policy's position target lies outside the target clamp
+    (``clamp_targets_to_limits``: the motor hard limits), before the clamp.
+
+    A target past the clamp moves nothing, so small changes to it carry no gradient: the session-10 walkers held both
+    elbows below 0 deg and both shoulder rolls above +10 deg on 100 % of steps, arms frozen at the stops, out of reach
+    of any style reward. This term gives the way back into the working range (and keeps the motors off their stops)."""
+    term = env.action_manager.get_term(action_name)
+    clip = getattr(term, "_clip", None)
+    if clip is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    target = term.raw_actions * term._scale + term._offset  # noqa: SLF001 (Isaac Lab JointAction internals)
+    excess = torch.relu(target - clip[..., 1]) + torch.relu(clip[..., 0] - target)
+    if joint_names is not None:
+        cache = getattr(env, "_beyond_clip_ids", {})
+        key = (action_name, tuple(joint_names))
+        if key not in cache:
+            names = list(term._joint_names)  # noqa: SLF001
+            cache[key] = torch.tensor([names.index(n) for n in joint_names], device=env.device)
+            env._beyond_clip_ids = cache
+        excess = excess[:, cache[key]]
+    return excess.sum(dim=1)
