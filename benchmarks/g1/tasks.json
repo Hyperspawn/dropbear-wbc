@@ -1,0 +1,32 @@
+{
+  "scene": {
+    "name": "g1_indoor_v1",
+    "description": "Two rooms joined by a doorway, a table with red/blue/green blocks, a circular target zone, a 10 cm step, a 10 degree slope and a standing avatar.",
+    "perception_mode": "privileged",
+    "entities": ["table", "block_red", "block_blue", "block_green", "target_zone", "step", "slope", "person", "start_pose"]
+  },
+  "skills_available": ["walk_to", "turn_to", "stand", "get_up", "wave", "push_object", "step_over", "play_motion"],
+  "tasks": [
+    {"id": "t01", "goal": "Walk to the table.", "plan": ["walk_to(table)"], "success": "base within 0.6 m of table, 0 falls"},
+    {"id": "t02", "goal": "Walk to the table and stop.", "plan": ["walk_to(table)", "stand(3)"], "success": "within 0.6 m of table, base speed < 0.05 m/s for 3 s"},
+    {"id": "t03", "goal": "Go to the person and wave, then come back.", "plan": ["walk_to(person)", "wave()", "walk_to(start_pose)"], "success": "visited person within 1.2 m, wave completed, back within 0.5 m of start_pose"},
+    {"id": "t04", "goal": "Push the red block into the target zone.", "plan": ["walk_to(block_red)", "push_object(block_red, target_zone)"], "success": "block_red center inside target_zone"},
+    {"id": "t05", "goal": "Walk to the table and push the red block into the zone.", "plan": ["walk_to(table)", "push_object(block_red, target_zone)"], "success": "block_red center inside target_zone"},
+    {"id": "t06", "goal": "Push the blue block into the target zone, leave the red one.", "plan": ["walk_to(block_blue)", "push_object(block_blue, target_zone)"], "success": "block_blue in zone, block_red moved < 0.1 m"},
+    {"id": "t07", "goal": "Push both the red and the green blocks into the zone.", "plan": ["walk_to(block_red)", "push_object(block_red, target_zone)", "walk_to(block_green)", "push_object(block_green, target_zone)"], "success": "block_red and block_green in zone"},
+    {"id": "t08", "goal": "Step over the step and stand on the other side.", "plan": ["step_over(step)", "stand(3)"], "success": "base past the step by > 0.3 m, 0 falls"},
+    {"id": "t09", "goal": "Walk up the slope.", "plan": ["walk_to(slope_top)"], "success": "base within 0.5 m of slope top, 0 falls"},
+    {"id": "t10", "goal": "Go to the other room.", "plan": ["walk_to(doorway)", "walk_to(room_b_center)"], "success": "base within 0.8 m of room_b_center"},
+    {"id": "t11", "goal": "Go to the other room, wave at the person, return.", "plan": ["walk_to(doorway)", "walk_to(person)", "wave()", "walk_to(start_pose)"], "success": "visited person, wave completed, back within 0.5 m of start_pose"},
+    {"id": "t12", "goal": "Face the table.", "plan": ["turn_to(table)"], "success": "heading error to table < 10 deg"},
+    {"id": "t13", "goal": "Turn around and walk back to where you started.", "plan": ["turn_to(start_pose)", "walk_to(start_pose)"], "success": "within 0.5 m of start_pose"},
+    {"id": "t14", "goal": "Stand still for 30 seconds.", "plan": ["stand(30)"], "success": "no fall, base drift < 0.2 m"},
+    {"id": "t15", "goal": "Get up after being knocked down, then walk to the table.", "plan": ["get_up()", "walk_to(table)"], "success": "starts prone/supine, standing within 10 s, then within 0.6 m of table", "initial_condition": "prone_or_supine"},
+    {"id": "t16", "goal": "Walk to the table; if you fall, get up and keep going.", "plan": ["walk_to(table)"], "success": "within 0.6 m of table; any fall followed by get_up and re-plan", "recovery_expected": true, "perturbation": "push_impulse_mid_route"},
+    {"id": "t17", "goal": "Do the dance clip, then walk to the person.", "plan": ["play_motion(dance)", "walk_to(person)"], "success": "motion completed without fall, within 1.2 m of person"},
+    {"id": "t18", "goal": "Wave at the person, then push the blue block into the zone.", "plan": ["walk_to(person)", "wave()", "walk_to(block_blue)", "push_object(block_blue, target_zone)"], "success": "wave completed, block_blue in zone"},
+    {"id": "t19", "goal": "Walk to the green block, then the table, then the person.", "plan": ["walk_to(block_green)", "walk_to(table)", "walk_to(person)"], "success": "each waypoint reached in order within 0.8 m"},
+    {"id": "t20", "goal": "Go past the step, turn around, come back, and wave.", "plan": ["step_over(step)", "turn_to(start_pose)", "step_over(step)", "wave()"], "success": "crossed step twice, 0 unrecovered falls, wave completed"}
+  ],
+  "pass_criteria": {"tasks": 20, "seeds_per_task": 10, "min_success_rate": 0.7, "human_input": "none", "log_failure_reason": true}
+}
