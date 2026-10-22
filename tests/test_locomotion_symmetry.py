@@ -106,7 +106,7 @@ def test_mirror_respects_the_observation_normalizer():
     """rsl-rl stores normalized observations: the augmentation must un-normalize, mirror and re-normalize."""
     from types import SimpleNamespace
 
-    import torch
+    torch = pytest.importorskip("torch")
 
     from dropbear_wbc.tasks.locomotion.symmetry import (DEFAULT_POLICY_LAYOUT, compute_symmetric_states,
                                                         observation_mirror_matrix, set_observation_normalizers)
@@ -127,3 +127,51 @@ def test_mirror_respects_the_observation_normalizer():
         torch.testing.assert_close(aug[5:], x @ m.T, atol=1e-5, rtol=1e-5)
     finally:
         set_observation_normalizers()
+
+
+def _stand_root_positions():
+    from pathlib import Path
+
+    npz = Path(sym.__file__).resolve().parents[4] / "data" / "motions" / "smoke" / "dropbear_static_stand.npz"
+    if not npz.exists():
+        pytest.skip("standing reference not generated")
+    z = np.load(npz, allow_pickle=True)
+    names = [str(b) for b in z["body_names"]]
+    pos = np.asarray(z["body_pos_w"][0], dtype=float)
+    w, x, y, zq = np.asarray(z["body_quat_w"][0, 0], dtype=float)
+    rot = np.array([[1 - 2 * (y * y + zq * zq), 2 * (x * y - w * zq), 2 * (x * zq + w * y)],
+                    [2 * (x * y + w * zq), 1 - 2 * (x * x + zq * zq), 2 * (y * zq - w * x)],
+                    [2 * (x * zq - w * y), 2 * (y * zq + w * x), 1 - 2 * (x * x + y * y)]])
+    return names, (pos - pos[0]) @ rot
+
+
+def test_sagittal_plane_reflects_every_left_right_body_pair():
+    names, p = _stand_root_positions()
+    pairs = [(i, names.index("R" + n[1:])) for i, n in enumerate(names)
+             if n[:2] in ("LL", "LH") and "R" + n[1:] in names]
+    assert len(pairs) >= 20
+    li, ri = (np.array(v) for v in zip(*pairs))
+    mirrored = sym.reflect_root_positions(p[li])
+    assert np.abs(mirrored[:, 1] - p[ri, 1]).max() < 1e-3  # 0.34 mm max over 24 pairs (midpoints within 0.17 mm)
+    assert np.abs(sym.reflect_root_positions(p[li], 0.0)[:, 1] - p[ri, 1]).min() > 0.1  # y = 0 is the wrong plane
+
+
+def test_sagittal_plane_matches_amp_feature_mirror():
+    pytest.importorskip("torch")
+    from dropbear_wbc.tasks.locomotion.amp import FeatureMirror
+
+    assert abs(FeatureMirror.midline_y() - sym.SAGITTAL_PLANE_Y) < 5e-4
+
+
+def test_reflect_root_positions_is_involution_and_torch_ok():
+    p = np.array([[0.1, 0.03, -0.9], [0.0, -0.17, 0.2]])
+    assert np.allclose(sym.reflect_root_positions(sym.reflect_root_positions(p)), p)
+    torch = pytest.importorskip("torch")
+    t = torch.tensor(p)
+    assert torch.allclose(sym.reflect_root_positions(t), torch.tensor(sym.reflect_root_positions(p)))
+    assert torch.equal(t, torch.tensor(p))  # input untouched
+
+
+def test_positional_term_is_refused_with_plane_hint():
+    with pytest.raises(KeyError, match="SAGITTAL_PLANE_Y"):
+        sym.observation_mirror_matrix(layout=(("base_lin_vel", 3), ("feet_pos_b", 6)))

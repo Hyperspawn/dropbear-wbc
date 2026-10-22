@@ -37,6 +37,26 @@ BASE_TERM_SIGNS: dict[str, tuple[float, ...]] = {
 }
 """Per-component sign of the root-frame observation terms under the x-z mirror."""
 
+SAGITTAL_PLANE_Y = -0.0698
+"""The robot's mirror plane in the root frame, y [m] (USD 45586414, standing pose). The root frame is NOT on the
+midline: all 24 L/R body pairs (feet, hands, shoulders, tie-rods, ...) have midpoints within 0.17 mm of this plane,
+and the mass-weighted COM is 0.6 mm off it. ``BASE_TERM_SIGNS`` holds only frame vectors (velocities, gravity,
+commands), which mirror about any plane. A root-frame POSITION (feet, hands, a height-scan grid) must reflect about
+this plane with :func:`reflect_root_positions`; reflecting it about y = 0 puts it 0.14 m off. Positional terms are
+affine, so :func:`observation_mirror_matrix` refuses them."""
+
+POSITION_TERM_HINTS: tuple[str, ...] = ("pos_b", "_pos_root", "height_scan", "feet_pos", "hand_pos", "body_pos")
+"""Substrings of observation term names that denote root-frame positions (refused with a pointer to the plane)."""
+
+
+def reflect_root_positions(p, mid_y: float = SAGITTAL_PLANE_Y):
+    """Reflect root-frame positions ``(..., 3)`` about the sagittal plane: y -> 2 mid_y - y (numpy or torch).
+
+    Does not swap left/right bodies; the caller reorders partner rows."""
+    out = p.clone() if hasattr(p, "clone") else np.array(p, dtype=float, copy=True)
+    out[..., 1] = 2.0 * mid_y - p[..., 1]
+    return out
+
 MOTOR_TERMS: tuple[str, ...] = ("joint_pos", "joint_vel")
 ACTION_TERMS: tuple[str, ...] = ("actions",)
 
@@ -107,6 +127,10 @@ def observation_mirror_matrix(layout=DEFAULT_POLICY_LAYOUT, action_scale=None,
             blocks.append(motor_mirror_matrix(calibration))
         elif name in ACTION_TERMS and dim == NUM_MOTORS:
             blocks.append(action_mirror_matrix(action_scale, calibration))
+        elif any(h in name for h in POSITION_TERM_HINTS):
+            raise KeyError(f"observation term {name!r} is a root-frame position: its mirror is affine (reflect about "
+                           f"SAGITTAL_PLANE_Y = {SAGITTAL_PLANE_Y} m with reflect_root_positions and swap partners), "
+                           "not a sign matrix")
         else:
             raise KeyError(f"no mirror rule for observation term {name!r} (dim {dim})")
     n = sum(b.shape[0] for b in blocks)
