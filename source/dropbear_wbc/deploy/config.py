@@ -195,6 +195,14 @@ class FsmCfg:
         imu_frozen_steps: leave/refuse ``POLICY`` when gyro+accel are bit-identical for this many consecutive
             new-tick control steps (a sensor left in SLEEP returns a constant register image, notes/37). 0 = off
             (default: a fixed-base noise-free simulation is legitimately constant). Use ~25 (0.5 s) on hardware.
+        state_gate: LowState freshness gate (item 236, notes/202): refuse/leave ``POLICY`` on a stale or
+            tick-regressed LowState (see :meth:`DeployController.observe_state`). Independent of ``imu_gate``.
+        state_max_age_s: stale threshold [s] for transport age, tick re-use time and tick lag; ``None`` keeps only
+            the tick-regression check. Default 0.030 = 1.5 policy steps at 50 Hz (box loopback p99 1.4-5.9 ms,
+            notes/48; with CONFLATE the first read after a stall is 0.6-2.4 ms old, notes/202).
+        state_stale_grace_steps: consecutive stale steps in ``POLICY`` that re-send the last policy target before
+            the FSM goes to ``PASSIVE`` (1 = one missed 50 Hz frame is bridged).
+        state_drift_ppm: clock drift between the HAL tick and the controller clock absorbed by the lag baseline.
         motor_mode_gate: L4 gate on ``LowState.motor.mode`` (notes/46 F2, item 157). In MoveToDefault / Hold /
             Policy, once the robot side has armed a gated motor (reported mode 1), that motor reporting mode != 1
             for more than ``motor_mode_grace_steps`` consecutive controller steps sends the FSM to Passive and
@@ -216,6 +224,10 @@ class FsmCfg:
     imu_gate: bool = True
     imu_max_age_s: float | None = 0.060
     imu_frozen_steps: int = 0
+    state_gate: bool = True
+    state_max_age_s: float | None = 0.030
+    state_stale_grace_steps: int = 1
+    state_drift_ppm: float = 500.0
     motor_mode_gate: bool = True
     motor_mode_grace_steps: int = 1
     motor_mode_arm_timeout_s: float | None = 0.5
@@ -407,6 +419,14 @@ def _fsm_from(d: dict | None) -> FsmCfg:
         fsm.imu_frozen_steps = int(d["imu_frozen_steps"])
         if fsm.imu_frozen_steps < 0:
             raise ValueError(f"fsm.imu_frozen_steps must be >= 0, got {fsm.imu_frozen_steps}")
+    if "state_gate" in d:
+        fsm.state_gate = bool(d["state_gate"])
+    if "state_max_age_ms" in d:
+        fsm.state_max_age_s = None if d["state_max_age_ms"] is None else float(d["state_max_age_ms"]) * 1e-3
+    if "state_stale_grace_steps" in d:
+        fsm.state_stale_grace_steps = int(d["state_stale_grace_steps"])
+        if fsm.state_stale_grace_steps < 0:
+            raise ValueError("fsm.state_stale_grace_steps must be >= 0")
     if "motor_mode_gate" in d:
         fsm.motor_mode_gate = bool(d["motor_mode_gate"])
     if "motor_mode_grace_steps" in d:

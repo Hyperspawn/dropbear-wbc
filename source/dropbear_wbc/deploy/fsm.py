@@ -23,6 +23,15 @@ same LowState tick has been re-used exceeds ``fsm.imu_max_age_s``) or, if enable
 frozen (``fsm.imu_frozen_steps``). A default-constructed ``IMUState`` is invalid, so a
 dead IMU's identity quaternion can no longer pass as "upright".
 
+LowState freshness gate (item 236, notes/202 F2): ``POLICY`` is refused, and left, when the LowState itself is
+stale, independent of the HAL-side ``imu.age_us``: (a) transport age (runner receive time minus publisher
+``stamp_ns``, same host only) or the time the same tick has been re-used exceeds ``fsm.state_max_age_s``; (b) the
+tick lags the controller clock by more than ``fsm.state_max_age_s`` relative to the best (lowest-latency) sample seen,
+which works across hosts without a shared clock (needs ``state_tick_dt_s``); (c) the tick went backwards (HAL
+restart). The policy is not evaluated on a stale sample: for up to ``fsm.state_stale_grace_steps`` consecutive stale
+steps the last policy target is re-sent, then the FSM goes to ``PASSIVE``. Before this gate a LowState 0.7 s old
+with a fresh ``imu.age_us`` drove the policy.
+
 L4 motor-mode gate (item 157, notes/46 F2): in every active state (MoveToDefault / Hold / Policy) a gated motor
 that the robot side had armed (``LowState.motor.mode == 1``) and that then reports mode != 1 for more than
 ``fsm.motor_mode_grace_steps`` steps (HAL: stale reply, latched group fault, watchdog damping) sends the FSM to
@@ -101,6 +110,15 @@ class DeployController:
         self._imu_last_raw: bytes | None = None
         self._imu_same = 0
         self._imu_health: tuple[str | None, float] = ("imu_unseen", float("inf"))
+        self.state_tick_dt_s: float | None = None  # LowState tick period [s]; enables the cross-host lag check
+        self._st_tick: int | None = None
+        self._st_tick_t0 = 0.0
+        self._st_base: float | None = None         # lowest (t - tick * dt) seen, drift-relaxed
+        self._st_t_base = 0.0
+        self._st_lag = 0.0
+        self._st_regressed = False
+        self._st_bad = 0                           # consecutive stale steps in POLICY
+        self._last_q_policy: np.ndarray | None = None
 
         n = motors.NUM_MOTORS
         mask = cfg.fsm.motor_mode_mask
@@ -140,6 +158,46 @@ class DeployController:
         self._imu_health = (fault, age)
         return fault, age
 
+    # ------------------------------------------------------------------ LowState freshness
+
+    def observe_state(self, low_state: LowState, t: float,
+                      state_age_s: float | None = None) -> tuple[str | None, float, float]:
+        """Update the LowState freshness tracker (item 236) at controller time ``t``.
+
+        Args:
+            state_age_s: transport age of ``low_state`` measured by the caller now (receive clock minus publisher
+                ``stamp_ns``; ``None`` when unknown or cross-host).
+
+        Returns ``(fault, age_s, lag_s)``: ``fault`` is ``None``, ``"state_stale"`` or ``"state_tick_regressed"``;
+        ``age_s = max(transport age, time this tick has been re-used)``; ``lag_s`` is how far the tick trails the
+        controller clock relative to the best sample seen (0 without ``state_tick_dt_s``). Idempotent for repeated
+        calls with the same (tick, t).
+        """
+        fsm = self.cfg.fsm
+        tick = int(low_state.tick)
+        if tick != self._st_tick:
+            self._st_regressed = self._st_tick is not None and tick < self._st_tick
+            self._st_tick, self._st_tick_t0 = tick, t
+            dt = self.state_tick_dt_s
+            if dt:
+                off = t - tick * dt
+                if self._st_base is None or self._st_regressed:
+                    base = off
+                else:  # relax the baseline by the allowed clock drift so ppm-level drift is not read as lag
+                    base = min(off, self._st_base + fsm.state_drift_ppm * 1e-6 * max(0.0, t - self._st_t_base))
+                self._st_base, self._st_t_base = base, t
+                self._st_lag = off - base
+        reuse = max(0.0, t - self._st_tick_t0)
+        transport = state_age_s if state_age_s is not None and np.isfinite(state_age_s) and state_age_s >= 0 else 0.0
+        age = max(reuse, float(transport))
+        fault = None
+        if fsm.state_gate:
+            if self._st_regressed:
+                fault = "state_tick_regressed"
+            elif fsm.state_max_age_s is not None and (age > fsm.state_max_age_s or self._st_lag > fsm.state_max_age_s):
+                fault = "state_stale"
+        return fault, age, self._st_lag
+
     # ------------------------------------------------------------------ latch
 
     def clear_latch(self) -> None:
@@ -178,7 +236,7 @@ class DeployController:
 
     # ------------------------------------------------------------------ transitions
 
-    def request(self, new: FsmState, low_state: LowState, t: float) -> bool:
+    def request(self, new: FsmState, low_state: LowState, t: float, state_age_s: float | None = None) -> bool:
         """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, or
         (for any non-Passive state) by the motor-mode latch; the state is then unchanged.
 
@@ -193,6 +251,8 @@ class DeployController:
             raise RuntimeError("POLICY requested but no ONNX policy is loaded")
         if new == FsmState.POLICY:
             fault, _ = self.observe_imu(low_state, t)
+            if fault is None:
+                fault, _, _ = self.observe_state(low_state, t, state_age_s)
             if fault is not None:
                 if fault != self._last_refusal:
                     self._pending = f"{self.state.value}->policy refused({fault})"
@@ -208,6 +268,8 @@ class DeployController:
         elif new == FsmState.POLICY:
             self._last_action = np.zeros(self.cfg.num_actions)
             self._policy_step = 0
+            self._st_bad = 0
+            self._last_q_policy = None
             self.obs_builder.reset()
             if self.motion is not None:
                 ctx = self._ctx(low_state)
@@ -228,8 +290,8 @@ class DeployController:
 
     # ------------------------------------------------------------------ step
 
-    def step(self, low_state: LowState, t: float) -> tuple[LowCmd, StepInfo]:
-        """Compute the command for controller time ``t`` [s]."""
+    def step(self, low_state: LowState, t: float, state_age_s: float | None = None) -> tuple[LowCmd, StepInfo]:
+        """Compute the command for controller time ``t`` [s] (``state_age_s``: see :meth:`observe_state`)."""
         n = motors.NUM_MOTORS
         cfg = self.cfg
         q_meas = low_state.motor.q.astype(np.float64)
@@ -239,6 +301,17 @@ class DeployController:
         if self.state == FsmState.POLICY and fault is not None:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
             self.state, self._pending = FsmState.PASSIVE, f"policy->passive({fault})"
+        sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
+        info_extra.update(state_age_s=sage, state_lag_s=slag, state_fault=sfault)
+        hold_last = False
+        if self.state == FsmState.POLICY and sfault is not None:
+            self._st_bad += 1
+            if self._last_q_policy is None or self._st_bad > cfg.fsm.state_stale_grace_steps:
+                self.state, self._pending = FsmState.PASSIVE, f"policy->passive({sfault})"
+            else:
+                hold_last = True
+        else:
+            self._st_bad = 0
         info = StepInfo(state=self.state, q_des=np.zeros(n), extra=info_extra)
         if cfg.fsm.motor_mode_gate:
             reason = self._motor_mode_check(low_state, t, info)
@@ -261,8 +334,12 @@ class DeployController:
         elif self.state == FsmState.HOLD:
             q_des = cfg.hold_target_sdk.copy()
             kp, kd = cfg.fsm.hold_kp.copy(), cfg.fsm.hold_kd.copy()
+        elif hold_last:  # POLICY on a stale sample: re-send the last policy target, do not evaluate the policy
+            q_des = self._last_q_policy.copy()
+            info.extra["state_hold_last"] = self._st_bad
         else:  # POLICY
             q_des = self._policy_step_q(low_state, info)
+            self._last_q_policy = q_des.copy()
             tilt = Q.tilt_angle(low_state.imu.quat_wxyz.astype(np.float64))
             info.extra["tilt_rad"] = tilt
             if cfg.fsm.bad_orientation_rad is not None and tilt > cfg.fsm.bad_orientation_rad:

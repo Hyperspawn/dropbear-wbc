@@ -90,6 +90,13 @@ def parse_args(argv=None) -> argparse.Namespace:
                     help="disable the IMU valid/age/frozen gate (replaying pre-0004 logs only; unsafe on hardware)")
     ap.add_argument("--fall-tilt-rad", type=float, default=1.0, help="summary: tilt counted as a fall")
     ap.add_argument("--fall-height-m", type=float, default=None, help="summary: root z counted as a fall")
+    ap.add_argument("--state-max-age-ms", type=float, default=None,
+                    help="override fsm.state_max_age_ms (LowState freshness gate, item 236); <= 0 disables the age "
+                         "and lag checks")
+    ap.add_argument("--no-state-gate", action="store_true", help="disable the LowState freshness gate (item 236)")
+    ap.add_argument("--cross-host", action="store_true",
+                    help="LowState stamp_ns is another host's clock: ignore it, gate on tick re-use and tick lag only "
+                         "(stamp age is used only with --clock wall)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--cmd-port", type=int, default=5555)
     ap.add_argument("--state-port", type=int, default=5556)
@@ -198,6 +205,10 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         cfg.fsm.imu_frozen_steps = max(0, int(args.imu_frozen_steps))
     if args.no_imu_gate:
         cfg.fsm.imu_gate = False
+    if args.state_max_age_ms is not None:
+        cfg.fsm.state_max_age_s = None if args.state_max_age_ms <= 0 else args.state_max_age_ms * 1e-3
+    if args.no_state_gate:
+        cfg.fsm.state_gate = False
         print("[runner] WARNING: IMU valid/age gate disabled (--no-imu-gate)", flush=True)
     if args.no_motor_mode_fsm_gate:
         cfg.fsm.motor_mode_gate = False
@@ -246,6 +257,8 @@ def main(argv=None) -> int:
                              "move_to_default_s": cfg.fsm.move_to_default_s,
                              "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
                              "imu_frozen_steps": cfg.fsm.imu_frozen_steps,
+                             "state_gate": cfg.fsm.state_gate, "state_max_age_s": cfg.fsm.state_max_age_s,
+                             "state_stale_grace_steps": cfg.fsm.state_stale_grace_steps,
                              "observations": [t.__dict__ for t in cfg.observations],
                              "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)
@@ -263,6 +276,16 @@ def main(argv=None) -> int:
             raise TimeoutError("no LowState received")
         tick_dt = args.tick_dt
         decim = max(1, int(round(cfg.step_dt / tick_dt)))
+        ctrl.state_tick_dt_s = tick_dt
+        # Transport age from stamp_ns only in real time and only when the publisher shares this host's clock: the
+        # sim clock follows ticks (the bridge may run slower or faster than real time), and a stamp from another
+        # host or a placeholder stamp reads as seconds of age. Tick re-use and tick lag are gated either way.
+        stamp_age = args.clock == "wall" and not args.cross_host
+        age0_s = (time.perf_counter_ns() - st.stamp_ns) * 1e-9 if st.stamp_ns else None
+        if stamp_age and not (age0_s is not None and 0.0 <= age0_s < 1.0):
+            print(f"[runner] WARNING: first LowState stamp age {age0_s} s is not a same-host perf_counter stamp; "
+                  "gating on tick re-use and tick lag only (as --cross-host)", flush=True)
+            stamp_age = False
         t0_tick = st.tick
         t0_wall = time.perf_counter()
         ctrl_time = lambda s: ((s.tick - t0_tick) * tick_dt) if args.clock == "sim" else time.perf_counter() - t0_wall  # noqa: E731
@@ -283,6 +306,9 @@ def main(argv=None) -> int:
         last_cmd: LowCmd | None = None
         last_pub = time.perf_counter()
         keepalives = 0
+        state_faults: dict[str, int] = {}
+        state_hold_last = 0
+        state_lag_max = 0.0
         next_wall = time.perf_counter()
         seq_i = 0
         while not stop["flag"]:
@@ -317,6 +343,7 @@ def main(argv=None) -> int:
                 elif time.perf_counter() - last_rx > args.state_timeout_s:
                     raise TimeoutError(f"LowState stopped for {args.state_timeout_s} s")
             t_rx_ns = time.perf_counter_ns()
+            age_s = (t_rx_ns - st.stamp_ns) * 1e-9 if (stamp_age and st.stamp_ns) else None
             t = ctrl_time(st)
             if t >= args.duration:
                 break
@@ -324,10 +351,10 @@ def main(argv=None) -> int:
                 ctrl.request(schedule[seq_i][1], st, t)
                 seq_i += 1
             if policy_at is not None and t >= policy_at and ctrl.state == FsmState.HOLD:
-                if ctrl.request(FsmState.POLICY, st, t):  # refused while the IMU gate fails: retry next step
+                if ctrl.request(FsmState.POLICY, st, t, state_age_s=age_s):  # refused while the IMU gate fails: retry next step
                     policy_at = None
             a = time.perf_counter()
-            cmd, info = ctrl.step(st, t)
+            cmd, info = ctrl.step(st, t, state_age_s=age_s)
             pub.Write(cmd)
             last_cmd, last_pub = cmd, time.perf_counter()
             compute_ms.append((time.perf_counter() - a) * 1e3)
@@ -335,6 +362,11 @@ def main(argv=None) -> int:
             wall_steps.append(time.perf_counter())
             tick_gaps.append(st.tick - last_tick)
             last_tick = st.tick
+            if info.extra.get("state_fault"):
+                state_faults[info.extra["state_fault"]] = state_faults.get(info.extra["state_fault"], 0) + 1
+            if info.extra.get("state_hold_last"):
+                state_hold_last += 1
+            state_lag_max = max(state_lag_max, float(info.extra.get("state_lag_s") or 0.0))
             if info.policy_ms:
                 policy_ms.append(info.policy_ms)
             if info.transition:
@@ -358,6 +390,8 @@ def main(argv=None) -> int:
                 rec = {"step": steps, "t": t, "tick": st.tick, "fsm": info.state.value, "tilt": tilt,
                        "root_z": root_z, "state_age_ms": state_age_ms[-1], "imu_valid": info.extra.get("imu_valid"),
                        "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
+                       "state_lag_ms": 1e3 * float(info.extra.get("state_lag_s") or 0.0),
+                       "state_fault": info.extra.get("state_fault"),
                        "q": q.tolist(),
                        "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist(),
                        "motor_mode": mode_u8.astype(int).tolist()}
@@ -402,6 +436,9 @@ def main(argv=None) -> int:
             if compute_ms else None,
             "policy_ms_p50": float(np.percentile(policy_ms, 50)) if policy_ms else None,
             "transitions": transitions, "fall": fall, "hold_tracking": tracking,
+            "state_gate": {"enabled": bool(cfg.fsm.state_gate), "max_age_s": cfg.fsm.state_max_age_s,
+                           "stamp_age": bool(stamp_age), "fault_steps": state_faults,
+                           "hold_last_steps": state_hold_last, "lag_max_ms": 1e3 * state_lag_max},
             "motor_mode_gate": {"enabled": bool(cfg.fsm.motor_mode_gate),
                                 "grace_steps": int(cfg.fsm.motor_mode_grace_steps),
                                 "arm_timeout_s": cfg.fsm.motor_mode_arm_timeout_s,
