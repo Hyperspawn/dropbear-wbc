@@ -27,7 +27,7 @@ EP = Endpoints(cmd_port=47555, state_port=47556)
 
 
 class FakeRobot(threading.Thread):
-    def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True):
+    def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True, tick_offset: int = 0):
         super().__init__(daemon=True)
         self.endpoints = endpoints
         self.running = True
@@ -36,6 +36,7 @@ class FakeRobot(threading.Thread):
         self.ticks = 0
         self.cmds = 0
         self.echo_mode = echo_mode
+        self.tick_offset = tick_offset
         self.mode = np.zeros(22, dtype=np.uint8)
 
     def run(self):
@@ -54,7 +55,7 @@ class FakeRobot(threading.Thread):
                 if self.q_des is not None:  # paused until the first command, like the bridge
                     self.q += 0.05 * (self.q_des - self.q)
                     self.ticks += 1
-                st = fx.low_state(self.ticks, self.q)
+                st = fx.low_state((self.ticks + self.tick_offset) & 0xFFFFFFFF, self.q)
                 st.motor.mode[:] = self.mode
                 pub.Write(st)
                 time.sleep(0.0002)
@@ -145,3 +146,24 @@ def test_runner_hold_mode_passes_with_enable_echo(tmp_path):
     assert max(summary["config"]["hold_kd"]) <= 5.0 + 1e-9
     assert summary["config"]["hold_kd"][3] == 5.0
     assert summary["config"]["hold_kd"][9] == 5.0
+
+
+def test_runner_sim_clock_survives_the_uint32_tick_wrap(tmp_path):
+    """Item 258: started 150 ticks before the uint32 wrap, the sim-clock scheduler compared raw ticks
+    (``st.tick >= last_tick + decim``) and spun in its keepalive loop forever after the wrap."""
+    ep = Endpoints(cmd_port=47585, state_port=47586)
+    robot = FakeRobot(ep, echo_mode=True, tick_offset=(1 << 32) - 150)
+    robot.start()
+    try:
+        runner = _load_runner()
+        summary_path = tmp_path / "summary.json"
+        rc = runner.main(["--mode", "hold", "--duration", "0.6", "--passive-s", "0.05", "--move-s", "0.2",
+                          "--cmd-port", str(ep.cmd_port), "--state-port", str(ep.state_port),
+                          "--connect-timeout-s", "20", "--summary", str(summary_path)])
+    finally:
+        robot.running = False
+        robot.join(timeout=5)
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert rc == 0, summary.get("error")
+    assert robot.ticks > 150  # the run crossed the wrap
+    assert summary["ticks_per_step"]["mean"] >= 10 and summary["steps"] >= 25

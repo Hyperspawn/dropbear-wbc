@@ -28,7 +28,8 @@ stale, independent of the HAL-side ``imu.age_us``: (a) transport age (runner rec
 ``stamp_ns``, same host only) or the time the same tick has been re-used exceeds ``fsm.state_max_age_s``; (b) the
 tick lags the controller clock by more than ``fsm.state_max_age_s`` relative to the best (lowest-latency) sample seen,
 which works across hosts without a shared clock (needs ``state_tick_dt_s``); (c) the tick went backwards (HAL
-restart). The policy is not evaluated on a stale sample: for up to ``fsm.state_stale_grace_steps`` consecutive stale
+restart). Ticks are compared modulo 2**32 (``sdk.types.tick_diff``, item 258), so the uint32 wrap after 99.4 days at
+500 Hz is a normal forward step, not (c). The policy is not evaluated on a stale sample: for up to ``fsm.state_stale_grace_steps`` consecutive stale
 steps the last policy target is re-sent, then the FSM goes to ``PASSIVE``. Before this gate a LowState 0.7 s old
 with a fresh ``imu.age_us`` drove the policy.
 
@@ -48,7 +49,7 @@ from enum import Enum
 import numpy as np
 
 from ..sdk import motors
-from ..sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode
+from ..sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, tick_diff
 from . import quat as Q
 from .config import DeployConfig
 from .motion import MotionReference
@@ -112,6 +113,7 @@ class DeployController:
         self._imu_health: tuple[str | None, float] = ("imu_unseen", float("inf"))
         self.state_tick_dt_s: float | None = None  # LowState tick period [s]; enables the cross-host lag check
         self._st_tick: int | None = None
+        self._st_utick = 0                         # unwrapped LowState tick (uint32 wrap, item 258)
         self._st_tick_t0 = 0.0
         self._st_base: float | None = None         # lowest (t - tick * dt) seen, drift-relaxed
         self._st_t_base = 0.0
@@ -176,11 +178,14 @@ class DeployController:
         fsm = self.cfg.fsm
         tick = int(low_state.tick)
         if tick != self._st_tick:
-            self._st_regressed = self._st_tick is not None and tick < self._st_tick
+            # Modular difference: the uint32 wrap (99.4 days at 500 Hz) is a forward step, not a regression.
+            d = 0 if self._st_tick is None else tick_diff(tick, self._st_tick)
+            self._st_regressed = d < 0
+            self._st_utick = tick if (self._st_tick is None or self._st_regressed) else self._st_utick + d
             self._st_tick, self._st_tick_t0 = tick, t
             dt = self.state_tick_dt_s
             if dt:
-                off = t - tick * dt
+                off = t - self._st_utick * dt
                 if self._st_base is None or self._st_regressed:
                     base = off
                 else:  # relax the baseline by the allowed clock drift so ppm-level drift is not read as lag

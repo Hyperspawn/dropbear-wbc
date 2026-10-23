@@ -59,6 +59,45 @@ IMU_AGE_UNKNOWN = 0xFFFFFFFF
 """``IMUState.age_us`` sentinel: the producer does not know the sample age (treated as stale)."""
 
 
+TICK_MOD = 1 << 32
+"""``tick`` is ``uint32`` on the wire: at the 500 Hz LowState tick it wraps after 2**32 * 2 ms = 99.4 days."""
+
+
+def tick_diff(new: int, old: int) -> int:
+    """Signed modular difference ``new - old`` of two wire ticks, in ``[-2**31, 2**31)``.
+
+    A wrap (``0xFFFFFFF6 -> 0x4``) reads as +14, a producer restart (``1_000_000 -> 0``) as -1_000_000. Only a
+    restart after more than 2**31 ticks (49.7 days at 500 Hz) is ambiguous and reads as a forward jump.
+    """
+    return ((int(new) - int(old) + (TICK_MOD >> 1)) % TICK_MOD) - (TICK_MOD >> 1)
+
+
+class TickUnwrapper:
+    """Map wire ticks to a monotonic (unbounded int) tick by accumulating :func:`tick_diff`.
+
+    Consumers that compare ticks with ``<``/``>=`` or subtract them (loop schedulers, simulated clocks) must use
+    the unwrapped tick, or they stall or run backwards at the uint32 wrap. A backwards step stays backwards so a
+    producer restart is still visible. ``LowCmd`` serialization masks ``tick & 0xFFFFFFFF``, so echoing an unwrapped
+    tick puts the original wire value back on the wire.
+    """
+
+    def __init__(self) -> None:
+        self._wire: int | None = None
+        self._u = 0
+
+    def __call__(self, tick: int) -> int:
+        wire = int(tick) & (TICK_MOD - 1)
+        self._u = wire if self._wire is None else self._u + tick_diff(wire, self._wire)
+        self._wire = wire
+        return self._u
+
+    def state(self, low_state):
+        """Return ``low_state`` with ``tick`` replaced by the unwrapped tick (``None`` passes through)."""
+        if low_state is not None:
+            low_state.tick = self(low_state.tick)
+        return low_state
+
+
 class CrcError(ValueError):
     """Raised when a decoded message's CRC does not match its contents."""
 

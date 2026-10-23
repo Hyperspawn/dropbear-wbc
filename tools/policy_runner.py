@@ -47,7 +47,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickUnwrapper  # noqa: E402
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -245,6 +245,7 @@ def main(argv=None) -> int:
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()}}
     stop = {"flag": False}
     signal.signal(signal.SIGINT, lambda *_: stop.__setitem__("flag", True))
+    tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
     pub = sub = None
     logf = None
     try:
@@ -271,7 +272,7 @@ def main(argv=None) -> int:
             logf = open(args.log, "w", encoding="utf-8")
 
         print(f"[runner] waiting for rt/lowstate on {ep.for_channel(LOWSTATE)} ...", flush=True)
-        st = sub.Read(timeout=args.connect_timeout_s)
+        st = tick_unwrap.state(sub.Read(timeout=args.connect_timeout_s))
         if st is None:
             raise TimeoutError("no LowState received")
         tick_dt = args.tick_dt
@@ -315,7 +316,7 @@ def main(argv=None) -> int:
             # ---- acquire the state for this step
             if args.clock == "sim":
                 while True:
-                    new = sub.Read(timeout=0.05)
+                    new = tick_unwrap.state(sub.Read(timeout=0.05))
                     if new is not None:
                         st, last_rx = new, time.perf_counter()
                         if st.tick >= last_tick + decim:
@@ -337,7 +338,7 @@ def main(argv=None) -> int:
                 if next_wall > now:
                     time.sleep(next_wall - now)
                 next_wall += cfg.step_dt
-                new = sub.Read(timeout=0.0)
+                new = tick_unwrap.state(sub.Read(timeout=0.0))
                 if new is not None:
                     st, last_rx = new, time.perf_counter()
                 elif time.perf_counter() - last_rx > args.state_timeout_s:

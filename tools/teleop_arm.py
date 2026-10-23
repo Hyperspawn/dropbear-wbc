@@ -46,7 +46,7 @@ import numpy as np  # noqa: E402
 
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, TickUnwrapper  # noqa: E402
 from dropbear_wbc.teleop.arm_ik import (  # noqa: E402
     ARM_MOTOR_SLOTS, MIRROR_SIGN, SIDES, DropbearArmIK, IKWeights, pose, so3_log,
 )
@@ -301,6 +301,7 @@ def main(argv=None) -> int:
     signal.signal(signal.SIGINT, _on_sigint)
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()},
                      "started": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
+    tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
     pub = sub = dev = None
     rec = None
     st = None
@@ -349,7 +350,7 @@ def main(argv=None) -> int:
         if isinstance(dev, VuerXRSource):
             print(f"[teleop] WebXR: open {dev.url} in the headset browser (see docs/TELEOP.md)", flush=True)
         print(f"[teleop] waiting for rt/lowstate on {ep.for_channel(LOWSTATE)} ...", flush=True)
-        st = sub.Read(timeout=args.connect_timeout_s)
+        st = tick_unwrap.state(sub.Read(timeout=args.connect_timeout_s))
         if st is None:
             raise TimeoutError("no LowState received")
         q_start22 = st.motor.q.astype(float).copy()
@@ -380,7 +381,7 @@ def main(argv=None) -> int:
         while not stop["flag"]:
             if args.clock == "sim":
                 while True:
-                    new = sub.Read(timeout=0.05)
+                    new = tick_unwrap.state(sub.Read(timeout=0.05))
                     if new is not None:
                         st, last_rx = new, time.perf_counter()
                         if st.tick >= sched_tick:
@@ -399,7 +400,7 @@ def main(argv=None) -> int:
                 if next_wall > now:
                     time.sleep(next_wall - now)
                 next_wall += dt_step
-                new = sub.Read(timeout=0.0)
+                new = tick_unwrap.state(sub.Read(timeout=0.0))
                 if new is not None:
                     st, last_rx = new, time.perf_counter()
                 elif time.perf_counter() - last_rx > args.state_timeout_s:
@@ -550,7 +551,7 @@ def main(argv=None) -> int:
                 if home_abort is not None:
                     print(f"[teleop] HOME aborted: {home_abort}", flush=True)
                     break
-                new = sub.Read(timeout=0.05)
+                new = tick_unwrap.state(sub.Read(timeout=0.05))
                 if new is None:
                     if time.perf_counter() - last_pub > 0.05 and last_cmd is not None:
                         last_cmd.stamp_ns = 0
