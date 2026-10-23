@@ -110,7 +110,7 @@ is written `<instance>`; the last instance was called `dropbear-training`, so th
 cd <repo>
 python3 tools/build_motion_library_manifest.py --dry-run            # "unchanged" or the new accepted_v<N> it would write
 python3 tools/pack_brev_bundle.py --manifest data/motions/libraries/accepted_v1.json \
-    --extra data/motions/smoke/dropbear_static_stand.npz --out logs/brev/dropbear-wbc-brev.tgz
+    --out logs/brev/dropbear-wbc-brev.tgz   # the stand reset NPZ is always shipped (DATA_FILES)
 sha256sum logs/brev/dropbear-wbc-brev.tgz
 
 # (WSL) 2. log in (user), then copy the bundle and the plant USD (421 MB USDC, self-contained; read-only original on P:)
@@ -278,8 +278,8 @@ The cost is those GPU-hours times the hourly rate in the Brev console; this plan
   Beyond that, wire `torch.distributed` into `scripts/train.py`: rsl-rl 2.3.3 `multi_gpu_cfg`, one env set per rank,
   `--device cuda:<local_rank>`. Verify it locally-equivalent on a 2-GPU box before scaling.
 - **Locomotion** (`Dropbear-Velocity-Flat-v0`). Use `tools/run_chunked_locomotion.py` (same chunk/resume design, owner
-  and log dir flags; `--stand_npz data/motions/smoke/dropbear_static_stand.npz`, which the bundle `--extra` above
-  ships). H1-flat-style runs are typically 3-5k iterations at 4096 envs (0.3-0.5 B env-steps, about 3-7 A100 GPU-h).
+  and log dir flags; `--stand_npz data/motions/smoke/dropbear_static_stand.npz`, which the bundle always
+  ships via `DATA_FILES`). H1-flat-style runs are typically 3-5k iterations at 4096 envs (0.3-0.5 B env-steps, about 3-7 A100 GPU-h).
   Run it only after the local run shows the knee-authority problem solved (`logs/locomotion/PROGRESS.md`).
 - **SONIC-native tracker.** Its body-keypoint commands would be a new task id (DECISIONS: a new task, not a change of
   this one). It needs multi-GPU training and a library of hundreds of accepted clips first. Plan it as 100s of

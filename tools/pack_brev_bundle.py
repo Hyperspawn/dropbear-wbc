@@ -7,7 +7,8 @@ Stdlib only (any Python 3.10+, Windows or WSL). Contents:
   properties for ``--robot_mass_kg``, serial surrogates);
 * for every ``--manifest`` (``dropbear-motion-library-v1``): the manifest, every clip NPZ it lists and the clip's
   ``<clip>.validation.json`` verdict (the library refuses clips without an accepted verdict, CONTRACTS 5.3);
-* ``--extra`` files/dirs (e.g. ``data/motions/smoke/dropbear_static_stand.npz`` for locomotion resets);
+* ``DATA_FILES`` (always): the locomotion/tabletop reset pose ``data/motions/smoke/dropbear_static_stand.npz``;
+* ``--extra`` files/dirs;
 * ``BUNDLE.json``: file list with SHA-256, the manifests' clip pins, the source host and time.
 
 The plant USD (421 MB, read-only on P:) is NOT packed: copy it separately and point ``$DROPBEAR_USD`` at it.
@@ -30,6 +31,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 CODE_DIRS = ("source", "scripts", "tools", "third_party/pydeps", "docs", "requirements")
 DATA_DIRS = ("data/calibration", "data/robot")  # data/robot: USD body masses (--robot_mass_kg), serial surrogates
+# Single files every training job reads whatever its flags: the locomotion/tabletop reset pose
+# (DropbearFlatEnvCfg.__post_init__ -> set_stand_npz(DEFAULT_STAND_NPZ), tabletop mdp.DEFAULT_STAND_NPZ).
+DATA_FILES = ("data/motions/smoke/dropbear_static_stand.npz", "data/motions/smoke/dropbear_static_stand.validation.json")
 SKIP_PARTS = {"__pycache__", ".pytest_cache", ".git"}
 
 
@@ -84,6 +88,11 @@ def build_bundle(out: Path, manifests: list[Path], extra: list[Path], include_co
         if r.exists():
             for p in _walk(r):
                 files[_rel(p)] = p
+    for f in DATA_FILES:
+        p = REPO / f
+        if not p.is_file():
+            raise SystemExit(f"{f}: required by every training job and missing")
+        files[_rel(p)] = p
     info_manifests = {}
     for m in manifests:
         mf, pins = manifest_files(m.resolve())
