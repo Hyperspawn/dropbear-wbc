@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import signal
 import sys
 import time
 import traceback
@@ -46,6 +45,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
                                         load_standing_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
+from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickStallWatch, TickUnwrapper  # noqa: E402
 
@@ -247,7 +247,8 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()}}
     stop = {"flag": False}
-    signal.signal(signal.SIGINT, lambda *_: stop.__setitem__("flag", True))
+    # Item 268: SIGTERM/SIGHUP used to kill the runner with the last hold/policy LowCmd still on the robot.
+    install_stop_handler(lambda *_: stop.__setitem__("flag", True))
     tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
     pub = sub = None
     logf = None

@@ -10,7 +10,7 @@ Stage 2: sine on the calf motors A/B (parallel ankle) and wrist rolls around the
 Dropbear safety deltas vs Unitree (item 266): no command is written until a LowState arrives within
 ``--connect-timeout-s`` (Unitree's 600 s wait fell through with q0 = 0); gains are clipped to the
 motion-mode field (knee kd 12 -> 5, else the HAL rejects every LowCmd); LowState older than
-``--state-timeout-s`` aborts; every exit path (end, abort, Ctrl-C) sends damping (kp 0).
+``--state-timeout-s`` aborts; every exit path (end, abort, Ctrl-C, SIGTERM, SIGHUP) sends damping (kp 0).
 
 Run against the bridge (hang the robot)::
 
@@ -33,6 +33,7 @@ import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy.config import motion_mode_field_kd, motion_mode_field_kp  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
+from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import ChannelFactoryInitialize, ChannelPublisher, ChannelSubscriber  # noqa: E402
 from dropbear_wbc.sdk.types import LowCmd, LowState  # noqa: E402
 
@@ -153,6 +154,7 @@ if __name__ == "__main__":
     custom = Custom(args.duration, args.connect_timeout_s, args.state_timeout_s)
     custom.Init()
     error, rc = None, 0
+    install_stop_handler()  # item 268: SIGTERM/SIGHUP raise KeyboardInterrupt too, so the damping finally runs
     try:
         custom.Start()
     except (StateLost, KeyboardInterrupt) as exc:

@@ -601,6 +601,7 @@ Port: `scripts/examples/dropbear_low_level_example.py`, run evidence in 8.4. Lin
 | Stage 1: ramp to the all-zero posture over 3 s | Stage 1: ramp to `motors.DEFAULT_POS` (legacy DROPBEAR_CFG init pose) over 3 s | Dropbear's default is not all-zero (knee cranks and elbows 0.3, calf A −0.2, hip −0.1) |
 | `self.first_state.wait(timeout=600)` (result ignored) | `--connect-timeout-s` (20 s): no LowState means exit without writing any command | Unitree's fall-through ramps from q0 = 0 at full kp (1.2 rad knee step at kp 200 from a crouch) |
 | no state-age check, no exit command | `--state-timeout-s` (0.5 s) abort; end, abort and Ctrl-C all send damping (kp 0, kd clipped `DEFAULT_KD`) | The last LowCmd (kp up to 200) otherwise stays on the robot until a HAL watchdog fires |
+| (Python default) SIGTERM / SIGHUP kill the process without running `finally` | `install_stop_handler()` from `dropbear_wbc.sdk.signals` routes SIGINT, SIGTERM and SIGHUP to `KeyboardInterrupt` | `kill`, systemd/docker stop and a dropped SSH session otherwise leave the last LowCmd on the robot. Every rt/lowcmd writer in `tools/` and `scripts/` must call it and damp in an except/finally path (`tests/test_lowcmd_stop_signals.py`) |
 | Stage 2: ankle pitch/roll sines in PR mode. Stage 3: ankle A/B sines in AB mode, plus wrist yaw. | Stage 2: calf motor A/B sines (anti-phase) and wrist rolls, in motor space | Dropbear's parallel ankle is always "AB" at the SDK level. It has no wrist yaw. |
 | (none) | optional: `self.low_cmd.tick = self.low_state.tick` | Lets the bridge measure command latency; needed for `--lockstep-ticks` |
 
@@ -608,7 +609,7 @@ Port: `scripts/examples/dropbear_low_level_example.py`, run evidence in 8.4. Lin
 
 | Path | Role |
 |---|---|
-| `source/dropbear_wbc/sdk/types.py`, `crc.py`, `transport.py`, `motors.py` | `dropbear_hg-v1` messages, CRC, ZMQ channels, motor table |
+| `source/dropbear_wbc/sdk/types.py`, `crc.py`, `transport.py`, `motors.py`, `signals.py` | `dropbear_hg-v1` messages, CRC, ZMQ channels, motor table, stop signals for LowCmd writers |
 | `source/dropbear_wbc/newton_sim/plant.py`, `imu.py`, `usd_fixes.py`, `gpu_lock.py` | Newton plant, IMU / LowState assembly, CONTRACTS 0.1 fixes, GPU lock |
 | `source/dropbear_wbc/deploy/config.py`, `fsm.py`, `observations.py`, `motion.py`, `policy.py`, `quat.py` | Runner configuration, FSM, observation terms, reference motion (NPZ / CSV / ONNX), ONNX wrapper |
 | `tools/newton_bridge.py`, `tools/policy_runner.py`, `tools/probe_newton_plant.py` | Bridge, runner, plant probe |

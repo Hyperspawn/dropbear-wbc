@@ -33,7 +33,6 @@ import argparse
 import datetime as dt
 import json
 import math
-import signal
 import sys
 import time
 import traceback
@@ -45,6 +44,7 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 import numpy as np  # noqa: E402
 
 from dropbear_wbc.sdk import motors  # noqa: E402
+from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, TickStallWatch, TickUnwrapper  # noqa: E402
 from dropbear_wbc.teleop.arm_ik import (  # noqa: E402
@@ -300,7 +300,7 @@ def main(argv=None) -> int:
         stop["flag"] = True
         stop["count"] += 1  # a second Ctrl-C also aborts the HOME ramp
 
-    signal.signal(signal.SIGINT, _on_sigint)
+    install_stop_handler(_on_sigint)  # item 268: SIGTERM/SIGHUP take the same HOME -> damping exit as Ctrl-C
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()},
                      "started": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
     tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
