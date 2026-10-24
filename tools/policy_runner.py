@@ -47,7 +47,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickUnwrapper  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickStallWatch, TickUnwrapper  # noqa: E402
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -102,6 +102,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--state-port", type=int, default=5556)
     ap.add_argument("--connect-timeout-s", type=float, default=600.0, help="wait for the first LowState")
     ap.add_argument("--state-timeout-s", type=float, default=5.0, help="abort if LowState stops")
+    ap.add_argument("--tick-stall-s", type=float, default=5.0,
+                    help="--clock sim: abort if LowState keeps arriving but its tick does not advance for this long "
+                         "(frozen sim/HAL); <=0 disables")
     ap.add_argument("--log", type=Path, help="JSONL per-step log")
     ap.add_argument("--summary", type=Path, help="JSON summary")
     ap.add_argument("--settle-window-s", type=float, default=1.0, help="tracking stats over the last N s of Hold")
@@ -304,6 +307,7 @@ def main(argv=None) -> int:
         motor_mode_enable_steps = 0
         last_tick = st.tick - decim
         last_rx = time.perf_counter()
+        stall = TickStallWatch(st.tick, args.tick_stall_s)  # item 263: frames arrive but the tick is frozen
         last_cmd: LowCmd | None = None
         last_pub = time.perf_counter()
         keepalives = 0
@@ -323,6 +327,7 @@ def main(argv=None) -> int:
                             break
                     if time.perf_counter() - last_rx > args.state_timeout_s:
                         raise TimeoutError(f"LowState stopped for {args.state_timeout_s} s")
+                    stall.check(st.tick, time.perf_counter())
                     if stop["flag"]:
                         break
                     # Keepalive: re-send the last command while the sim tick does not advance. This
@@ -457,6 +462,19 @@ def main(argv=None) -> int:
     except Exception:  # noqa: BLE001
         summary["error"] = traceback.format_exc()
         print(summary["error"], file=sys.stderr, flush=True)
+        # Item 263: an abort (state timeout, tick stall, any exception) used to skip the damping exit command and
+        # leave the last LowCmd (hold/policy gains) as the robot's final command. Best effort: damping now.
+        st_x, cfg_x = locals().get("st"), locals().get("cfg")
+        if pub is not None and st_x is not None and cfg_x is not None:
+            try:
+                exit_cmd = LowCmd(tick=st_x.tick)
+                exit_cmd.motor = MotorCmdBlock.from_arrays(motors.NUM_MOTORS, q=st_x.motor.q, kp=0.0,
+                                                           kd=cfg_x.fsm.passive_kd)
+                pub.Write(exit_cmd)
+                summary["abort_damping_sent"] = True
+                time.sleep(0.05)
+            except Exception:  # noqa: BLE001
+                summary["abort_damping_sent"] = False
     finally:
         if logf is not None:
             logf.close()

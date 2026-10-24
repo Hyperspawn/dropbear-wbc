@@ -27,7 +27,8 @@ EP = Endpoints(cmd_port=47555, state_port=47556)
 
 
 class FakeRobot(threading.Thread):
-    def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True, tick_offset: int = 0):
+    def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True, tick_offset: int = 0,
+                 freeze_after: int | None = None, restart_after: int | None = None):
         super().__init__(daemon=True)
         self.endpoints = endpoints
         self.running = True
@@ -37,7 +38,10 @@ class FakeRobot(threading.Thread):
         self.cmds = 0
         self.echo_mode = echo_mode
         self.tick_offset = tick_offset
+        self.freeze_after = freeze_after    # item 263: keep publishing, stop advancing the tick
+        self.restart_after = restart_after  # item 263: tick jumps back to 0 once (producer restart)
         self.mode = np.zeros(22, dtype=np.uint8)
+        self.last_kp = None
 
     def run(self):
         pub = ChannelPublisher(LOWSTATE, LowState, endpoints=self.endpoints, role="robot")
@@ -49,12 +53,16 @@ class FakeRobot(threading.Thread):
                 cmd = sub.Read(timeout=0.0)
                 if cmd is not None:
                     self.q_des = cmd.motor.q.astype(float)
+                    self.last_kp = np.asarray(cmd.motor.kp, dtype=float).copy()
                     self.cmds += 1
                     if self.echo_mode:
                         self.mode = np.asarray(cmd.motor.mode, dtype=np.uint8).copy()
                 if self.q_des is not None:  # paused until the first command, like the bridge
                     self.q += 0.05 * (self.q_des - self.q)
-                    self.ticks += 1
+                    if self.freeze_after is None or self.ticks < self.freeze_after:
+                        self.ticks += 1
+                    if self.restart_after is not None and self.ticks >= self.restart_after:
+                        self.ticks, self.restart_after = 0, None
                 st = fx.low_state((self.ticks + self.tick_offset) & 0xFFFFFFFF, self.q)
                 st.motor.mode[:] = self.mode
                 pub.Write(st)
@@ -167,3 +175,42 @@ def test_runner_sim_clock_survives_the_uint32_tick_wrap(tmp_path):
     assert rc == 0, summary.get("error")
     assert robot.ticks > 150  # the run crossed the wrap
     assert summary["ticks_per_step"]["mean"] >= 10 and summary["steps"] >= 25
+
+
+def _run_stalled(tmp_path, ep, robot, stall_s, duration=2.0):
+    robot.start()
+    t0 = time.perf_counter()
+    try:
+        runner = _load_runner()
+        summary_path = tmp_path / "summary.json"
+        rc = runner.main(["--mode", "hold", "--duration", str(duration), "--passive-s", "0.05", "--move-s", "0.2",
+                          "--cmd-port", str(ep.cmd_port), "--state-port", str(ep.state_port),
+                          "--connect-timeout-s", "20", "--tick-stall-s", str(stall_s),
+                          "--summary", str(summary_path)])
+    finally:
+        robot.running = False
+        robot.join(timeout=5)
+    return rc, json.loads(summary_path.read_text(encoding="utf-8")), time.perf_counter() - t0
+
+
+def test_runner_sim_clock_aborts_on_frozen_tick(tmp_path):
+    """Item 263: a producer that keeps publishing one tick used to spin the keepalive loop forever
+    (frames keep last_rx fresh, so --state-timeout-s never fires)."""
+    ep = Endpoints(cmd_port=47587, state_port=47588)
+    robot = FakeRobot(ep, freeze_after=100)
+    rc, summary, wall = _run_stalled(tmp_path, ep, robot, 0.5)
+    assert rc != 0
+    assert "TickStallError" in summary["error"] and "frozen at tick" in summary["error"]
+    assert wall < 10
+    assert summary["abort_damping_sent"] is True
+    assert robot.last_kp is not None and float(np.abs(robot.last_kp).max()) == 0.0  # damping was the last command
+
+
+def test_runner_sim_clock_aborts_on_producer_restart(tmp_path):
+    """Item 263: a restart (tick back to 0) stalls the scheduler until the tick passes the old value
+    (3000 ticks here, about 1.5 s of catch-up at the fake robot rate; 0.5 s stall limit)."""
+    ep = Endpoints(cmd_port=47589, state_port=47590)
+    rc, summary, wall = _run_stalled(tmp_path, ep, FakeRobot(ep, restart_after=3000), 0.5, duration=8.0)
+    assert rc != 0
+    assert "TickStallError" in summary["error"] and "producer restart" in summary["error"]
+    assert wall < 10

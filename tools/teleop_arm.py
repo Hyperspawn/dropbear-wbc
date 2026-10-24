@@ -46,7 +46,7 @@ import numpy as np  # noqa: E402
 
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, TickUnwrapper  # noqa: E402
+from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, TickStallWatch, TickUnwrapper  # noqa: E402
 from dropbear_wbc.teleop.arm_ik import (  # noqa: E402
     ARM_MOTOR_SLOTS, MIRROR_SIGN, SIDES, DropbearArmIK, IKWeights, pose, so3_log,
 )
@@ -139,6 +139,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--state-port", type=int, default=5556)
     ap.add_argument("--connect-timeout-s", type=float, default=600.0)
     ap.add_argument("--state-timeout-s", type=float, default=5.0)
+    ap.add_argument("--tick-stall-s", type=float, default=5.0,
+                    help="--clock sim: abort if LowState keeps arriving but its tick does not advance; <=0 disables")
     ap.add_argument("--record", type=Path, default=None, help="session directory (LeRobot-v2-like)")
     ap.add_argument("--task", default="dropbear arm teleop (scripted figure-8)")
     ap.add_argument("--summary", type=Path, default=None)
@@ -367,6 +369,7 @@ def main(argv=None) -> int:
         last_tick = st.tick - decim
         sched_tick = st.tick  # sim clock: control steps sit on a fixed tick grid (sched_tick + k * decim)
         last_rx = time.perf_counter()
+        stall = TickStallWatch(st.tick, args.tick_stall_s)  # item 263
         last_cmd = None
         last_pub = time.perf_counter()
         keepalives = 0
@@ -388,6 +391,7 @@ def main(argv=None) -> int:
                             break
                     if time.perf_counter() - last_rx > args.state_timeout_s:
                         raise TimeoutError(f"LowState stopped for {args.state_timeout_s} s")
+                    stall.check(st.tick, time.perf_counter())
                     if stop["flag"]:
                         break
                     if last_cmd is not None and time.perf_counter() - last_pub > 0.05:
@@ -616,6 +620,17 @@ def main(argv=None) -> int:
         summary["traceback"] = traceback.format_exc()
         print(summary["traceback"], flush=True)
         rc = 1
+        # Item 263: an abort used to skip the damping exit command (last LowCmd stayed on the robot).
+        if st is not None and pub is not None:
+            try:
+                exit_cmd = LowCmd(tick=st.tick)
+                exit_cmd.motor = MotorCmdBlock.from_arrays(motors.NUM_MOTORS, q=st.motor.q, kp=0.0,
+                                                           kd=np.asarray(motors.DEFAULT_KD, dtype=float))
+                pub.Write(exit_cmd)
+                summary["abort_damping_sent"] = True
+                time.sleep(0.05)
+            except Exception:  # noqa: BLE001
+                summary["abort_damping_sent"] = False
     finally:
         if locals().get("reloader") is not None:
             locals()["reloader"].close()

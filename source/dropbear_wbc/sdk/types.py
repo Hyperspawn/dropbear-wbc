@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import math
 import struct
+import time
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
@@ -96,6 +97,38 @@ class TickUnwrapper:
         if low_state is not None:
             low_state.tick = self(low_state.tick)
         return low_state
+
+
+class TickStallError(TimeoutError):
+    """LowState frames keep arriving but the (unwrapped) tick has not passed its previous maximum."""
+
+
+class TickStallWatch:
+    """Abort a tick-scheduled loop whose producer keeps publishing without advancing the tick.
+
+    A sim-clock scheduler waits for ``tick >= target``. A frozen simulation (or a HAL stuck on one sample) keeps
+    sending frames, so a receive timeout never fires and the loop spins forever on keepalives. A producer restart
+    (tick back near 0) has the same effect until the tick climbs past the old value. ``check`` raises
+    :class:`TickStallError` once no tick above the running maximum has been seen for ``stall_s`` seconds.
+    Feed it unwrapped ticks (:class:`TickUnwrapper`). ``stall_s <= 0`` disables it.
+    """
+
+    def __init__(self, tick: int, stall_s: float, now: float | None = None) -> None:
+        self.stall_s = float(stall_s)
+        self.max_tick = int(tick)
+        self.last_tick = int(tick)
+        self.t_adv = time.perf_counter() if now is None else float(now)
+
+    def check(self, tick: int, now: float) -> None:
+        tick = int(tick)
+        self.last_tick = tick
+        if tick > self.max_tick:
+            self.max_tick, self.t_adv = tick, float(now)
+            return
+        if self.stall_s > 0 and now - self.t_adv > self.stall_s:
+            how = (f"frozen at tick {tick}" if tick == self.max_tick
+                   else f"at tick {tick}, behind the previous maximum {self.max_tick} (producer restart?)")
+            raise TickStallError(f"LowState tick has not advanced for {self.stall_s} s: {how}")
 
 
 class CrcError(ValueError):
