@@ -592,13 +592,15 @@ Port: `scripts/examples/dropbear_low_level_example.py`, run evidence in 8.4. Lin
 | `MotionSwitcherClient()`, `CheckMode()`, `ReleaseMode()` | delete | There is no on-board sport/high-level controller to release. The bridge simply waits (paused) for the first LowCmd. |
 | `ChannelFactoryInitialize(0, sys.argv[1])` (NIC name) | `ChannelFactoryInitialize(0)` or `ChannelFactoryInitialize(0, cmd_port=…, state_port=…)` | Domain and NIC arguments are accepted and ignored; the endpoints are TCP |
 | `G1_NUM_MOTOR = 29`, `class G1JointIndex` | `NUM_MOTOR = motors.NUM_MOTORS` (22); indices via `motors.motor_index("LL_Revolute67")` | Motor contract (table 3.4). Slots are motors, not G1 joints. |
-| `Kp`, `Kd` lists (29) | `motors.DEFAULT_KP`, `motors.DEFAULT_KD` | Legacy DROPBEAR_CFG gains |
+| `Kp`, `Kd` lists (29) | `motion_mode_field_kp()`, `motion_mode_field_kd()` (`motors.DEFAULT_KP/KD` clipped to 0..500 / 0..5) | Legacy DROPBEAR_CFG gains; knee kd 12 does not fit the MIT kd field and the HAL rejects every LowCmd carrying it |
 | `self.low_cmd.mode_pr = Mode.PR`, `self.low_cmd.mode_machine = self.mode_machine_`, waiting for `mode_machine` | delete | No PR/AB modes and no machine-type handshake. The parallel ankle is commanded in motor space (calf A/B). Pitch/roll goes through `SemanticMap`. |
 | `self.low_cmd.motor_cmd[i].mode / q / dq / tau / kp / kd = …` | identical | Unitree-style slot views |
 | `msg.motor_state[i].q`, `msg.imu_state.rpy` | identical (`motor_state` and `imu_state` aliases; arrays also at `msg.motor.q`, `msg.imu.rpy`) | |
 | `RecurrentThread(interval=0.002, target=self.LowCmdWrite)` | a 2 ms `perf_counter` loop (or any timer) | Pacing only |
 | `lowstate_subscriber.Init(self.LowStateHandler, 10)` | identical (`queue_len` ignored) | Handler thread with latest-message semantics |
 | Stage 1: ramp to the all-zero posture over 3 s | Stage 1: ramp to `motors.DEFAULT_POS` (legacy DROPBEAR_CFG init pose) over 3 s | Dropbear's default is not all-zero (knee cranks and elbows 0.3, calf A −0.2, hip −0.1) |
+| `self.first_state.wait(timeout=600)` (result ignored) | `--connect-timeout-s` (20 s): no LowState means exit without writing any command | Unitree's fall-through ramps from q0 = 0 at full kp (1.2 rad knee step at kp 200 from a crouch) |
+| no state-age check, no exit command | `--state-timeout-s` (0.5 s) abort; end, abort and Ctrl-C all send damping (kp 0, kd clipped `DEFAULT_KD`) | The last LowCmd (kp up to 200) otherwise stays on the robot until a HAL watchdog fires |
 | Stage 2: ankle pitch/roll sines in PR mode. Stage 3: ankle A/B sines in AB mode, plus wrist yaw. | Stage 2: calf motor A/B sines (anti-phase) and wrist rolls, in motor space | Dropbear's parallel ankle is always "AB" at the SDK level. It has no wrist yaw. |
 | (none) | optional: `self.low_cmd.tick = self.low_state.tick` | Lets the bridge measure command latency; needed for `--lockstep-ticks` |
 
