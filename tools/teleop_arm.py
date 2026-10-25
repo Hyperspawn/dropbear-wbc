@@ -45,7 +45,7 @@ import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy.config import motion_mode_field_kd, motion_mode_field_kp  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
-from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
+from dropbear_wbc.sdk.signals import StopRequest, install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, TickStallWatch, TickUnwrapper  # noqa: E402
 from dropbear_wbc.teleop.arm_ik import (  # noqa: E402
@@ -313,13 +313,8 @@ def analyze(arr: dict, rate: float, skip_s: float) -> dict:
 # ------------------------------------------------------------------------------------------------ main
 def main(argv=None) -> int:
     args = parse_args(argv)
-    stop = {"flag": False, "count": 0}
-
-    def _on_sigint(*_):
-        stop["flag"] = True
-        stop["count"] += 1  # a second Ctrl-C also aborts the HOME ramp
-
-    install_stop_handler(_on_sigint)  # item 268: SIGTERM/SIGHUP take the same HOME -> damping exit as Ctrl-C
+    stop = StopRequest()  # item 270: records the stop cause; a second signal also aborts the HOME ramp
+    install_stop_handler(stop.handler)  # item 268: SIGTERM/SIGHUP take the same HOME -> damping exit as Ctrl-C
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()},
                      "started": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
     tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
@@ -403,7 +398,7 @@ def main(argv=None) -> int:
         loop_wall = []
         dt_step = decim * args.tick_dt
         q_des_prev = None
-        while not stop["flag"]:
+        while not stop.flag:
             if args.clock == "sim":
                 while True:
                     new = tick_unwrap.state(sub.Read(timeout=0.05))
@@ -414,7 +409,7 @@ def main(argv=None) -> int:
                     if time.perf_counter() - last_rx > args.state_timeout_s:
                         raise TimeoutError(f"LowState stopped for {args.state_timeout_s} s")
                     stall.check(st.tick, time.perf_counter())
-                    if stop["flag"]:
+                    if stop.flag:
                         break
                     if last_cmd is not None and time.perf_counter() - last_pub > 0.05:
                         last_cmd.stamp_ns = 0
@@ -487,7 +482,7 @@ def main(argv=None) -> int:
                 elif ev == "toggle":
                     tracking = not tracking
                 elif ev == "stop":
-                    stop["flag"] = True
+                    stop.request("device_stop")
                 elif ev == "calibrate" and isinstance(dev, VuerXRSource):
                     try:
                         info = dev.calibrate(ik.fk_both(q_cmd10))
@@ -503,7 +498,7 @@ def main(argv=None) -> int:
                     dq = np.clip(q_ik10 - q_cmd10, -args.max_joint_vel * dt_step, args.max_joint_vel * dt_step)
                     q_cmd10 = q_cmd10 + dq  # the IK keeps its own solution as the warm start
                 if args.duration > 0 and tt >= args.duration:
-                    stop["flag"] = True
+                    stop.request("duration")
             if phase in ("teleop",):
                 m10, _sat = ik.to_motor_fast(q_cmd10)
                 q_des22 = ik.motor22(m10, q_stand22)
@@ -562,7 +557,7 @@ def main(argv=None) -> int:
             last_tick = st.tick
             home_rx = time.perf_counter()
             home_deadline = home_rx + args.home_s + args.state_timeout_s
-            sigints_at_home = stop["count"]
+            signals_at_home = stop.count
             home_abort = None
             while True:
                 # the HOME ramp must terminate even if the bridge dies or the operator insists (review fix 2026-09-24):
@@ -572,8 +567,8 @@ def main(argv=None) -> int:
                     home_abort = f"no LowState for {args.state_timeout_s} s"
                 elif time.perf_counter() > home_deadline:
                     home_abort = f"HOME deadline home_s + state_timeout_s = {args.home_s + args.state_timeout_s:.1f} s"
-                elif stop["count"] > sigints_at_home:
-                    home_abort = "SIGINT during HOME"
+                elif stop.count > signals_at_home:
+                    home_abort = f"{stop.signals[-1]} during HOME"
                 if home_abort is not None:
                     print(f"[teleop] HOME aborted: {home_abort}", flush=True)
                     break
@@ -637,6 +632,11 @@ def main(argv=None) -> int:
             summary["recording"] = rec.close(meta)
             print(f"[teleop] recorded {len(rec)} frames -> {args.record}", flush=True)
         rc = 0
+        # Item 270: a signal stop is "interrupted" (rc 128+signum), except Ctrl-C ending an open-ended
+        # --duration 0 session, which is the documented way to finish one.
+        if stop.by_signal and not (args.duration <= 0 and stop.cause == "SIGINT"):
+            summary["status"] = "interrupted"
+            rc = stop.exit_code()
     except Exception as e:  # noqa: BLE001
         summary["error"] = repr(e)
         summary["traceback"] = traceback.format_exc()
@@ -668,6 +668,7 @@ def main(argv=None) -> int:
                     c.Close()
             except Exception:  # noqa: BLE001
                 pass
+    summary["stop"] = stop.to_dict() | {"cause": stop.cause or ("error" if "error" in summary else None)}
     if args.summary:
         args.summary.parent.mkdir(parents=True, exist_ok=True)
         args.summary.write_text(json.dumps(summary, indent=2, default=str) + "\n", encoding="utf-8")

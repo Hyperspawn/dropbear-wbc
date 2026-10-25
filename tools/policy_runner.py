@@ -45,7 +45,7 @@ from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_y
                                         load_standing_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
-from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
+from dropbear_wbc.sdk.signals import StopRequest, install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickStallWatch, TickUnwrapper  # noqa: E402
 
@@ -246,9 +246,10 @@ def _meta_list(meta: dict, key: str) -> list[str]:
 def main(argv=None) -> int:
     args = parse_args(argv)
     summary: dict = {"status": "failed", "args": {k: str(v) for k, v in vars(args).items()}}
-    stop = {"flag": False}
+    stop = StopRequest()
     # Item 268: SIGTERM/SIGHUP used to kill the runner with the last hold/policy LowCmd still on the robot.
-    install_stop_handler(lambda *_: stop.__setitem__("flag", True))
+    # Item 270: the handler records which signal stopped the run (summary["stop"], status "interrupted").
+    install_stop_handler(stop.handler)
     tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
     pub = sub = None
     logf = None
@@ -317,7 +318,7 @@ def main(argv=None) -> int:
         state_lag_max = 0.0
         next_wall = time.perf_counter()
         seq_i = 0
-        while not stop["flag"]:
+        while not stop.flag:
             # ---- acquire the state for this step
             if args.clock == "sim":
                 while True:
@@ -329,7 +330,7 @@ def main(argv=None) -> int:
                     if time.perf_counter() - last_rx > args.state_timeout_s:
                         raise TimeoutError(f"LowState stopped for {args.state_timeout_s} s")
                     stall.check(st.tick, time.perf_counter())
-                    if stop["flag"]:
+                    if stop.flag:
                         break
                     # Keepalive: re-send the last command while the sim tick does not advance. This
                     # breaks the start-up deadlock (paused bridge + lost first command, ZMQ slow joiner)
@@ -353,6 +354,7 @@ def main(argv=None) -> int:
             age_s = (t_rx_ns - st.stamp_ns) * 1e-9 if (stamp_age and st.stamp_ns) else None
             t = ctrl_time(st)
             if t >= args.duration:
+                stop.request("duration")
                 break
             if seq_i < len(schedule) and t >= schedule[seq_i][0] and ctrl.state == FsmState.PASSIVE:
                 ctrl.request(schedule[seq_i][1], st, t)
@@ -427,6 +429,8 @@ def main(argv=None) -> int:
         status = "executed" if mode_ok else "failed"
         if mode_ok and ctrl.latched is not None:
             status = "tripped"  # FSM L4 gate fired: the robot side dropped a motor (item 157); not a clean run
+        if status == "executed" and stop.by_signal:
+            status = "interrupted"  # item 270: a SIGINT/SIGTERM/SIGHUP stop is not a completed --duration run
         summary.update({
             "status": status, "steps": steps, "controller_time_s": ctrl_time(st),
             "motor_mode_max": motor_mode_max,
@@ -477,6 +481,7 @@ def main(argv=None) -> int:
             except Exception:  # noqa: BLE001
                 summary["abort_damping_sent"] = False
     finally:
+        summary["stop"] = stop.to_dict() | {"cause": stop.cause or ("error" if "error" in summary else None)}
         if logf is not None:
             logf.close()
         for ch in (pub, sub):
@@ -487,6 +492,8 @@ def main(argv=None) -> int:
             args.summary.write_text(json.dumps(summary, indent=2, default=str) + "\n")
         print(json.dumps({k: summary.get(k) for k in ("status", "steps", "runner_hz_wall", "fall", "error")},
                          default=str), flush=True)
+    if summary["status"] == "interrupted":
+        return stop.exit_code()  # 128 + signum, as a shell reports a signalled process
     return 0 if summary["status"] == "executed" else 1
 
 
