@@ -43,6 +43,7 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 
 import numpy as np  # noqa: E402
 
+from dropbear_wbc.deploy.config import motion_mode_field_kd, motion_mode_field_kp  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
@@ -165,7 +166,8 @@ def ref_arm_q(ik: DropbearArmIK, name: str) -> np.ndarray:
     return np.concatenate([ik.chains["left"].clip(q), ik.chains["right"].clip(q * MIRROR_SIGN)])
 
 
-def gains(args) -> tuple[np.ndarray, np.ndarray]:
+def requested_gains(args) -> tuple[np.ndarray, np.ndarray]:
+    """SDK-order gains as requested on the command line (legs: legacy DEFAULT x --leg-gain-scale)."""
     kp = np.asarray(motors.DEFAULT_KP, dtype=float) * args.leg_gain_scale
     kd = np.asarray(motors.DEFAULT_KD, dtype=float) * args.leg_gain_scale
     for side_slots in ((12, 13, 14, 15, 16), (17, 18, 19, 20, 21)):
@@ -177,6 +179,23 @@ def gains(args) -> tuple[np.ndarray, np.ndarray]:
             else:
                 kp[slot], kd[slot] = args.kp_wrist, args.kd_wrist
     return kp, kd
+
+
+def gains(args) -> tuple[np.ndarray, np.ndarray, list[dict]]:
+    """On-wire gains: :func:`requested_gains` clipped to the motion-mode field (kp 0..500, kd 0..5).
+
+    The old defaults put legs at kd 10/10/10/24/8/8 and the elbows at kp 600 / kd 10; a HAL that checks the
+    MIT field (item 156) refuses every such LowCmd, the damping exit included. Returns ``(kp, kd, clamped)``
+    with one ``{motor, field, before, after}`` entry per value that moved.
+    """
+    kp_req, kd_req = requested_gains(args)
+    kp, kd = motion_mode_field_kp(kp_req), motion_mode_field_kd(kd_req)
+    clamped = []
+    for fld, before, after in (("kp", kp_req, kp), ("kd", kd_req, kd)):
+        for i in np.flatnonzero(before != after):
+            clamped.append({"motor": motors.MOTOR_NAMES[i], "field": fld,
+                            "before": float(before[i]), "after": float(after[i])})
+    return kp, kd, clamped
 
 
 def sim_hand_torso(ik: DropbearArmIK, st: LowState) -> dict:
@@ -314,7 +333,10 @@ def main(argv=None) -> int:
         if args.gravity_ff == "model":
             from dropbear_wbc.teleop.gravity import ArmGravity
             grav = ArmGravity(ik, args.inertia)
-        kp, kd = gains(args)
+        kp, kd, clamped = gains(args)
+        if clamped:
+            print(f"[teleop] {len(clamped)} gain(s) clipped to the motion-mode field (kp<=500, kd<=5): "
+                  + ", ".join(f"{c['motor']}.{c['field']} {c['before']:g}->{c['after']:g}" for c in clamped), flush=True)
 
         def _rebuild():  # runs on the reloader thread (never inside the control loop)
             ik2 = DropbearArmIK(ik.path, weights=IKWeights(rotation=rot_w, mode=args.ik_mode))
@@ -333,7 +355,7 @@ def main(argv=None) -> int:
         dev, ref = build_device(args, ik, q_ref10)
         keys = build_key_events(args, ref)
         summary["ik"] = ik.info()
-        summary["gains"] = {"kp": kp.tolist(), "kd": kd.tolist()}
+        summary["gains"] = {"kp": kp.tolist(), "kd": kd.tolist(), "clamped_to_motion_mode_field": clamped}
         summary["gravity_ff"] = None if grav is None else {"inertia": str(grav.path), "arm_mass_kg": grav.arm_mass}
         decim = max(1, int(round(1.0 / args.rate / args.tick_dt)))
         rate = 1.0 / (decim * args.tick_dt)
@@ -586,7 +608,7 @@ def main(argv=None) -> int:
         if st is not None and pub is not None:
             exit_cmd = LowCmd(tick=st.tick)
             exit_cmd.motor = MotorCmdBlock.from_arrays(motors.NUM_MOTORS, q=st.motor.q, kp=0.0,
-                                                       kd=np.asarray(motors.DEFAULT_KD, dtype=float))
+                                                       kd=motion_mode_field_kd())
             pub.Write(exit_cmd)
             time.sleep(0.05)
         lw = np.diff(np.asarray(loop_wall)) if len(loop_wall) > 1 else np.zeros(0)
@@ -625,7 +647,7 @@ def main(argv=None) -> int:
             try:
                 exit_cmd = LowCmd(tick=st.tick)
                 exit_cmd.motor = MotorCmdBlock.from_arrays(motors.NUM_MOTORS, q=st.motor.q, kp=0.0,
-                                                           kd=np.asarray(motors.DEFAULT_KD, dtype=float))
+                                                           kd=motion_mode_field_kd())
                 pub.Write(exit_cmd)
                 summary["abort_damping_sent"] = True
                 time.sleep(0.05)

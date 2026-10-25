@@ -243,7 +243,10 @@ real headset over Wi-Fi is UNVERIFIED).
    The FK-based metric therefore understates the true error by that much. The recording keeps both
    (`fk.*` and `sim.*` columns).
 3. **Gains**. The four-bar makes the forearm about 20x softer than the elbow motor gain (semantic stiffness ≈ kp /
-   ratio²), hence elbow motor kp 600. Ablations on the diagnostic CPU plant (older "forward_extended" figure-8, baseline
+   ratio²), hence elbow motor kp 600. On the wire `teleop_arm.py` clips every gain to the motion-mode field (kp <= 500,
+   kd <= 5) and lists what moved in `summary.gains.clamped_to_motion_mode_field`: elbow 600/10 -> 500/5, legs (DEFAULT x
+   `--leg-gain-scale` 2) kd 10/10/10/24/8/8 -> 5, damping exit knee kd 12 -> 5. Unclipped, a field-checking HAL refuses
+   every teleop LowCmd. The ablations below were measured at the unclipped 600/10 and have not been re-run. Ablations on the diagnostic CPU plant (older "forward_extended" figure-8, baseline
    3.7 mm mean / 5.3 RMS, lag 0.04 s, `teleop_cpu_fig8_pd0.5.json`):
 
    | change | mean / RMS | lag | log |
