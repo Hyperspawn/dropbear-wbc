@@ -188,7 +188,7 @@ def test_runner_trips_when_fake_robot_drops_a_motor(tmp_path):
             threading.Thread(target=dropper, daemon=True).start()
             super().run()
 
-    ep = Endpoints(cmd_port=47585, state_port=47586)
+    ep = Endpoints(cmd_port=27595, state_port=27596)
     robot = DroppingRobot(ep)
     robot.start()
     try:

@@ -231,7 +231,7 @@ def _run_wall(tmp_path, ep, robot):
 def test_runner_wall_clock_no_false_trip(tmp_path):
     from dropbear_wbc.sdk.transport import Endpoints
 
-    ep = Endpoints(cmd_port=47591, state_port=47592)
+    ep = Endpoints(cmd_port=27591, state_port=27592)
     s = _run_wall(tmp_path, ep, _wall_robot(ep))
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names and not any("state_" in n for n in names), names
@@ -241,7 +241,7 @@ def test_runner_wall_clock_no_false_trip(tmp_path):
 def test_runner_wall_clock_publisher_stall_goes_passive(tmp_path):
     from dropbear_wbc.sdk.transport import Endpoints
 
-    ep = Endpoints(cmd_port=47593, state_port=47594)
+    ep = Endpoints(cmd_port=27593, state_port=27594)
     # 0.1+0.4+0.2 s = 35 steps before POLICY; stall 0.25 s ten steps into POLICY.
     s = _run_wall(tmp_path, ep, _wall_robot(ep, stall_after_cmds=45, stall_s=0.25))
     names = [t["transition"] for t in s["transitions"]]

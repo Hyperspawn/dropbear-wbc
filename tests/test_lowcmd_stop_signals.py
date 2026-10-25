@@ -86,9 +86,9 @@ def _cmd(rel: str, ep: Endpoints) -> list[str]:
     return [sys.executable, "-u", str(ROOT / rel), *extra, *ports]
 
 
-CASES = [("tools/policy_runner.py", "SIGTERM", 47811), ("tools/policy_runner.py", "SIGHUP", 47813),
-         ("tools/teleop_arm.py", "SIGTERM", 47815),
-         ("scripts/examples/dropbear_low_level_example.py", "SIGTERM", 47817)]
+CASES = [("tools/policy_runner.py", "SIGTERM", 27811), ("tools/policy_runner.py", "SIGHUP", 27813),
+         ("tools/teleop_arm.py", "SIGTERM", 27815),
+         ("scripts/examples/dropbear_low_level_example.py", "SIGTERM", 27817)]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX signals")

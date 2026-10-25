@@ -13,7 +13,7 @@ from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock
 
 def _endpoints(offset: int) -> Endpoints:
     # Ports away from the contract defaults so tests never collide with a running bridge.
-    return Endpoints(cmd_port=46555 + offset, state_port=46556 + offset)
+    return Endpoints(cmd_port=26555 + offset, state_port=26556 + offset)
 
 
 def _wait_connected(pub, sub, make_msg, timeout=3.0):

@@ -23,7 +23,7 @@ from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, Chann
 from dropbear_wbc.sdk.types import IMUState, LowCmd, LowState, MotorStateBlock, SimState
 
 ROOT = Path(__file__).resolve().parents[1]
-EP = Endpoints(cmd_port=48555, state_port=48556)
+EP = Endpoints(cmd_port=28555, state_port=28556)
 pytestmark = pytest.mark.skipif(not DEFAULT_CALIBRATION.exists(), reason="no semantic calibration JSON")
 
 

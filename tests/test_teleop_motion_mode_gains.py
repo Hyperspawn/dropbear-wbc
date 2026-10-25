@@ -79,7 +79,7 @@ class FieldCheckRobot(lb.FakeArmRobot):
 def test_every_teleop_lowcmd_inside_field(tmp_path):
     from dropbear_wbc.teleop.arm_ik import DropbearArmIK
 
-    ep = Endpoints(cmd_port=48655, state_port=48656)
+    ep = Endpoints(cmd_port=28655, state_port=28656)
     robot = FieldCheckRobot(DropbearArmIK(), ep)
     robot.start()
     try:

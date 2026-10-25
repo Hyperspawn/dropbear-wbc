@@ -23,7 +23,7 @@ from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, Chann
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorMode
 
 ROOT = Path(__file__).resolve().parents[1]
-EP = Endpoints(cmd_port=47555, state_port=47556)
+EP = Endpoints(cmd_port=27555, state_port=27556)
 
 
 class FakeRobot(threading.Thread):
@@ -112,7 +112,7 @@ def test_runner_policy_mode_over_zmq(tmp_path):
 
 def test_runner_fails_when_motor_mode_never_enable(tmp_path):
     """Item 156: summary must not report executed when LowState.mode stays 0 (HAL refuse / never armed)."""
-    ep = Endpoints(cmd_port=47575, state_port=47576)
+    ep = Endpoints(cmd_port=27575, state_port=27576)
     robot = FakeRobot(ep, echo_mode=False)  # mode stays 0
     robot.start()
     try:
@@ -133,7 +133,7 @@ def test_runner_fails_when_motor_mode_never_enable(tmp_path):
 
 
 def test_runner_hold_mode_passes_with_enable_echo(tmp_path):
-    ep = Endpoints(cmd_port=47565, state_port=47566)
+    ep = Endpoints(cmd_port=27565, state_port=27566)
     robot = FakeRobot(ep, echo_mode=True)
     robot.start()
     try:
@@ -159,7 +159,7 @@ def test_runner_hold_mode_passes_with_enable_echo(tmp_path):
 def test_runner_sim_clock_survives_the_uint32_tick_wrap(tmp_path):
     """Item 258: started 150 ticks before the uint32 wrap, the sim-clock scheduler compared raw ticks
     (``st.tick >= last_tick + decim``) and spun in its keepalive loop forever after the wrap."""
-    ep = Endpoints(cmd_port=47585, state_port=47586)
+    ep = Endpoints(cmd_port=27585, state_port=27586)
     robot = FakeRobot(ep, echo_mode=True, tick_offset=(1 << 32) - 150)
     robot.start()
     try:
@@ -196,7 +196,7 @@ def _run_stalled(tmp_path, ep, robot, stall_s, duration=2.0):
 def test_runner_sim_clock_aborts_on_frozen_tick(tmp_path):
     """Item 263: a producer that keeps publishing one tick used to spin the keepalive loop forever
     (frames keep last_rx fresh, so --state-timeout-s never fires)."""
-    ep = Endpoints(cmd_port=47587, state_port=47588)
+    ep = Endpoints(cmd_port=27587, state_port=27588)
     robot = FakeRobot(ep, freeze_after=100)
     rc, summary, wall = _run_stalled(tmp_path, ep, robot, 0.5)
     assert rc != 0
@@ -209,7 +209,7 @@ def test_runner_sim_clock_aborts_on_frozen_tick(tmp_path):
 def test_runner_sim_clock_aborts_on_producer_restart(tmp_path):
     """Item 263: a restart (tick back to 0) stalls the scheduler until the tick passes the old value
     (3000 ticks here, about 1.5 s of catch-up at the fake robot rate; 0.5 s stall limit)."""
-    ep = Endpoints(cmd_port=47589, state_port=47590)
+    ep = Endpoints(cmd_port=27589, state_port=27590)
     rc, summary, wall = _run_stalled(tmp_path, ep, FakeRobot(ep, restart_after=3000), 0.5, duration=8.0)
     assert rc != 0
     assert "TickStallError" in summary["error"] and "producer restart" in summary["error"]
