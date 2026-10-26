@@ -378,9 +378,9 @@ def main(argv=None) -> int:
             state_lag_max = max(state_lag_max, float(info.extra.get("state_lag_s") or 0.0))
             if info.policy_ms:
                 policy_ms.append(info.policy_ms)
-            if info.transition:
-                transitions.append({"t": t, "tick": st.tick, "transition": info.transition})
-                print(f"[runner] t={t:6.3f}s {info.transition}", flush=True)
+            for tr in info.transitions:  # all of this step's transitions (request + trip keep both, item 260)
+                transitions.append({"t": t, "tick": st.tick, "transition": tr})
+                print(f"[runner] t={t:6.3f}s {tr}", flush=True)
             q = st.motor.q.astype(float)
             err = q - info.q_des
             mode_u8 = np.asarray(st.motor.mode)

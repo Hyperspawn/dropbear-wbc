@@ -70,7 +70,8 @@ class StepInfo:
 
     state: FsmState
     q_des: np.ndarray
-    transition: str | None = None
+    transition: str | None = None   # last transition of this step (== transitions[-1]); kept for callers
+    transitions: list[str] = field(default_factory=list)  # every transition of this step, in order (item 260)
     policy_ms: float = 0.0
     obs: np.ndarray | None = None
     action: np.ndarray | None = None
@@ -104,7 +105,7 @@ class DeployController:
         self.full_kd = cfg.fsm.hold_kd.copy()
         self.full_kp[cfg.motor_ids] = cfg.kp
         self.full_kd[cfg.motor_ids] = cfg.kd
-        self._pending: str | None = None
+        self._pending: list[str] = []  # transitions since the last step() (request() + step), reported in order
         self._last_refusal: str | None = None
         self._imu_tick: int | None = None
         self._imu_tick_t0 = 0.0
@@ -245,12 +246,14 @@ class DeployController:
         """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, or
         (for any non-Passive state) by the motor-mode latch; the state is then unchanged.
 
-        An IMU refusal reports ``"<state>->policy refused(<fault>)"`` as the next step's transition (once per distinct
+        Every transition (including refusals) is reported in the next step's ``StepInfo.transitions`` in order, so a
+        request followed by a trip in the same step keeps both. An IMU refusal reports
+        ``"<state>->policy refused(<fault>)"`` as the next step's transition (once per distinct
         fault; callers may retry every step).
         """
         if self.latched is not None and new != FsmState.PASSIVE:
             self.refused.append({"t": t, "requested": new.value, "latched": self.latched["reason"]})
-            self._pending = f"{self.state.value}->{new.value}(refused:motor_mode_latched)"
+            self._pending.append(f"{self.state.value}->{new.value}(refused:motor_mode_latched)")
             return False
         if new == FsmState.POLICY and self.policy is None:
             raise RuntimeError("POLICY requested but no ONNX policy is loaded")
@@ -260,11 +263,11 @@ class DeployController:
                 fault, _, _ = self.observe_state(low_state, t, state_age_s)
             if fault is not None:
                 if fault != self._last_refusal:
-                    self._pending = f"{self.state.value}->policy refused({fault})"
+                    self._pending.append(f"{self.state.value}->policy refused({fault})")
                 self._last_refusal = fault
                 return False
         self._last_refusal = None
-        self._pending = f"{self.state.value}->{new.value}"
+        self._pending.append(f"{self.state.value}->{new.value}")
         self.state = new
         self._t_enter = t
         q = low_state.motor.q.astype(np.float64)
@@ -305,14 +308,16 @@ class DeployController:
         info_extra = {"imu_valid": int(low_state.imu.valid), "imu_age_s": age, "imu_fault": fault}
         if self.state == FsmState.POLICY and fault is not None:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
-            self.state, self._pending = FsmState.PASSIVE, f"policy->passive({fault})"
+            self.state = FsmState.PASSIVE
+            self._pending.append(f"policy->passive({fault})")
         sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
         info_extra.update(state_age_s=sage, state_lag_s=slag, state_fault=sfault)
         hold_last = False
         if self.state == FsmState.POLICY and sfault is not None:
             self._st_bad += 1
             if self._last_q_policy is None or self._st_bad > cfg.fsm.state_stale_grace_steps:
-                self.state, self._pending = FsmState.PASSIVE, f"policy->passive({sfault})"
+                self.state = FsmState.PASSIVE
+                self._pending.append(f"policy->passive({sfault})")
             else:
                 hold_last = True
         else:
@@ -321,7 +326,7 @@ class DeployController:
         if cfg.fsm.motor_mode_gate:
             reason = self._motor_mode_check(low_state, t, info)
             if reason is not None:
-                self._pending = f"{self.state.value}->passive({reason})"
+                self._pending.append(f"{self.state.value}->passive({reason})")
                 self.latched = {"t": t, "tick": int(low_state.tick), "from": self.state.value, "reason": reason}
                 self.state = FsmState.PASSIVE
                 self._t_active = None
@@ -335,7 +340,7 @@ class DeployController:
             info.extra["ratio"] = ratio
             if ratio >= 1.0:
                 self.state = FsmState.HOLD
-                self._pending = "move_to_default->hold"
+                self._pending.append("move_to_default->hold")
         elif self.state == FsmState.HOLD:
             q_des = cfg.hold_target_sdk.copy()
             kp, kd = cfg.fsm.hold_kp.copy(), cfg.fsm.hold_kd.copy()
@@ -348,13 +353,16 @@ class DeployController:
             tilt = Q.tilt_angle(low_state.imu.quat_wxyz.astype(np.float64))
             info.extra["tilt_rad"] = tilt
             if cfg.fsm.bad_orientation_rad is not None and tilt > cfg.fsm.bad_orientation_rad:
-                self.state, self._pending = FsmState.PASSIVE, "policy->passive(bad_orientation)"
+                self.state = FsmState.PASSIVE
+                self._pending.append("policy->passive(bad_orientation)")
             elif self.motion is not None and self.motion.done(self._policy_step):
-                self.state, self._pending = FsmState.HOLD, "policy->hold(motion_end)"
+                self.state = FsmState.HOLD
+                self._pending.append("policy->hold(motion_end)")
         cmd = LowCmd(tick=low_state.tick)
         cmd.motor = MotorCmdBlock.from_arrays(n, mode=MotorMode.ENABLE, q=q_des, dq=0.0, tau=0.0, kp=kp, kd=kd)
         info.q_des = q_des
-        info.transition, self._pending = self._pending, None
+        info.transitions, self._pending = self._pending, []
+        info.transition = info.transitions[-1] if info.transitions else None
         return cmd, info
 
     def _policy_step_q(self, low_state: LowState, info: StepInfo) -> np.ndarray:
