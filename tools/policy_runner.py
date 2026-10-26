@@ -360,7 +360,7 @@ def main(argv=None) -> int:
                 ctrl.request(schedule[seq_i][1], st, t)
                 seq_i += 1
             if policy_at is not None and t >= policy_at and ctrl.state == FsmState.HOLD:
-                if ctrl.request(FsmState.POLICY, st, t, state_age_s=age_s):  # refused while the IMU gate fails: retry next step
+                if ctrl.request(FsmState.POLICY, st, t, state_age_s=age_s):  # refused on an IMU, state or tilt fault: retry next step
                     policy_at = None
             a = time.perf_counter()
             cmd, info = ctrl.step(st, t, state_age_s=age_s)

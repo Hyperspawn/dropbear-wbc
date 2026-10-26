@@ -78,9 +78,11 @@ def test_policy_entry_kept_when_first_policy_step_trips(tmp_path):
                         list(fx.BODIES), fx.T_FRAMES)
     ctrl = DeployController(cfg, policy, motion)
     ctrl.state = FsmState.HOLD
-    st = fx.low_state(5, np.asarray(motors.DEFAULT_POS), quat_wxyz=(0, 1, 0, 0))  # upside down at entry
+    up = fx.low_state(5, np.asarray(motors.DEFAULT_POS))
+    up.motor.mode[:] = np.uint8(1)
+    st = fx.low_state(6, np.asarray(motors.DEFAULT_POS), quat_wxyz=(0, 1, 0, 0))  # tips over before the first step
     st.motor.mode[:] = np.uint8(1)
-    assert ctrl.request(FsmState.POLICY, st, 0.1)
-    _, info = ctrl.step(st, 0.1)
+    assert ctrl.request(FsmState.POLICY, up, 0.1)
+    _, info = ctrl.step(st, 0.12)
     assert ctrl.state == FsmState.PASSIVE
     assert info.transitions == ["hold->policy", "policy->passive(bad_orientation)"]

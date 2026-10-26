@@ -243,8 +243,9 @@ class DeployController:
     # ------------------------------------------------------------------ transitions
 
     def request(self, new: FsmState, low_state: LowState, t: float, state_age_s: float | None = None) -> bool:
-        """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, or
-        (for any non-Passive state) by the motor-mode latch; the state is then unchanged.
+        """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, the
+        state freshness gate or the tilt check (``bad_orientation``, item 275), or (for any non-Passive state) by the
+        motor-mode latch; the state is then unchanged.
 
         Every transition (including refusals) is reported in the next step's ``StepInfo.transitions`` in order, so a
         request followed by a trip in the same step keeps both. An IMU refusal reports
@@ -261,6 +262,8 @@ class DeployController:
             fault, _ = self.observe_imu(low_state, t)
             if fault is None:
                 fault, _, _ = self.observe_state(low_state, t, state_age_s)
+            if fault is None and self._tilted(low_state) is not None:
+                fault = "bad_orientation"
             if fault is not None:
                 if fault != self._last_refusal:
                     self._pending.append(f"{self.state.value}->policy refused({fault})")
@@ -284,6 +287,14 @@ class DeployController:
                 pos = ctx.robot_anchor_pos_w() if (self.allow_privileged and low_state.sim is not None) else None
                 self.motion.align(ctx.robot_anchor_quat_w(), pos)
         return True
+
+    def _tilted(self, low_state: LowState) -> float | None:
+        """Torso tilt [rad] when it exceeds ``fsm.bad_orientation_rad`` (else ``None``; ``None`` also when disabled)."""
+        lim = self.cfg.fsm.bad_orientation_rad
+        if lim is None:
+            return None
+        tilt = Q.tilt_angle(low_state.imu.quat_wxyz.astype(np.float64))
+        return tilt if tilt > lim else None
 
     def _ctx(self, low_state: LowState) -> ObsContext:
         ctx = ObsContext(state=low_state, cfg=self.cfg, last_action=self._last_action,
@@ -310,6 +321,13 @@ class DeployController:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
             self.state = FsmState.PASSIVE
             self._pending.append(f"policy->passive({fault})")
+        tilt = self._tilted(low_state) if self.state == FsmState.POLICY else None
+        if tilt is not None:
+            # Item 275: leave before evaluating the policy, so the trip step itself sends Passive damping, not a policy
+            # target at policy kp (the IMU is valid here, so the quaternion is trusted).
+            info_extra["tilt_rad"] = tilt
+            self.state = FsmState.PASSIVE
+            self._pending.append("policy->passive(bad_orientation)")
         sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
         info_extra.update(state_age_s=sage, state_lag_s=slag, state_fault=sfault)
         hold_last = False
@@ -350,12 +368,8 @@ class DeployController:
         else:  # POLICY
             q_des = self._policy_step_q(low_state, info)
             self._last_q_policy = q_des.copy()
-            tilt = Q.tilt_angle(low_state.imu.quat_wxyz.astype(np.float64))
-            info.extra["tilt_rad"] = tilt
-            if cfg.fsm.bad_orientation_rad is not None and tilt > cfg.fsm.bad_orientation_rad:
-                self.state = FsmState.PASSIVE
-                self._pending.append("policy->passive(bad_orientation)")
-            elif self.motion is not None and self.motion.done(self._policy_step):
+            info.extra["tilt_rad"] = Q.tilt_angle(low_state.imu.quat_wxyz.astype(np.float64))
+            if self.motion is not None and self.motion.done(self._policy_step):
                 self.state = FsmState.HOLD
                 self._pending.append("policy->hold(motion_end)")
         cmd = LowCmd(tick=low_state.tick)
