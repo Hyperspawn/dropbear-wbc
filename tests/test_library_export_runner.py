@@ -72,7 +72,7 @@ def _state_on_reference(npz: Path, k: int, tick: int):
     r = bodies.index("world")
     q = np.asarray(d["body_quat_w"][k, r], float)
     f32 = lambda v: np.asarray(v, np.float32)  # noqa: E731
-    st = LowState(tick=tick, stamp_ns=1)
+    st = LowState(tick=tick, stamp_ns=0)
     st.imu = IMUState(quat_wxyz=f32(q), gyro=f32(Q.rotate_inv(q, d["body_ang_vel_w"][k, r])),
                       accel=f32([0, 0, 9.81]), rpy=np.zeros(3, np.float32), valid=1, age_us=0)
     st.motor = MotorStateBlock.zeros(motors.NUM_MOTORS)

@@ -121,7 +121,7 @@ def write_contract_npz(path: Path) -> dict[str, np.ndarray]:
 
 def low_state(tick: int, q: np.ndarray | None = None, quat_wxyz=(1.0, 0.0, 0.0, 0.0), gyro=(0.0, 0.0, 0.0),
               sim: bool = True, imu_valid: int = 1, imu_age_us: int = 0) -> LowState:
-    st = LowState(tick=tick, stamp_ns=1)
+    st = LowState(tick=tick, stamp_ns=0)
     st.imu = IMUState(quat_wxyz=np.asarray(quat_wxyz, np.float32), gyro=np.asarray(gyro, np.float32),
                       accel=np.array([0, 0, 9.81], np.float32), rpy=np.zeros(3, np.float32),
                       valid=imu_valid, age_us=imu_age_us)
