@@ -111,7 +111,10 @@ def test_stop_signal_leaves_damping_as_last_lowcmd(rel, signame, port):
         assert robot.last_kp is not None and float(np.abs(robot.last_kp).max()) > 0  # gains were live
         proc.send_signal(getattr(signal, signame))
         out, _ = proc.communicate(timeout=20)
-        time.sleep(0.2)
+        # Item 277: wait for the robot thread to read the damping frame instead of a fixed 0.2 s sleep.
+        t1 = time.time()
+        while float(np.abs(robot.last_kp).max()) > 0 and time.time() - t1 < 3.0:
+            time.sleep(0.01)
     finally:
         if proc.poll() is None:
             proc.kill()

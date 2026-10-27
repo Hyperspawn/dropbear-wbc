@@ -78,11 +78,16 @@ class ZmqPublisher:
         channel: channel name used as the frame prefix.
         bind: bind (robot side) or connect (client side).
         sndhwm: send high-water mark; beyond it messages are dropped (counted in :attr:`dropped`).
+        flush_s: :meth:`close` keeps the socket open until ``flush_s`` has passed since the last send (item 277).
+            With linger 0 a frame written just before close + process exit was lost in 15/60 trials on the box;
+            for a LowCmd writer that frame is the damping command. 0 disables the wait.
     """
 
     def __init__(self, endpoint: str, channel: str, bind: bool, sndhwm: int = 16,
-                 context: zmq.Context | None = None, conflate: bool = True):
+                 context: zmq.Context | None = None, conflate: bool = True, flush_s: float = 0.05):
         self.endpoint, self.channel = endpoint, channel
+        self.flush_s = flush_s
+        self._last_send: float | None = None
         self._prefix = _prefix(channel)
         self._sock = (context or zmq.Context.instance()).socket(zmq.PUB)
         if conflate:
@@ -101,9 +106,16 @@ class ZmqPublisher:
             self.dropped += 1
             return False
         self.sent += 1
+        self._last_send = time.perf_counter()
         return True
 
     def close(self) -> None:
+        """Close without blocking on an absent peer (linger 0), but only after the last frame had ``flush_s`` to
+        leave the I/O thread. Costs nothing when nothing was sent recently."""
+        if self._last_send is not None and self.flush_s > 0:
+            wait = self.flush_s - (time.perf_counter() - self._last_send)
+            if wait > 0:
+                time.sleep(wait)
         self._sock.close(linger=0)
 
 
