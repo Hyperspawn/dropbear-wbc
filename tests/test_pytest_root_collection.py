@@ -50,3 +50,19 @@ def test_bare_pytest_collects_without_errors():
     lines = out.splitlines()
     assert not [ln for ln in lines if ln.startswith("tools/") or ln.startswith("ERROR")]
     assert "error" not in lines[-1].lower()
+
+
+def test_pytest_entry_point_without_cwd_on_path_collects():
+    """The `pytest` console script does not put the repo root on sys.path (`python -m pytest`
+    does), so tests importing `tools.*` failed to collect under a bare `pytest`. `-P` (3.11+)
+    reproduces the console-script path; pytest.ini's `pythonpath = .` fixes it."""
+    proc = subprocess.run(
+        [sys.executable, "-P", "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out[-2000:]
+    assert "error" not in out.splitlines()[-1].lower()

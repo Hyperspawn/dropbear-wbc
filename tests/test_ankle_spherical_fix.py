@@ -87,6 +87,7 @@ def _stage(tree_joint_named_111: bool = False):
 
 
 def _types(stage):
+    _need_usd()
     from pxr import Usd, UsdPhysics
 
     return {p.GetName(): p.GetTypeName() for p in Usd.PrimRange(stage.GetPrimAtPath("/humanoid"))
