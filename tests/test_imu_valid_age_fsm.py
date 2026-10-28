@@ -155,8 +155,10 @@ def test_unknown_age_is_stale():
 
 
 def test_reused_lowstate_tick_ages_out():
-    """Wall-clock runner re-uses the last LowState when none arrives: its age must grow with controller time."""
-    ctrl, pol = _ctrl()
+    """Wall-clock runner re-uses the last LowState when none arrives: its age must grow with controller time.
+    With the state freshness gate on, re-use is attributed to state_stale (item 279, tests/test_fsm_stale_attribution.py);
+    the IMU-only path is what still runs with the state gate off."""
+    ctrl, pol = _ctrl(state_gate=False)
     t = _to_hold(ctrl)
     st = fx.low_state(10, DEF, imu_age_us=10_000)
     assert ctrl.request(FsmState.POLICY, st, t)

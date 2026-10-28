@@ -204,6 +204,15 @@ class DeployController:
                 fault = "state_stale"
         return fault, age, self._st_lag
 
+    def _reuse_owned_by_state_gate(self, low_state: LowState, t: float) -> bool:
+        """True when IMU staleness comes only from re-using the current LowState tick and the state freshness gate
+        (with an age limit) is on to handle that re-use (item 279)."""
+        fsm = self.cfg.fsm
+        if not (fsm.state_gate and fsm.state_max_age_s is not None and fsm.imu_max_age_s is not None):
+            return False
+        reused = int(low_state.tick) == self._st_tick and t > self._st_tick_t0
+        return reused and low_state.imu.age_s <= fsm.imu_max_age_s
+
     # ------------------------------------------------------------------ latch
 
     def clear_latch(self) -> None:
@@ -317,6 +326,14 @@ class DeployController:
         kp, kd = self.full_kp.copy(), self.full_kd.copy()
         fault, age = self.observe_imu(low_state, t)
         info_extra = {"imu_valid": int(low_state.imu.valid), "imu_age_s": age, "imu_fault": fault}
+        sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
+        if (fault == "imu_stale" and self._reuse_owned_by_state_gate(low_state, t)):
+            # Item 279: the IMU sample was fresh on arrival and has only aged because the whole LowState tick is being
+            # re-used. That is a LowState stall, owned by the state freshness gate (its grace re-sends the last target
+            # without evaluating the policy, then trips as state_stale). Tripping here as imu_stale pre-empted that
+            # grace and mislabelled transport/HAL stalls as IMU faults whenever both gates expired on the same step.
+            info_extra["imu_stale_deferred"] = True
+            fault = None
         if self.state == FsmState.POLICY and fault is not None:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
             self.state = FsmState.PASSIVE
@@ -328,7 +345,6 @@ class DeployController:
             info_extra["tilt_rad"] = tilt
             self.state = FsmState.PASSIVE
             self._pending.append("policy->passive(bad_orientation)")
-        sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
         info_extra.update(state_age_s=sage, state_lag_s=slag, state_fault=sfault)
         hold_last = False
         if self.state == FsmState.POLICY and sfault is not None:
