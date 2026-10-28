@@ -318,6 +318,7 @@ def main(argv=None) -> int:
         state_lag_max = 0.0
         next_wall = time.perf_counter()
         seq_i = 0
+        stamp_fallback = None  # item 281: first frame whose stamp stopped being a same-host perf_counter stamp
         while not stop.flag:
             # ---- acquire the state for this step
             if args.clock == "sim":
@@ -353,6 +354,15 @@ def main(argv=None) -> int:
             t_rx_ns = time.perf_counter_ns()
             age_s = (t_rx_ns - st.stamp_ns) * 1e-9 if (stamp_age and st.stamp_ns) else None
             t = ctrl_time(st)
+            if age_s is not None and not (0.0 <= age_s < 1.0):
+                # Item 281: the publisher's clock changed mid-run (restart on another host, placeholder stamp, clock
+                # step). A negative age was silently read as 0 and a seconds-old foreign stamp tripped state_stale on a
+                # fresh frame. Same rule as the first-frame check: drop transport age for the rest of the run and gate
+                # on tick re-use and tick lag only (a frame that is really stale still trips the tick-lag gate).
+                print(f"[runner] WARNING: LowState stamp age {age_s:.3f} s at tick {st.tick} (t={t:.3f}s) is not a "
+                      "same-host perf_counter stamp; gating on tick re-use and tick lag only from here on", flush=True)
+                stamp_fallback = {"t": t, "tick": int(st.tick), "age_s": float(age_s), "step": steps}
+                stamp_age, age_s = False, None
             if t >= args.duration:
                 stop.request("duration")
                 break
@@ -448,7 +458,8 @@ def main(argv=None) -> int:
             "policy_ms_p50": float(np.percentile(policy_ms, 50)) if policy_ms else None,
             "transitions": transitions, "fall": fall, "hold_tracking": tracking,
             "state_gate": {"enabled": bool(cfg.fsm.state_gate), "max_age_s": cfg.fsm.state_max_age_s,
-                           "stamp_age": bool(stamp_age), "fault_steps": state_faults,
+                           "stamp_age": bool(stamp_age), "stamp_fallback": stamp_fallback,
+                           "fault_steps": state_faults,
                            "hold_last_steps": state_hold_last, "lag_max_ms": 1e3 * state_lag_max},
             "motor_mode_gate": {"enabled": bool(cfg.fsm.motor_mode_gate),
                                 "grace_steps": int(cfg.fsm.motor_mode_grace_steps),
