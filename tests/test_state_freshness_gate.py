@@ -154,6 +154,14 @@ def test_gate_off_and_config_keys():
 
 # --- end to end: policy_runner --clock wall over the real ZMQ transport (item 236) ---------------------------------
 
+def _clock_tick(t0: float, now: float, dt: float = 0.002) -> int:
+    """LowState.tick of a fake robot whose counter runs on its own clock, like an MCU sample counter: a late loop
+    iteration skips ticks instead of falling behind wall time. Counting publishes instead made the tick trail the
+    runner's wall clock whenever the fake robot thread was starved (machine load, GIL), which the tick-lag estimator
+    then correctly reported as state_stale on a fresh frame (item 280)."""
+    return 1 + int((now - t0) / dt + 1e-9)
+
+
 def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
     """500 Hz fake robot in real time; stamp_ns=0 so the transport stamps it. Optionally stops publishing for
     ``stall_s`` after ``stall_after_cmds`` LowCmds (a reader- or bus-side stall, notes/202 F2)."""
@@ -176,7 +184,7 @@ def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
             pub.Init()
             sub.Init()
             mode = np.zeros(22, dtype=np.uint8)
-            nxt = time.perf_counter()
+            nxt = t0 = time.perf_counter()
             try:
                 while self.running:
                     cmd = sub.Read(timeout=0.0)
@@ -188,7 +196,12 @@ def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
                         self.stalled = True
                         time.sleep(stall_s)
                         nxt = time.perf_counter()
-                    self.ticks += 1
+                    tick = _clock_tick(t0, time.perf_counter())
+                    if tick == self.ticks:  # loop ran early: same tick, nothing new to publish
+                        nxt += 0.002
+                        time.sleep(max(0.0, nxt - time.perf_counter()))
+                        continue
+                    self.ticks = tick
                     st = fx.low_state(self.ticks, self.q)
                     st.stamp_ns = 0
                     st.motor.mode[:] = mode

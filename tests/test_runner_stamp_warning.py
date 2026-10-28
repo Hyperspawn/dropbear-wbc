@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import deploy_fixtures as fx
-from test_state_freshness_gate import _run_wall
+from test_state_freshness_gate import _clock_tick, _run_wall
 
 
 def test_fixture_low_state_leaves_stamp_to_transport():
@@ -34,14 +34,19 @@ def _stamped_robot(ep, stamp_fn):
             pub.Init()
             sub.Init()
             mode = np.zeros(22, dtype=np.uint8)
-            nxt = time.perf_counter()
+            nxt = t0 = time.perf_counter()
             try:
                 while self.running:
                     cmd = sub.Read(timeout=0.0)
                     if cmd is not None:
                         self.q += 0.05 * (cmd.motor.q.astype(float) - self.q)
                         mode = np.asarray(cmd.motor.mode, dtype=np.uint8).copy()
-                    self.ticks += 1
+                    tick = _clock_tick(t0, time.perf_counter())  # clock-driven, not publish-counted (item 280)
+                    if tick == self.ticks:
+                        nxt += 0.002
+                        time.sleep(max(0.0, nxt - time.perf_counter()))
+                        continue
+                    self.ticks = tick
                     st = fx.low_state(self.ticks, self.q)
                     st.stamp_ns = int(stamp_fn())
                     st.motor.mode[:] = mode
@@ -82,3 +87,11 @@ def test_runner_non_same_host_stamp_warns_and_gates_on_ticks(tmp_path, capsys, c
     # a foreign stamp must neither trip state_stale (seconds of fake age) nor block the policy
     assert "hold->policy" in names and not any("state_" in n for n in names), names
     assert s["state_gate"]["fault_steps"] == {}, s["state_gate"]
+
+
+def test_clock_tick_skips_instead_of_trailing():
+    """A fake robot iteration that runs 13 ms late reports the tick of its own clock (item 280)."""
+    assert _clock_tick(10.0, 10.0) == 1
+    assert _clock_tick(10.0, 10.0019) == 1
+    assert _clock_tick(10.0, 10.002) == 2
+    assert _clock_tick(10.0, 10.015) == 8  # 13 ms late after tick 2: skips 3..7, no lag vs the wall clock
