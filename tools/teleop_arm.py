@@ -306,8 +306,25 @@ def analyze(arr: dict, rate: float, skip_s: float) -> dict:
     out["ik_rot_err_median_rad"] = float(np.nanmedian(arr["ik.rot_err_rad"][m]))
     for k in ("latency.compute_ms", "latency.state_age_ms", "latency.device_age_ms"):
         v = arr[k][m, 0]
-        out[k] = {"p50": float(np.percentile(v, 50)), "p95": float(np.percentile(v, 95)), "max": float(v.max())}
+        ok = np.isfinite(v)  # item 284: a foreign / placeholder stamp is recorded as NaN, not as an age
+        d = {"n": int(ok.sum()), "invalid_frames": int((~ok).sum())}
+        if ok.any():
+            d.update(p50=float(np.percentile(v[ok], 50)), p95=float(np.percentile(v[ok], 95)), max=float(v[ok].max()))
+        out[k] = d
     return out
+
+
+def same_host_age_ms(t_rx_ns: int, stamp_ns: int) -> float:
+    """LowState age in ms when ``stamp_ns`` is a same-host perf_counter stamp, else NaN (item 284).
+
+    Same rule as policy_runner (0043): an unset (0) stamp, a stamp ahead of the receive time, or one 1 s or more
+    behind it is not an age on this host's clock (cross-host clock, placeholder, other epoch) and must not be
+    logged as hours of latency.
+    """
+    if not stamp_ns:
+        return float("nan")
+    age_s = (t_rx_ns - stamp_ns) * 1e-9
+    return age_s * 1e3 if 0.0 <= age_s < 1.0 else float("nan")
 
 
 # ------------------------------------------------------------------------------------------------ main
@@ -546,7 +563,7 @@ def main(argv=None) -> int:
                     "time.tick": st.tick, "time.skipped_steps": skipped_steps,
                     "teleop.tracking": float(tracking and targets is not None and targets.valid),
                     "latency.compute_ms": (t_tx_ns - t_rx_ns) * 1e-6,
-                    "latency.state_age_ms": (t_rx_ns - st.stamp_ns) * 1e-6,
+                    "latency.state_age_ms": same_host_age_ms(t_rx_ns, st.stamp_ns),
                     "latency.device_age_ms": ((t_tx_ns - targets.stamp_ns) * 1e-6) if targets is not None else np.nan,
                 })
         # ---------------------------------------------------------------- HOME + exit

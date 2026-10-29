@@ -25,6 +25,7 @@ LeRobot check and the real-clock drift; ``meta/episodes_stats.jsonl`` (v2.1) is 
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -59,7 +60,7 @@ EXTRA_COLUMNS = {
     "time.skipped_steps": (1, "control periods the loop missed right before this frame (0 = on schedule)"),
     "teleop.tracking": (1, "1 while the arms follow the device (started, device data valid)"),
     "latency.compute_ms": (1, "LowState received -> LowCmd sent [ms]"),
-    "latency.state_age_ms": (1, "LowState publish -> received [ms]"),
+    "latency.state_age_ms": (1, "LowState publish -> received [ms]; NaN when the stamp is not a same-host age"),
     "latency.device_age_ms": (1, "device sample stamp -> LowCmd sent [ms]"),
 }
 
@@ -263,8 +264,10 @@ class SessionRecorder:
             v = np.asarray(v, dtype=np.float64).reshape(n, -1) if n else np.zeros((0, 1))
             if not len(v):
                 continue
-            ep_stats[k] = {"min": np.nanmin(v, 0).tolist(), "max": np.nanmax(v, 0).tolist(),
-                           "mean": np.nanmean(v, 0).tolist(), "std": np.nanstd(v, 0).tolist(), "count": [int(n)]}
+            with warnings.catch_warnings():  # an all-NaN column (e.g. state_age_ms on foreign stamps) stays NaN
+                warnings.simplefilter("ignore", RuntimeWarning)
+                ep_stats[k] = {"min": np.nanmin(v, 0).tolist(), "max": np.nanmax(v, 0).tolist(),
+                               "mean": np.nanmean(v, 0).tolist(), "std": np.nanstd(v, 0).tolist(), "count": [int(n)]}
         (meta / "episodes_stats.jsonl").write_text(json.dumps({"episode_index": 0, "stats": ep_stats}) + "\n",
                                                    encoding="utf-8")
         timing = check_timing_arrays(arr, self.fps)
