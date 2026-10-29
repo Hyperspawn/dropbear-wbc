@@ -78,13 +78,35 @@ def test_background_reload_never_blocks_the_loop(tmp_path):
         r.close()
 
 
+def _loop_gaps(ik, until, take=None):
+    """Run the 50 Hz control-loop stand-in until until() is true; return (gaps, last take() result)."""
+    gaps, got, last = [], None, time.perf_counter()
+    while not until(got):
+        if take is not None:
+            got = take()
+        ik.fk_both(ik.rest_q())  # some control-loop work
+        time.sleep(0.02)
+        now = time.perf_counter()
+        gaps.append(now - last)
+        last = now
+    return gaps, got
+
+
 def test_background_reload_with_real_ik(tmp_path):
-    """The real rebuild (DropbearArmIK + measured elbow tables) runs off the loop; the loop keeps 50 Hz."""
+    """The real rebuild (DropbearArmIK + measured elbow tables) runs off the loop; the loop keeps 50 Hz.
+
+    A shared CI host can stall the whole process (CI run 40821097880: one 155 ms gap while the
+    rebuild itself took 0.35 s; locally <= 48 ms even pinned to 1 CPU with 3 CPU hogs). Such a
+    stall is not the rebuild blocking the loop, so a slow gap is re-checked against a control
+    window of the same loop with no rebuild running: only a gap the control window does not show
+    fails the test.
+    """
     from dropbear_wbc.kinematics.semantic import DEFAULT_CALIBRATION
     from dropbear_wbc.teleop.arm_ik import DropbearArmIK
 
     if not DEFAULT_CALIBRATION.exists():
         pytest.skip("no calibration")
+    limit_s = 0.1  # the bridge watchdog is 100 ms (CONTRACTS 6.1)
     calib = tmp_path / "calib.json"
     data = json.loads(DEFAULT_CALIBRATION.read_text())
     calib.write_text(json.dumps(data))
@@ -93,17 +115,17 @@ def test_background_reload_with_real_ik(tmp_path):
     try:
         data["created"] = str(data.get("created")) + "-touched"
         calib.write_text(json.dumps(data))
-        gaps, got, last = [], None, time.perf_counter()
         t_end = time.perf_counter() + 4.0
-        while time.perf_counter() < t_end and got is None:
-            got = r.take()
-            ik0.fk_both(ik0.rest_q())  # some control-loop work
-            time.sleep(0.02)
-            now = time.perf_counter()
-            gaps.append(now - last)
-            last = now
+        gaps, got = _loop_gaps(ik0, lambda g: g is not None or time.perf_counter() >= t_end, r.take)
         assert got is not None, f"no rebuild within 4 s (errors {r.errors})"
         print(f"real rebuild {got[2]:.3f} s off-loop; worst loop gap {1e3 * max(gaps):.1f} ms")
-        assert max(gaps) < 0.1  # the bridge watchdog is 100 ms (CONTRACTS 6.1)
     finally:
         r.close()
+    if max(gaps) < limit_s:
+        return
+    n = len(gaps)
+    control, _ = _loop_gaps(ik0, lambda _g, c=iter(range(n + 1)): next(c) >= n)
+    print(f"control window (no rebuild, {n} iters): worst gap {1e3 * max(control):.1f} ms")
+    if max(control) >= limit_s:
+        pytest.skip(f"host stalled {1e3 * max(control):.0f} ms with no rebuild running; gap not attributable")
+    assert max(gaps) < limit_s, f"rebuild blocked the loop {1e3 * max(gaps):.0f} ms (control {1e3 * max(control):.0f} ms)"
