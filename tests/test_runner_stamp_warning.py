@@ -15,8 +15,12 @@ def test_fixture_low_state_leaves_stamp_to_transport():
     assert fx.low_state(5, np.zeros(22)).stamp_ns == 0
 
 
-def _stamped_robot(ep, stamp_fn):
-    """500 Hz fake robot that writes ``stamp_fn()`` into every LowState (non-zero => the transport keeps it)."""
+def _stamped_robot(ep, stamp_fn, clock_fn=None):
+    """500 Hz fake robot that writes ``stamp_fn()`` into every LowState (non-zero => the transport keeps it).
+
+    ``clock_fn(elapsed_s)`` optionally maps robot wall time to the time its tick counter reads; returning ``None``
+    publishes nothing (a silent publisher or bus stall), a value behind ``elapsed_s`` delivers frames whose tick trails
+    wall time (a backlogged link). Ticks never move backwards (item 283)."""
     import threading
 
     from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber
@@ -41,8 +45,13 @@ def _stamped_robot(ep, stamp_fn):
                     if cmd is not None:
                         self.q += 0.05 * (cmd.motor.q.astype(float) - self.q)
                         mode = np.asarray(cmd.motor.mode, dtype=np.uint8).copy()
-                    tick = _clock_tick(t0, time.perf_counter())  # clock-driven, not publish-counted (item 280)
-                    if tick == self.ticks:
+                    now = time.perf_counter()
+                    t_tick = now if clock_fn is None else clock_fn(now - t0)
+                    if t_tick is not None and clock_fn is not None:
+                        t_tick += t0
+                    # clock-driven, not publish-counted (item 280)
+                    tick = self.ticks if t_tick is None else _clock_tick(t0, t_tick)
+                    if tick <= self.ticks:
                         nxt += 0.002
                         time.sleep(max(0.0, nxt - time.perf_counter()))
                         continue

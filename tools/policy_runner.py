@@ -288,7 +288,8 @@ def main(argv=None) -> int:
         # host or a placeholder stamp reads as seconds of age. Tick re-use and tick lag are gated either way.
         stamp_age = args.clock == "wall" and not args.cross_host
         age0_s = (time.perf_counter_ns() - st.stamp_ns) * 1e-9 if st.stamp_ns else None
-        if stamp_age and not (age0_s is not None and 0.0 <= age0_s < 1.0):
+        age0_valid = age0_s is not None and 0.0 <= age0_s < 1.0
+        if stamp_age and not age0_valid:
             print(f"[runner] WARNING: first LowState stamp age {age0_s} s is not a same-host perf_counter stamp; "
                   "gating on tick re-use and tick lag only (as --cross-host)", flush=True)
             stamp_age = False
@@ -303,6 +304,7 @@ def main(argv=None) -> int:
         if args.mode == "policy":
             policy_at = args.passive_s + cfg.fsm.move_to_default_s + args.hold_s
         steps, wall_steps, state_age_ms, compute_ms, tick_gaps, policy_ms = 0, [], [], [], [], []
+        state_age_invalid = 0  # frames whose stamp was not a same-host age (not in state_age_ms)
         hold_err: list[np.ndarray] = []
         transitions, fall = [], None
         motor_mode_max = 0
@@ -377,7 +379,16 @@ def main(argv=None) -> int:
             pub.Write(cmd)
             last_cmd, last_pub = cmd, time.perf_counter()
             compute_ms.append((time.perf_counter() - a) * 1e3)
-            state_age_ms.append((t_rx_ns - st.stamp_ns) * 1e-6)
+            # Item 283: only a same-host stamp is an age. A foreign / placeholder stamp (fallback, first-frame warning,
+            # --cross-host) read as hours of "age" and polluted the steps log and the summary percentiles.
+            raw_age_s = (t_rx_ns - st.stamp_ns) * 1e-9 if st.stamp_ns else None
+            step_age_ms = None
+            if (raw_age_s is not None and not args.cross_host and stamp_fallback is None and age0_valid
+                    and 0.0 <= raw_age_s < 1.0):
+                step_age_ms = raw_age_s * 1e3
+                state_age_ms.append(step_age_ms)
+            else:
+                state_age_invalid += 1
             wall_steps.append(time.perf_counter())
             tick_gaps.append(st.tick - last_tick)
             last_tick = st.tick
@@ -407,7 +418,7 @@ def main(argv=None) -> int:
                 print(f"[runner] FALL detected at t={t:.3f}s tilt={tilt:.2f} rad root_z={root_z}", flush=True)
             if logf is not None:
                 rec = {"step": steps, "t": t, "tick": st.tick, "fsm": info.state.value, "tilt": tilt,
-                       "root_z": root_z, "state_age_ms": state_age_ms[-1], "imu_valid": info.extra.get("imu_valid"),
+                       "root_z": root_z, "state_age_ms": step_age_ms, "imu_valid": info.extra.get("imu_valid"),
                        "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
                        "state_lag_ms": 1e3 * float(info.extra.get("state_lag_s") or 0.0),
                        "state_fault": info.extra.get("state_fault"),
@@ -453,6 +464,7 @@ def main(argv=None) -> int:
                                "expected": decim},
             "state_age_ms": {"p50": float(np.percentile(state_age_ms, 50)), "p99": float(np.percentile(state_age_ms, 99)),
                              "max": float(np.max(state_age_ms))} if state_age_ms else None,
+            "state_age_invalid_frames": state_age_invalid,
             "compute_ms": {"p50": float(np.percentile(compute_ms, 50)), "p99": float(np.percentile(compute_ms, 99))}
             if compute_ms else None,
             "policy_ms_p50": float(np.percentile(policy_ms, 50)) if policy_ms else None,
