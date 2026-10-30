@@ -31,6 +31,7 @@ def _stamped_robot(ep, stamp_fn, clock_fn=None):
             super().__init__(daemon=True)
             self.running, self.ticks = True, 0
             self.q = np.zeros(22)
+            self.pub_t = {}  # tick -> perf_counter() at publish (item 288: attribute state faults to publisher gaps)
 
         def run(self):
             pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
@@ -60,6 +61,7 @@ def _stamped_robot(ep, stamp_fn, clock_fn=None):
                     st.stamp_ns = int(stamp_fn())
                     st.motor.mode[:] = mode
                     pub.Write(st)
+                    self.pub_t[self.ticks] = time.perf_counter()
                     nxt += 0.002
                     time.sleep(max(0.0, nxt - time.perf_counter()))
             finally:
@@ -67,6 +69,31 @@ def _stamped_robot(ep, stamp_fn, clock_fn=None):
                 sub.Close()
 
     return R()
+
+
+def _unexplained_state_faults(tmp_path, robot, max_age_s=0.030):
+    """State-gate fault steps the fake robot's own publish timing does not explain (item 288).
+
+    Under host load the robot thread can miss its 2 ms period by more than ``state_max_age_s`` (30 ms); the runner then
+    re-uses a tick for > 30 ms and correctly records ``state_stale`` (absorbed by the hold-last grace). That is a real
+    stale input, not a stamp bug. A fault step is *explained* when the robot's next publish after the faulted tick came
+    more than ``max_age_s / 2`` later (the rest is ZMQ delivery / runner read latency); a fault while the robot kept
+    publishing at its 2 ms period is the false trip these tests guard against."""
+    import json
+
+    pub = robot.pub_t
+    ticks = sorted(pub)
+    nxt = dict(zip(ticks, ticks[1:]))
+    bad = []
+    for line in (tmp_path / "steps.jsonl").read_text(encoding="utf-8").splitlines():
+        rec = json.loads(line)
+        if not rec.get("state_fault"):
+            continue
+        k = rec["tick"]
+        gap = (pub[nxt[k]] - pub[k]) if k in nxt else float("inf")  # no later publish: the robot stopped
+        if gap <= 0.5 * max_age_s:
+            bad.append({"t": rec["t"], "tick": k, "fault": rec["state_fault"], "robot_gap_ms": 1e3 * gap})
+    return bad
 
 
 # placeholder 1 ns, a clock 10 s ahead (negative age), a clock 1 h behind (age >> 1 s), and a same-host control.
@@ -87,7 +114,8 @@ def test_runner_non_same_host_stamp_warns_and_gates_on_ticks(tmp_path, capsys, c
     if case == "behind_1h" and time.perf_counter_ns() < 3_600_000_000_000:
         stamp_fn = lambda: 1  # noqa: E731  (fresh boot: perf_counter < 1 h; still a non-same-host stamp)
     ep = Endpoints(cmd_port=27601 + _OFFSET[case], state_port=27602 + _OFFSET[case])
-    s = _run_wall(tmp_path, ep, _stamped_robot(ep, stamp_fn))
+    robot = _stamped_robot(ep, stamp_fn)
+    s = _run_wall(tmp_path, ep, robot)
     out = capsys.readouterr().out
     warned = "is not a same-host perf_counter stamp" in out
     assert warned is (not expect_stamp_age), out[-2000:]
@@ -95,7 +123,27 @@ def test_runner_non_same_host_stamp_warns_and_gates_on_ticks(tmp_path, capsys, c
     names = [t["transition"] for t in s["transitions"]]
     # a foreign stamp must neither trip state_stale (seconds of fake age) nor block the policy
     assert "hold->policy" in names and not any("state_" in n for n in names), names
-    assert s["state_gate"]["fault_steps"] == {}, s["state_gate"]
+    # Item 288: a loaded host may stall the fake robot past 30 ms (1/6 concurrent runs got {'state_stale': 2}); such
+    # faults are real and stay sub-grace. Every fault step must be explained by a robot publish gap.
+    assert set(s["state_gate"]["fault_steps"]) <= {"state_stale"}, s["state_gate"]
+    assert _unexplained_state_faults(tmp_path, robot) == [], s["state_gate"]
+
+
+def test_publisher_stall_faults_are_attributed_not_hidden(tmp_path):
+    """A 100 ms publisher stall during MOVE_TO_DEFAULT (no trip outside POLICY) yields state_stale steps that the
+    attribution explains, so the relaxed assertion above still sees real faults and cannot mask a false trip."""
+    from dropbear_wbc.sdk.transport import Endpoints
+
+    stamp = lambda: max(1, time.perf_counter_ns() - 3_600_000_000_000)  # noqa: E731
+    if time.perf_counter_ns() < 3_600_000_000_000:
+        stamp = lambda: 1  # noqa: E731
+    ep = Endpoints(cmd_port=27609, state_port=27610)
+    robot = _stamped_robot(ep, stamp, clock_fn=lambda e: None if 0.25 <= e < 0.35 else e)
+    s = _run_wall(tmp_path, ep, robot)
+    names = [t["transition"] for t in s["transitions"]]
+    assert "hold->policy" in names and not any("state_" in n for n in names), names
+    assert s["state_gate"]["fault_steps"].get("state_stale", 0) >= 3, s["state_gate"]
+    assert _unexplained_state_faults(tmp_path, robot) == [], s["state_gate"]
 
 
 def test_clock_tick_skips_instead_of_trailing():
