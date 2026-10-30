@@ -5,6 +5,11 @@ sent the frame yet. For a LowCmd writer that last frame is the damping command (
 previous hold/policy gains on the robot. Measured on the box before the fix: a final frame followed by an immediate
 close + exit arrived in 45/60 trials (20/30 idle, 25/30 with 16 busy-loop processes); 60/60 with a 50 ms hold.
 This flaked tests/test_lowcmd_stop_signals.py for the low-level example, whose Damp() is followed directly by Close().
+
+The subscriber binds an OS-assigned port: this test runs ~14 s, and a fixed port (was 27901) failed with EADDRINUSE
+whenever a second suite in another venv ran it at the same time. That collision, not a lost frame, was the one
+failure seen with two concurrent suites (item 286); the 50 ms hold lost 0/120 final frames with 0, 16 and 32 busy
+processes on 8 CPUs; with no hold it lost 7/40 idle and 25/40 with 16 busy processes.
 """
 from __future__ import annotations
 
@@ -20,7 +25,6 @@ import sdk_test_paths  # noqa: F401
 from dropbear_wbc.sdk.transport import ZmqPublisher
 
 ROOT = Path(__file__).resolve().parents[1]
-PORT = dict(cmd_port=27901)["cmd_port"]
 TRIALS = 20
 
 CHILD = r"""
@@ -58,12 +62,13 @@ def test_final_frame_survives_close_and_exit():
     sub.setsockopt(zmq.SUBSCRIBE, b"")
     sub.setsockopt(zmq.RCVTIMEO, 300)
     sub.setsockopt(zmq.LINGER, 0)
-    sub.bind(f"tcp://127.0.0.1:{PORT}")
+    sub.bind("tcp://127.0.0.1:*")  # OS-assigned free port: no clash with a concurrent run of this test
+    port = int(sub.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
     lost = []
     try:
         for trial in range(1, TRIALS + 1):
             tid = trial.to_bytes(4, "little")
-            proc = subprocess.Popen([sys.executable, "-c", CHILD, str(PORT), str(trial)], env=env, cwd=ROOT)
+            proc = subprocess.Popen([sys.executable, "-c", CHILD, str(port), str(trial)], env=env, cwd=ROOT)
             last = None
             while True:
                 try:
