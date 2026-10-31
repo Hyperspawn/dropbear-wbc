@@ -177,6 +177,7 @@ def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
             super().__init__(daemon=True)
             self.running, self.cmds, self.ticks, self.stalled = True, 0, 0, False
             self.q = np.zeros(22)
+            self.pub_t = {}  # tick -> perf_counter() at publish (item 289: attribute state faults to publisher gaps)
 
         def run(self):
             pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
@@ -206,6 +207,7 @@ def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
                     st.stamp_ns = 0
                     st.motor.mode[:] = mode
                     pub.Write(st)
+                    self.pub_t[self.ticks] = time.perf_counter()
                     nxt += 0.002
                     time.sleep(max(0.0, nxt - time.perf_counter()))
             finally:
@@ -245,10 +247,15 @@ def test_runner_wall_clock_no_false_trip(tmp_path):
     from dropbear_wbc.sdk.transport import Endpoints
 
     ep = Endpoints(cmd_port=27591, state_port=27592)
-    s = _run_wall(tmp_path, ep, _wall_robot(ep))
+    robot = _wall_robot(ep)
+    s = _run_wall(tmp_path, ep, robot)
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names and not any("state_" in n for n in names), names
-    assert s["state_gate"]["fault_steps"] == {} and s["state_gate"]["stamp_age"] is True
+    assert s["state_gate"]["stamp_age"] is True
+    # Item 289: under host load the robot can miss its 2 ms period by > 30 ms (a real stale input, absorbed by the
+    # hold-last grace); only faults the robot's own publish gaps do not explain are false trips.
+    assert set(s["state_gate"]["fault_steps"]) <= {"state_stale"}, s["state_gate"]
+    assert fx.unexplained_state_faults(tmp_path / "steps.jsonl", robot.pub_t) == [], s["state_gate"]
 
 
 def test_runner_wall_clock_publisher_stall_goes_passive(tmp_path):

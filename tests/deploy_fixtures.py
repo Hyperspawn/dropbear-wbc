@@ -132,3 +132,36 @@ def low_state(tick: int, q: np.ndarray | None = None, quat_wxyz=(1.0, 0.0, 0.0, 
         st.sim = SimState(time_s=tick * 0.002, root_pos_w=np.array([0.1, -0.2, 0.9], np.float32),
                           root_quat_w=np.asarray(quat_wxyz, np.float32))
     return st
+
+
+def unexplained_state_faults(steps_path, pub_t, max_age_s=0.030):
+    """State-gate fault steps that the fake robot's own publish timing does not explain (items 288-289).
+
+    Under host load a fake robot thread can miss its 2 ms period by more than ``state_max_age_s`` (30 ms); the runner
+    then re-uses a tick for > 30 ms and correctly records ``state_stale`` (absorbed by the hold-last grace). That is a
+    real stale input, not a gate bug. A fault step is *explained* when the robot's next publish after the faulted tick
+    came more than ``max_age_s / 2`` later (the rest is ZMQ delivery / runner read latency); a fault while the robot
+    kept publishing at its 2 ms period is the false trip the wall-clock runner tests guard against.
+
+    A fault is also explained when the step's logged ``state_age_ms`` (the runner's same-host transport age, logged from
+    the raw stamp independently of the gated age and only when it is a valid [0, 1 s) age) is itself >= ``max_age_s``:
+    the frame really was that old at receive time (ZMQ delivery or the runner thread starved under load), item 289.
+
+    ``steps_path`` is the runner --log JSONL, ``pub_t`` maps tick -> perf_counter() at publish."""
+    import json
+    from pathlib import Path
+
+    ticks = sorted(pub_t)
+    nxt = dict(zip(ticks, ticks[1:]))
+    bad = []
+    for line in Path(steps_path).read_text(encoding="utf-8").splitlines():
+        rec = json.loads(line)
+        if not rec.get("state_fault"):
+            continue
+        k = rec["tick"]
+        gap = (pub_t[nxt[k]] - pub_t[k]) if k in nxt else float("inf")  # no later publish: the robot stopped
+        age_ms = rec.get("state_age_ms")
+        if gap <= 0.5 * max_age_s and not (age_ms is not None and age_ms >= 1e3 * max_age_s):
+            bad.append({"t": rec["t"], "tick": k, "fault": rec["state_fault"], "robot_gap_ms": 1e3 * gap,
+                        "state_age_ms": age_ms})
+    return bad

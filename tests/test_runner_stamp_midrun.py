@@ -9,6 +9,8 @@ import time
 
 import pytest
 
+import deploy_fixtures as fx
+
 from test_runner_stamp_warning import _stamped_robot
 from test_state_freshness_gate import _run_wall
 
@@ -43,7 +45,8 @@ def test_runner_midrun_foreign_stamp_falls_back_to_tick_gating(tmp_path, capsys,
     if case == "behind_1h" and time.perf_counter_ns() < 3_600_000_000_000:
         foreign = lambda: 1  # noqa: E731  (fresh boot: perf_counter < 1 h)
     ep = Endpoints(cmd_port=27621 + _OFFSET[case], state_port=27622 + _OFFSET[case])
-    s = _run_wall(tmp_path, ep, _stamped_robot(ep, _switching(foreign)))
+    robot = _stamped_robot(ep, _switching(foreign))
+    s = _run_wall(tmp_path, ep, robot)
     out = capsys.readouterr().out
     assert "is not a same-host perf_counter stamp; gating on tick re-use and tick lag only from here on" in out, \
         out[-2000:]
@@ -53,7 +56,10 @@ def test_runner_midrun_foreign_stamp_falls_back_to_tick_gating(tmp_path, capsys,
     assert g["stamp_fallback"]["t"] > 0.7, g["stamp_fallback"]  # switched after POLICY entry
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names and not any("state_" in n for n in names), names
-    assert g["fault_steps"] == {}, g
+    # Item 289: a fault step is allowed only when the robot's own publish gap explains it (loaded host), never on
+    # fresh frames; a strict == {} failed under load although the gate was right (notes/288).
+    assert set(g["fault_steps"]) <= {"state_stale"}, g
+    assert fx.unexplained_state_faults(tmp_path / "steps.jsonl", robot.pub_t) == [], g
     assert not any(n.startswith("policy->passive") for n in names), names  # ends via motion_end, not a trip
     # Item 283: foreign stamps after the fallback are not ages; base logged ~1 h / 10 s "age" in summary and steps.
     assert s["state_age_ms"] is not None and s["state_age_ms"]["max"] < 1000.0, s["state_age_ms"]
