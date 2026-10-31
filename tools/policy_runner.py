@@ -44,6 +44,7 @@ from dropbear_wbc.deploy import quat as Q  # noqa: E402
 from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_yaml, load_loaded_stand_pose, load_sidecar,  # noqa: E402
                                         load_standing_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
+from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.signals import StopRequest, install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
@@ -97,6 +98,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--cross-host", action="store_true",
                     help="LowState stamp_ns is another host's clock: ignore it, gate on tick re-use and tick lag only "
                          "(stamp age is used only with --clock wall)")
+    ap.add_argument("--rt-cpu", type=int, default=None,
+                    help="pin the runner to this core (isolate it with isolcpus=/nohz_full= on the robot computer)")
+    ap.add_argument("--rt-prio", type=int, default=None, help="SCHED_FIFO priority 1..99 (needs CAP_SYS_NICE)")
+    ap.add_argument("--rt-lock-memory", action="store_true", help="mlockall so page faults cannot stall a step")
+    ap.add_argument("--rt-required", action="store_true",
+                    help="fail before connecting if any requested --rt-* setting did not take effect")
+    ap.add_argument("--max-overrun-steps", type=int, default=None,
+                    help="--clock wall: mark the summary failed when more steps than this start >1/4 period late")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--cmd-port", type=int, default=5555)
     ap.add_argument("--state-port", type=int, default=5556)
@@ -255,6 +264,13 @@ def main(argv=None) -> int:
     logf = None
     try:
         cfg, ctrl = build(args)
+        # Item 292: RT setup before connecting. A best-effort failure is logged in summary["rt"]; --rt-required fails.
+        rt = apply_rt(args.rt_cpu, args.rt_prio, args.rt_lock_memory, freeze_gc=args.clock == "wall")
+        summary["rt"] = rt
+        if rt["errors"]:
+            print(f"[runner] WARNING: RT setup incomplete: {rt['errors']}", flush=True)
+            if args.rt_required:
+                raise RuntimeError(f"--rt-required: {rt['errors']}")
         summary["config"] = {"source": cfg.source, "runtime_motion": cfg.meta.get("runtime_motion"),
                              "joint_names": list(cfg.joint_names), "step_dt": cfg.step_dt,
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
@@ -318,7 +334,7 @@ def main(argv=None) -> int:
         state_faults: dict[str, int] = {}
         state_hold_last = 0
         state_lag_max = 0.0
-        next_wall = time.perf_counter()
+        sched = WallSchedule(cfg.step_dt) if args.clock == "wall" else None
         seq_i = 0
         stamp_fallback = None  # item 281: first frame whose stamp stopped being a same-host perf_counter stamp
         while not stop.flag:
@@ -344,10 +360,9 @@ def main(argv=None) -> int:
                         last_pub = time.perf_counter()
                         keepalives += 1
             else:
-                now = time.perf_counter()
-                if next_wall > now:
-                    time.sleep(next_wall - now)
-                next_wall += cfg.step_dt
+                # Item 292: a step that starts a full period late skips the missed slots (no back-to-back catch-up
+                # commands from the same LowState) and every late step is counted in summary["loop_timing"].
+                sched.wait()
                 new = tick_unwrap.state(sub.Read(timeout=0.0))
                 if new is not None:
                     st, last_rx = new, time.perf_counter()
@@ -477,9 +492,17 @@ def main(argv=None) -> int:
                                 "grace_steps": int(cfg.fsm.motor_mode_grace_steps),
                                 "arm_timeout_s": cfg.fsm.motor_mode_arm_timeout_s,
                                 "latched": ctrl.latched, "refused": ctrl.refused},
+            "loop_timing": sched.summary() if sched is not None else None,
             "final_fsm": ctrl.state.value, "subscriber": sub.stats, "publisher": pub.stats, "keepalives": keepalives,
             "privileged_terms": ctrl.obs_builder.privileged_terms if ctrl.obs_builder else [],
         })
+        if (sched is not None and args.max_overrun_steps is not None and summary["status"] in ("executed", "tripped")
+                and sched.overrun_steps > args.max_overrun_steps):
+            summary["status"] = "failed"
+            summary["error"] = (f"{sched.overrun_steps} control steps started >{1e3 * sched.late_threshold:.1f} ms late "
+                                f"(limit {args.max_overrun_steps}, {sched.skipped_slots} slots skipped): the control "
+                                "loop is not real-time on this host (pin it with --rt-cpu/--rt-prio, item 292)")
+            print(f"[runner] FAIL: {summary['error']}", flush=True)
         if not mode_ok:
             summary["error"] = (
                 "LowState.motor.mode never reached ENABLE=1; robot side never armed or every LowCmd was "

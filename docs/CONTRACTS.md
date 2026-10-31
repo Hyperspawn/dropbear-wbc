@@ -760,6 +760,20 @@ needs these details to interoperate. They are additive; nothing above changes.
   - Optional provenance: `task`, `usd_sha256`, `run_path`.
   - BeyondMimic ONNX metadata (`attach_onnx_metadata`) fills any key the sidecar omits.
 
+### 6.2 Control-loop timing on the robot computer (item 292)
+
+- `policy_runner --clock wall` runs on a fixed 20 ms grid (`dropbear_wbc.deploy.rt.WallSchedule`). A step that starts
+  one or more periods late skips the missed slots; it no longer runs them back-to-back. The old loop sent up to 4
+  commands within ~4 ms after a 105 ms stall, built from the same LowState tick, and still reported ~50 Hz.
+- `summary.loop_timing` gives `overrun_steps` (steps that started more than 5 ms late), `skipped_slots` and `late_ms`
+  p50/p99/max. `--max-overrun-steps N` fails the run when more than N steps overrun.
+- RT setup: `--rt-cpu C` pins the process to core C. `--rt-prio P` requests SCHED_FIFO priority P and needs
+  CAP_SYS_NICE or `ulimit -r`. `--rt-lock-memory` calls mlockall. The wall clock also freezes the start-up objects out
+  of the GC. Whatever did not take effect is listed in `summary.rt.errors`, and `--rt-required` makes it fatal.
+  On the robot computer, isolate core C with `isolcpus=C nohz_full=C rcu_nocbs=C` and run with `--rt-required`.
+- A real overrun now shows up in `loop_timing` instead of as an unexplained `state_stale` (notes/290: a 39.5 ms step
+  faulted the gate with a robot publish gap of only 7.9 ms).
+
 ## 7. Velocity locomotion task `dropbear-velocity-v1` (H1 flat port; added by the locomotion component, 2026-09-24)
 
 Reason: the classic Unitree H1/G1 capability (Isaac Lab `Isaac-Velocity-Flat-H1-v0`, unitree_rl_lab
