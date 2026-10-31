@@ -55,11 +55,13 @@ def test_runner_midrun_foreign_stamp_falls_back_to_tick_gating(tmp_path, capsys,
     assert g["stamp_age"] is False and g["stamp_fallback"] is not None, g
     assert g["stamp_fallback"]["t"] > 0.7, g["stamp_fallback"]  # switched after POLICY entry
     names = [t["transition"] for t in s["transitions"]]
-    assert "hold->policy" in names and not any("state_" in n for n in names), names
+    unexplained = fx.unexplained_state_faults(tmp_path / "steps.jsonl", robot.pub_t)
+    # Item 290: a trip must leave enough in the CI log to tell a host stall from a false trip.
+    assert "hold->policy" in names and not any("state_" in n for n in names), (names, g, unexplained)
     # Item 289: a fault step is allowed only when the robot's own publish gap explains it (loaded host), never on
     # fresh frames; a strict == {} failed under load although the gate was right (notes/288).
     assert set(g["fault_steps"]) <= {"state_stale"}, g
-    assert fx.unexplained_state_faults(tmp_path / "steps.jsonl", robot.pub_t) == [], g
+    assert unexplained == [], (g, unexplained)
     assert not any(n.startswith("policy->passive") for n in names), names  # ends via motion_end, not a trip
     # Item 283: foreign stamps after the fallback are not ages; base logged ~1 h / 10 s "age" in summary and steps.
     assert s["state_age_ms"] is not None and s["state_age_ms"]["max"] < 1000.0, s["state_age_ms"]

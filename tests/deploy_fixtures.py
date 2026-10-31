@@ -134,7 +134,7 @@ def low_state(tick: int, q: np.ndarray | None = None, quat_wxyz=(1.0, 0.0, 0.0, 
     return st
 
 
-def unexplained_state_faults(steps_path, pub_t, max_age_s=0.030):
+def unexplained_state_faults(steps_path, pub_t, max_age_s=0.030, step_dt=0.020):
     """State-gate fault steps that the fake robot's own publish timing does not explain (items 288-289).
 
     Under host load a fake robot thread can miss its 2 ms period by more than ``state_max_age_s`` (30 ms); the runner
@@ -147,6 +147,12 @@ def unexplained_state_faults(steps_path, pub_t, max_age_s=0.030):
     the raw stamp independently of the gated age and only when it is a valid [0, 1 s) age) is itself >= ``max_age_s``:
     the frame really was that old at receive time (ZMQ delivery or the runner thread starved under load), item 289.
 
+    A fault is also explained when the runner itself was late reading the faulted tick: the controller step that first
+    read it came more than ``max_age_s / 2`` later than its ``step_dt`` slot after the previous step (item 290). The tick-lag rule compares the step
+    time with the sample's tick time, so a starved controller thread really acts on an old sample; after the stamp
+    fallback ``state_age_ms`` is not logged, so this is the only record of it (probe: lag 35.7 ms after a 39.5 ms
+    runner step while the robot published 7.9 ms later).
+
     ``steps_path`` is the runner --log JSONL, ``pub_t`` maps tick -> perf_counter() at publish."""
     import json
     from pathlib import Path
@@ -154,14 +160,20 @@ def unexplained_state_faults(steps_path, pub_t, max_age_s=0.030):
     ticks = sorted(pub_t)
     nxt = dict(zip(ticks, ticks[1:]))
     bad = []
+    prev_t = prev_tick = None
+    read_late = 0.0  # how late (beyond step_dt) the step that first read the current tick ran
     for line in Path(steps_path).read_text(encoding="utf-8").splitlines():
         rec = json.loads(line)
+        k = rec["tick"]
+        if k != prev_tick:
+            read_late = 0.0 if prev_t is None else rec["t"] - prev_t - step_dt
+        prev_t, prev_tick = rec["t"], k
         if not rec.get("state_fault"):
             continue
-        k = rec["tick"]
         gap = (pub_t[nxt[k]] - pub_t[k]) if k in nxt else float("inf")  # no later publish: the robot stopped
         age_ms = rec.get("state_age_ms")
-        if gap <= 0.5 * max_age_s and not (age_ms is not None and age_ms >= 1e3 * max_age_s):
+        if gap <= 0.5 * max_age_s and read_late <= 0.5 * max_age_s and \
+                not (age_ms is not None and age_ms >= 1e3 * max_age_s):
             bad.append({"t": rec["t"], "tick": k, "fault": rec["state_fault"], "robot_gap_ms": 1e3 * gap,
-                        "state_age_ms": age_ms})
+                        "runner_read_late_ms": 1e3 * read_late, "state_age_ms": age_ms})
     return bad
