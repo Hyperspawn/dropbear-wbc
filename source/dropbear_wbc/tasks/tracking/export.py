@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from dropbear_wbc.isaac.compat import body_quat_wxyz
 
 from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 
@@ -165,9 +166,9 @@ def export_tracking_policy(
     from isaaclab.utils.math import quat_apply_inverse, quat_inv, quat_mul
 
     a_idx = robot.body_names.index(command.cfg.anchor_body_name)
-    root_q = robot.data.body_link_quat_w[0:1, 0]
+    root_q = body_quat_wxyz(robot, link=True)[0:1, 0]
     rel_p = quat_apply_inverse(root_q, robot.data.body_link_pos_w[0:1, a_idx] - robot.data.body_link_pos_w[0:1, 0])[0]
-    rel_q = quat_mul(quat_inv(root_q), robot.data.body_link_quat_w[0:1, a_idx])[0]
+    rel_q = quat_mul(quat_inv(root_q), body_quat_wxyz(robot, link=True)[0:1, a_idx])[0]
     sidecar: dict[str, Any] = {
         # ---- dropbear-policy-sidecar-v1 (CONTRACTS 6.1; parsed by dropbear_wbc.deploy.config.load_sidecar) ----
         "schema": DEPLOY_SIDECAR_SCHEMA,

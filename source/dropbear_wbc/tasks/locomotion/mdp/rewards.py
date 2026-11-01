@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz
 
 import isaaclab.utils.math as math_utils
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
@@ -46,7 +47,7 @@ def foot_groups(sensor_cfg: SceneEntityCfg, bodies_per_foot: int) -> torch.Tenso
 def anchor_up_quat_w(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, up_offset_wxyz) -> torch.Tensor:
     """World-aligned anchor orientation ``q_link * offset`` (num_envs, 4)."""
     asset = env.scene[asset_cfg.name]
-    q_link = asset.data.body_link_quat_w[:, asset_cfg.body_ids[0]]
+    q_link = body_quat_wxyz(asset, asset_cfg.body_ids[0], link=True)
     off = torch.tensor(up_offset_wxyz, dtype=q_link.dtype, device=q_link.device).expand_as(q_link)
     return math_utils.quat_mul(q_link, off)
 
@@ -74,7 +75,7 @@ def track_lin_vel_xy_yaw_frame_exp(
 ) -> torch.Tensor:
     """Isaac Lab (H1): xy velocity command tracking in the gravity-aligned (yaw) frame, exp kernel."""
     asset = env.scene[asset_cfg.name]
-    vel_yaw = math_utils.quat_apply_inverse(math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3])
+    vel_yaw = math_utils.quat_apply_inverse(math_utils.yaw_quat(root_quat_wxyz(asset)), asset.data.root_lin_vel_w[:, :3])
     err = torch.sum(torch.square(env.command_manager.get_command(command_name)[:, :2] - vel_yaw[:, :2]), dim=1)
     return torch.exp(-err / std**2)
 
@@ -285,7 +286,7 @@ def feet_lateral_distance_below(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCf
     rest is only 0.138 m). ``asset_cfg`` = the two sole bodies, left then right."""
     asset = env.scene[asset_cfg.name]
     p = asset.data.body_link_pos_w[:, asset_cfg.body_ids, :]
-    d = math_utils.quat_apply_inverse(math_utils.yaw_quat(asset.data.root_quat_w), p[:, 0] - p[:, 1])
+    d = math_utils.quat_apply_inverse(math_utils.yaw_quat(root_quat_wxyz(asset)), p[:, 0] - p[:, 1])
     return torch.clamp(min_dist - d[:, 1], min=0.0)
 
 

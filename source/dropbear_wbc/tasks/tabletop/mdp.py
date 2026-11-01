@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from dropbear_wbc.isaac.compat import root_quat_wxyz, write_root_pose
 
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import ManagerBasedRLEnv
@@ -183,8 +184,7 @@ def place_objects(env: ManagerBasedRLEnv, ids: torch.Tensor, layout: TabletopLay
     bpos = torch.zeros(n, 3, device=env.device)
     bpos[:, :2] = bxy + root[:2]
     bpos[:, 2] = root[2] + layout.block_rest_z + 0.001
-    bpose = torch.cat([bpos + origins, _yaw_quat(byaw)], dim=-1)
-    block.write_root_pose_to_sim(bpose, env_ids=ids)
+    write_root_pose(block, bpos + origins, _yaw_quat(byaw), env_ids=ids)
     block.write_root_velocity_to_sim(torch.zeros(n, 6, device=env.device), env_ids=ids)
     zbuf = _zone_buffer(env)
     zbuf[ids, 0:2] = zxy
@@ -200,7 +200,7 @@ def _block_state_root(env: ManagerBasedRLEnv, layout: TabletopLayout):
     block: RigidObject = env.scene["block"]
     root = torch.tensor(layout.root_pos_w, device=env.device)
     pos = block.data.root_pos_w - env.scene.env_origins - root
-    return pos, block.data.root_quat_w, block.data.root_lin_vel_w, block.data.root_ang_vel_w
+    return pos, root_quat_wxyz(block), block.data.root_lin_vel_w, block.data.root_ang_vel_w
 
 
 def success_now(env: ManagerBasedRLEnv, layout: TabletopLayout = LAYOUT) -> torch.Tensor:

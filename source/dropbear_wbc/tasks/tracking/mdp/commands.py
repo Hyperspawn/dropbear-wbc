@@ -27,6 +27,7 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
 import torch
+from dropbear_wbc.isaac.compat import body_quat_wxyz, write_root_state
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm, CommandTermCfg
@@ -275,7 +276,7 @@ class MotionCommand(CommandTerm):
 
     @property
     def robot_body_quat_w(self) -> torch.Tensor:
-        return self.robot.data.body_quat_w[:, self.body_indexes]
+        return body_quat_wxyz(self.robot, self.body_indexes)
 
     @property
     def robot_body_lin_vel_w(self) -> torch.Tensor:
@@ -291,7 +292,7 @@ class MotionCommand(CommandTerm):
 
     @property
     def robot_anchor_quat_w(self) -> torch.Tensor:
-        return self.robot.data.body_quat_w[:, self.robot_anchor_body_index]
+        return body_quat_wxyz(self.robot, self.robot_anchor_body_index)
 
     @property
     def robot_anchor_lin_vel_w(self) -> torch.Tensor:
@@ -386,7 +387,7 @@ class MotionCommand(CommandTerm):
         limits = self.robot.data.joint_pos_limits[env_ids][:, self.motor_ids]
         joint_pos[:, self.motor_ids] = torch.clamp(motor_pos, limits[..., 0], limits[..., 1])
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
-        self.robot.write_root_state_to_sim(torch.cat([root_pos, root_ori, root_lin_vel, root_ang_vel], dim=-1), env_ids=env_ids)
+        write_root_state(self.robot, root_pos, root_ori, root_lin_vel, root_ang_vel, env_ids=env_ids)
         # The robot was just written onto the reference frame, so until the next _update_command the relative
         # targets are the reference bodies themselves. Without this, the very first env.step() after env.reset()
         # (Isaac Lab evaluates terminations/rewards before the first command update) compares against the zero

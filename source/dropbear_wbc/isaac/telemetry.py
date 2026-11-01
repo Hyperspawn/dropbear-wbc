@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from dropbear_wbc.isaac.compat import root_quat_wxyz
 
 from dropbear_wbc.robots.dropbear_names import FOOT_BODIES, MOTOR_NAMES
 from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
@@ -103,7 +104,7 @@ class MotorTelemetry:
         self._sub.clear()
         from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
-        v = quat_apply_inverse(yaw_quat(r.data.root_quat_w[e:e + 1]), r.data.root_lin_vel_w[e:e + 1])[0]
+        v = quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), r.data.root_lin_vel_w[e:e + 1])[0]
         self.rows["base_vel_b"].append(v.cpu().numpy())
         self.rows["yaw_rate"].append(float(r.data.root_ang_vel_w[e, 2]))
         self.rows["anchor_z"].append(float(r.data.body_link_pos_w[e, self.anchor, 2]) if self.anchor is not None else 0.0)
@@ -117,7 +118,7 @@ class MotorTelemetry:
 
         s = [r.body_names.index(b) for b in FOOT_EE_BODIES]
         dp = (r.data.body_link_pos_w[e, s[0]] - r.data.body_link_pos_w[e, s[1]])[None]
-        self.rows["feet_lateral"].append(float(quat_apply_inverse(yaw_quat(r.data.root_quat_w[e:e + 1]), dp)[0, 1]))
+        self.rows["feet_lateral"].append(float(quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), dp)[0, 1]))
         self.rows["sole_pos_w"].append(r.data.body_link_pos_w[e, s].cpu().numpy())  # (left, right) soles
         self.rows["root_pos_w"].append(r.data.root_link_pos_w[e].cpu().numpy())
         self.rows["proj_grav"].append(r.data.projected_gravity_b[e].cpu().numpy())

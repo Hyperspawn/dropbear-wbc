@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+from dropbear_wbc.isaac.compat import write_root_state
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
@@ -154,5 +155,4 @@ class reset_from_standing_npz(ManagerTermBase):
                 q = joint_pos[:, ids] + sample_uniform(lo, hi, (n, len(ids)), dev)
                 joint_pos[:, ids] = torch.clamp(q, limits[:, ids, 0], limits[:, ids, 1])
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
-        self.robot.write_root_state_to_sim(torch.cat([root_pos, root_quat, root_lin_vel, root_ang_vel], dim=-1),
-                                           env_ids=env_ids)
+        write_root_state(self.robot, root_pos, root_quat, root_lin_vel, root_ang_vel, env_ids=env_ids)

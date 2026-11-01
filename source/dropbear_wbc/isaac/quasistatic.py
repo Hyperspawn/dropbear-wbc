@@ -38,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 import torch
+from dropbear_wbc.isaac.compat import body_quat_wxyz
 
 from dropbear_wbc.robots.dropbear_names import (
     JOINT_AXIS_FIXES,
@@ -330,7 +331,7 @@ class QuasiStaticDropbear:
         """Closure anchor gaps [m], shape (N, C)."""
         from isaaclab.utils.math import quat_apply
 
-        bp, bq = self.robot.data.body_link_pos_w, self.robot.data.body_link_quat_w
+        bp, bq = self.robot.data.body_link_pos_w, body_quat_wxyz(self.robot, link=True)
         n, c = bp.shape[0], self._cl_i0.numel()
         a0 = bp[:, self._cl_i0] + quat_apply(bq[:, self._cl_i0].reshape(-1, 4),
                                              self._cl_l0.expand(n, c, 3).reshape(-1, 3)).reshape(n, c, 3)

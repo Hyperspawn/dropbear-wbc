@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from dropbear_wbc.isaac.compat import body_quat_wxyz
 
 from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 
@@ -98,9 +99,9 @@ def export_library_policy(
     from isaaclab.utils.math import quat_apply_inverse, quat_inv, quat_mul
 
     a_idx = robot.body_names.index(command.cfg.anchor_body_name)
-    root_q = robot.data.body_link_quat_w[0:1, 0]
+    root_q = body_quat_wxyz(robot, link=True)[0:1, 0]
     rel_p = quat_apply_inverse(root_q, robot.data.body_link_pos_w[0:1, a_idx] - robot.data.body_link_pos_w[0:1, 0])[0]
-    rel_q = quat_mul(quat_inv(root_q), robot.data.body_link_quat_w[0:1, a_idx])[0]
+    rel_q = quat_mul(quat_inv(root_q), body_quat_wxyz(robot, link=True)[0:1, a_idx])[0]
     spawn = cfg.scene.robot.spawn
     authored_ankle = len(tuple(getattr(spawn, "spherical_joint_overrides", ()) or ())) == 0
     info = dict(command.library_info)

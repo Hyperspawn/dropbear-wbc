@@ -28,6 +28,7 @@ from dataclasses import MISSING, fields
 from typing import TYPE_CHECKING
 
 import torch
+from dropbear_wbc.isaac.compat import write_root_state
 
 from isaaclab.managers import CommandTerm
 from isaaclab.utils import configclass
@@ -293,7 +294,7 @@ class MotionLibraryCommand(MotionCommand):
         limits = self.robot.data.joint_pos_limits[env_ids][:, self.motor_ids]
         joint_pos[:, self.motor_ids] = torch.clamp(motor_pos, limits[..., 0], limits[..., 1])
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
-        self.robot.write_root_state_to_sim(torch.cat([root_pos, root_ori, root_lin_vel, root_ang_vel], dim=-1), env_ids=env_ids)
+        write_root_state(self.robot, root_pos, root_ori, root_lin_vel, root_ang_vel, env_ids=env_ids)
         # relative targets = the reference itself until the next _update_command (single-clip fix, commands.py)
         self.body_pos_relative_w[env_ids] = self.motion.body_pos_w[g] + self._env.scene.env_origins[env_ids][:, None, :]
         self.body_quat_relative_w[env_ids] = self.motion.body_quat_w[g]
