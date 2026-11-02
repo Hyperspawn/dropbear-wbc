@@ -18,6 +18,42 @@ from pathlib import Path
 import numpy as np
 
 
+def onnx_external_data_files(path: str | Path) -> list[str]:
+    """Relative paths of the external-data files an ONNX model references (empty if all weights are inline)."""
+    import onnx
+
+    model = onnx.load(str(path), load_external_data=False)
+    files = []
+    for t in model.graph.initializer:
+        if t.data_location == onnx.TensorProto.EXTERNAL:
+            loc = next((e.value for e in t.external_data if e.key == "location"), None)
+            if loc and loc not in files:
+                files.append(loc)
+    return files
+
+
+def make_onnx_self_contained(path: str | Path) -> bool:
+    """Inline external weights into ``path`` and delete the side files; returns True if anything changed.
+
+    torch >= 2.9 exports through the dynamo exporter by default, which writes the weights to
+    ``<name>.onnx.data`` next to the graph. Deploy bundles ship ``policy.onnx`` + ``policy.json`` only, and
+    onnxruntime refuses a graph whose external data is missing, so every export is made single-file here.
+    """
+    import onnx
+
+    path = Path(path)
+    files = onnx_external_data_files(path)
+    if not files:
+        return False
+    model = onnx.load(str(path))  # resolves external data relative to path.parent
+    onnx.save(model, str(path))  # default: all tensors inline
+    for f in files:
+        side = (path.parent / f).resolve()
+        if side.parent == path.parent.resolve() and side.exists():
+            side.unlink()
+    return True
+
+
 class OnnxPolicy:
     """Thin onnxruntime session wrapper.
 

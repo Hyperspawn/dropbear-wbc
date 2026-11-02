@@ -78,13 +78,19 @@ class _MotionPolicyOnnx(torch.nn.Module):
 def _attach_onnx_metadata(path: Path, metadata: dict[str, Any]) -> None:
     import onnx
 
-    model = onnx.load(str(path))
+    from dropbear_wbc.deploy.policy import onnx_external_data_files
+
+    side = [path.parent / f for f in onnx_external_data_files(path)]
+    model = onnx.load(str(path))  # pulls external weights inline; saved single-file below
     for k, v in metadata.items():
         entry = onnx.StringStringEntryProto()
         entry.key = k
         entry.value = ",".join(str(x) for x in v) if isinstance(v, (list, tuple)) else str(v)
         model.metadata_props.append(entry)
     onnx.save(model, str(path))
+    for f in side:  # stale once the weights are inline
+        if f.resolve().parent == path.parent.resolve() and f.exists():
+            f.unlink()
 
 
 def _obs_layout(env, group: str) -> list[dict[str, Any]]:
