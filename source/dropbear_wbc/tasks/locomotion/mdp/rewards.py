@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import torch
 from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz
 
-import isaaclab.utils.math as math_utils
+from dropbear_wbc.isaac import qmath as math_utils
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 

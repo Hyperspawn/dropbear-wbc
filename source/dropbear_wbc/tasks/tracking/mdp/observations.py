@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from isaaclab.utils.math import matrix_from_quat, subtract_frame_transforms
+from dropbear_wbc.isaac.qmath import matrix_from_quat, subtract_frame_transforms
 
 from .commands import MotionCommand
 

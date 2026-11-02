@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 import torch
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.managers import ObservationTermCfg
-from isaaclab.utils.math import matrix_from_quat, quat_from_euler_xyz, quat_mul, subtract_frame_transforms
+from dropbear_wbc.isaac.qmath import matrix_from_quat, quat_from_euler_xyz, quat_mul, subtract_frame_transforms
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv

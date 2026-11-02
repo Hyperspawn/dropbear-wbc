@@ -92,7 +92,7 @@ class ClosureMonitor:
 
     def gaps(self, body_pos_w: torch.Tensor, body_quat_w: torch.Tensor) -> torch.Tensor:
         """Anchor gaps [m], shape (num_envs, num_closures). Quaternions are wxyz."""
-        from isaaclab.utils.math import quat_apply
+        from dropbear_wbc.isaac.qmath import quat_apply
 
         n = body_pos_w.shape[0]
         c = self.i0.numel()

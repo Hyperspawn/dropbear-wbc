@@ -32,7 +32,7 @@ from dropbear_wbc.isaac.compat import write_root_state
 
 from isaaclab.managers import CommandTerm
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul, sample_uniform, yaw_quat
+from dropbear_wbc.isaac.qmath import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul, sample_uniform, yaw_quat
 
 from ..motion_library import LibrarySampler, MotionLibrary, build_library, future_indices, library_report, play_assignment
 from ..motion_npz import expected_usd_sha256

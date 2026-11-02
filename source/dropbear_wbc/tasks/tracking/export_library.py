@@ -96,7 +96,7 @@ def export_library_policy(
     for t in layout:
         if t["name"] == "command" and t["dim"] != cmd_dim:
             raise RuntimeError(f"command term has {t['dim']} values, expected {cmd_dim} for future_steps={future}")
-    from isaaclab.utils.math import quat_apply_inverse, quat_inv, quat_mul
+    from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_inv, quat_mul
 
     a_idx = robot.body_names.index(command.cfg.anchor_body_name)
     root_q = body_quat_wxyz(robot, link=True)[0:1, 0]

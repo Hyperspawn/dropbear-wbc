@@ -7,7 +7,7 @@ import torch
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_error_magnitude
+from dropbear_wbc.isaac.qmath import quat_error_magnitude
 
 from .commands import MotionCommand
 

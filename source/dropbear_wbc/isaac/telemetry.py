@@ -102,7 +102,7 @@ class MotorTelemetry:
         sub = np.array(self._sub[-8:]) if self._sub else tau[None]
         self.rows["tau_sub"].append(sub)
         self._sub.clear()
-        from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+        from dropbear_wbc.isaac.qmath import quat_apply_inverse, yaw_quat
 
         v = quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), r.data.root_lin_vel_w[e:e + 1])[0]
         self.rows["base_vel_b"].append(v.cpu().numpy())

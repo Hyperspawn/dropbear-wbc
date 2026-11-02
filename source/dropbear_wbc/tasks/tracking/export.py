@@ -163,7 +163,7 @@ def export_tracking_policy(
     cfg = env.cfg
     layout = _obs_layout(env, "policy")
     # anchor pose in the root ('world') link frame -- rigid (fixed joint); taken from the robot's current state
-    from isaaclab.utils.math import quat_apply_inverse, quat_inv, quat_mul
+    from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_inv, quat_mul
 
     a_idx = robot.body_names.index(command.cfg.anchor_body_name)
     root_q = body_quat_wxyz(robot, link=True)[0:1, 0]

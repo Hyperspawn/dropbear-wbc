@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 
-import isaaclab.utils.math as math_utils
+from dropbear_wbc.isaac import qmath as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs.mdp.events import _randomize_prop_by_op
 from isaaclab.managers import SceneEntityCfg

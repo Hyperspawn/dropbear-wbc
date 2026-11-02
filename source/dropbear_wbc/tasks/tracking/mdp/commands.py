@@ -34,7 +34,7 @@ from isaaclab.managers import CommandTerm, CommandTermCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.utils import configclass
-from isaaclab.utils.math import (
+from dropbear_wbc.isaac.qmath import (
     quat_apply,
     quat_error_magnitude,
     quat_from_euler_xyz,

@@ -329,7 +329,7 @@ class QuasiStaticDropbear:
 
     def gaps(self) -> torch.Tensor:
         """Closure anchor gaps [m], shape (N, C)."""
-        from isaaclab.utils.math import quat_apply
+        from dropbear_wbc.isaac.qmath import quat_apply
 
         bp, bq = self.robot.data.body_link_pos_w, body_quat_wxyz(self.robot, link=True)
         n, c = bp.shape[0], self._cl_i0.numel()
@@ -401,7 +401,7 @@ class QuasiStaticDropbear:
         ``motor_pos`` (N,22), ``motor_target`` (N,22), ``root_pos_w`` (N,3, minus env origin),
         ``root_quat_w`` (N,4), ``gaps`` (N,C).
         """
-        from isaaclab.utils.math import quat_apply_inverse, quat_conjugate, quat_mul
+        from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_conjugate, quat_mul
 
         d = self.robot.data
         root_p = d.root_link_pos_w
