@@ -6,7 +6,8 @@ dropbear_wbc is wxyz everywhere outside Isaac: settled motion NPZs, ``deploy/qua
 ``.data`` properties return ProxyArray (``.torch``).
 
 Every Isaac quaternion read in ``source/dropbear_wbc`` goes through ``root_quat_wxyz`` /
-``body_quat_wxyz`` and every root write through ``write_root_state`` / ``write_root_pose``, so a
+``body_quat_wxyz`` and every root write through ``write_root_state`` / ``write_root_pose``, and every cfg ``rot=`` literal
+(``InitialStateCfg`` / ``OffsetCfg``) through ``cfg_quat``, so a
 3.0 port is a one-place reorder. ``tests/test_isaac_quat_boundary.py`` fails on any new raw read.
 
 Importing this module never imports isaaclab. On 2.x every conversion is an identity (no copy).
@@ -88,6 +89,16 @@ def isaac_from_wxyz(q: Any) -> Any:
     """wxyz quaternion(s) [..., 4] -> Isaac-native order. Identity on 2.x."""
     _check4(q)
     return q if isaac_quat_order() == WXYZ else _roll(q, -1)
+
+
+def cfg_quat(q_wxyz: Any) -> tuple[float, float, float, float]:
+    """wxyz quaternion -> float 4-tuple in Isaac Lab's cfg order, for ``rot=`` fields of
+    ``InitialStateCfg`` / sensor ``OffsetCfg``. Lab 3.0 reads those as xyzw (default (0, 0, 0, 1)), so a
+    wxyz identity (1, 0, 0, 0) would spawn the asset rotated 180 deg about x. Identity order on 2.x."""
+    q = tuple(float(v) for v in q_wxyz)
+    if len(q) != 4:
+        raise ValueError(f"cfg_quat expects 4 values (wxyz), got {len(q)}")
+    return q if isaac_quat_order() == WXYZ else (q[1], q[2], q[3], q[0])
 
 
 def root_quat_wxyz(asset: Any, *, link: bool = False) -> Any:

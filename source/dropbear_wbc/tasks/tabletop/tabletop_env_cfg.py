@@ -38,6 +38,7 @@ from isaaclab.sensors import CameraCfg, TiledCameraCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 
+from dropbear_wbc.isaac.compat import cfg_quat
 from dropbear_wbc.robots.dropbear import make_dropbear_cfg
 from dropbear_wbc.robots.dropbear_names import ARM_MOTORS
 
@@ -134,7 +135,7 @@ def head_camera_cfg() -> TiledCameraCfg:
     pos, rot = cam.head_cam_offset()
     return TiledCameraCfg(
         prim_path=f"{{ENV_REGEX_NS}}/Robot/{cam.ANCHOR_BODY}/head_cam",
-        offset=CameraCfg.OffsetCfg(pos=pos, rot=rot, convention="world"),
+        offset=CameraCfg.OffsetCfg(pos=pos, rot=cfg_quat(rot), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=cam.HEAD_CAM_FOCAL_MM, focus_distance=400.0,
                                          horizontal_aperture=20.955, clipping_range=(0.03, 20.0)),
@@ -146,7 +147,7 @@ def wrist_camera_cfg(side: str) -> TiledCameraCfg:
     pos, rot = cam.wrist_cam_offset(side)
     return TiledCameraCfg(
         prim_path=f"{{ENV_REGEX_NS}}/Robot/{cam.HAND_BODY[side]}/wrist_cam",
-        offset=CameraCfg.OffsetCfg(pos=pos, rot=rot, convention="world"),
+        offset=CameraCfg.OffsetCfg(pos=pos, rot=cfg_quat(rot), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=cam.WRIST_CAM_FOCAL_MM, focus_distance=400.0,
                                          horizontal_aperture=20.955, clipping_range=(0.01, 10.0)),
@@ -158,7 +159,7 @@ def scene_camera_cfg() -> TiledCameraCfg:
     pos, rot = cam.scene_cam_pose(LAYOUT.root_pos_w)
     return TiledCameraCfg(
         prim_path="{ENV_REGEX_NS}/SceneCam",
-        offset=CameraCfg.OffsetCfg(pos=pos, rot=rot, convention="world"),
+        offset=CameraCfg.OffsetCfg(pos=pos, rot=cfg_quat(rot), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=14.0, focus_distance=400.0, horizontal_aperture=20.955,
                                          clipping_range=(0.05, 30.0)),

@@ -41,6 +41,7 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from .defaults import DefaultPose, resolve_default_pose
+from ..isaac.compat import cfg_quat
 from .spawn import DropbearUsdFileCfg
 from .dropbear_names import (  # noqa: F401  (re-exported for the contract path dropbear_wbc.robots.dropbear.*)
     ACTUATOR_GROUP_MOTORS,
@@ -208,7 +209,7 @@ def make_dropbear_cfg(
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, DEFAULT_ROOT_HEIGHT),
-            rot=(1.0, 0.0, 0.0, 0.0),
+            rot=cfg_quat((1.0, 0.0, 0.0, 0.0)),
             joint_pos=joint_pos,
             joint_vel={".*": 0.0},
         ),

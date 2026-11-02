@@ -34,6 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
+from dropbear_wbc.isaac.compat import cfg_quat
+
 FFMPEG_DEFAULT = "C:/ProgramData/chocoportable/bin/ffmpeg.exe"
 FONT_DIR = "C:/Windows/Fonts"
 FONT_FILE = "arial.ttf"
@@ -99,7 +101,7 @@ def apply_clean_render(env_cfg, *, floor_rgb=(0.42, 0.43, 0.45), key_intensity: 
     env_cfg.scene.light = AssetBaseCfg(
         prim_path="/World/light",
         spawn=sim_utils.DistantLightCfg(color=(1.0, 1.0, 1.0), intensity=float(key_intensity), angle=1.0),
-        init_state=AssetBaseCfg.InitialStateCfg(rot=_quat_from_two_vectors(np.array([0.0, 0.0, -1.0]), key_dir)),
+        init_state=AssetBaseCfg.InitialStateCfg(rot=cfg_quat(_quat_from_two_vectors(np.array([0.0, 0.0, -1.0]), key_dir))),
     )
     env_cfg.scene.sky_light = AssetBaseCfg(
         prim_path="/World/skyLight", spawn=sim_utils.DomeLightCfg(color=(0.92, 0.93, 0.95), intensity=float(dome_intensity))

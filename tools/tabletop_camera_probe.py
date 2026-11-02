@@ -25,6 +25,7 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
+from dropbear_wbc.isaac.compat import cfg_quat  # noqa: E402
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
 
 prepare_kit_python()
@@ -93,7 +94,7 @@ def main() -> int:  # noqa: C901
                 continue
             key = f"{cls_name}_{name}"
             sensors[key] = cls(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cam.ANCHOR_BODY}/{key}",
-                               offset=CameraCfg.OffsetCfg(pos=off_p, rot=off_q, convention="world"),
+                               offset=CameraCfg.OffsetCfg(pos=off_p, rot=cfg_quat(off_q), convention="world"),
                                data_types=["rgb"], spawn=spawn, width=640, height=480)
     sensors["scene"] = scene_camera_cfg()
     for k, v in sensors.items():

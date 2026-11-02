@@ -38,7 +38,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import body_quat_wxyz
+from dropbear_wbc.isaac.compat import body_quat_wxyz, cfg_quat
 
 from dropbear_wbc.robots.dropbear_names import (
     JOINT_AXIS_FIXES,
@@ -171,7 +171,7 @@ class QuasiStaticDropbear:
         robot_cfg = ArticulationCfg(
             prim_path="{ENV_REGEX_NS}/Robot",
             spawn=spawn,
-            init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0),
+            init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0), rot=cfg_quat((1.0, 0.0, 0.0, 0.0)),
                                                        joint_pos={".*": 0.0}, joint_vel={".*": 0.0}),
             actuators={
                 "motors": ImplicitActuatorCfg(
