@@ -26,7 +26,13 @@ from typing import Any
 import torch
 from dropbear_wbc.isaac.compat import body_quat_wxyz
 
-from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
+from dropbear_wbc.tasks.policy_export import (
+    actor_obs_dim,
+    effective_normalizer,
+    export_actor_jit,
+    export_actor_onnx,
+    live_actions,
+)
 
 from dropbear_wbc.isaac.launch import sha256_file
 from dropbear_wbc.robots import dropbear_names as N
@@ -63,8 +69,8 @@ def export_library_policy(
     policy.eval()
     if hasattr(normalizer, "eval"):
         normalizer.eval()
-    export_policy_as_jit(policy, normalizer, path=str(out), filename="policy.pt")
-    export_policy_as_onnx(policy, normalizer=normalizer, path=str(out), filename="policy.onnx")
+    export_actor_jit(policy, normalizer, out, "policy.pt")
+    export_actor_onnx(policy, normalizer, out, "policy.onnx")
     stale = out / "policy_motion.onnx"
     if stale.exists():  # never leave a baked single-clip reference next to a runtime-reference export
         stale.unlink()
@@ -82,12 +88,13 @@ def export_library_policy(
     kd = robot.data.joint_damping[0, motor_ids].tolist()
     effort = robot.data.joint_effort_limits[0, motor_ids].tolist()
     default = [float(nominal[i]) for i in motor_ids]
-    obs_dim = int(policy.actor[0].in_features)
+    obs_dim = actor_obs_dim(policy)
 
     norm_state = {}
-    if hasattr(normalizer, "_mean") and hasattr(normalizer, "_std"):
-        norm_state = {"mean": normalizer._mean.squeeze(0).tolist(), "std": normalizer._std.squeeze(0).tolist(),
-                      "eps": float(normalizer.eps)}
+    stats = effective_normalizer(policy, normalizer)
+    if hasattr(stats, "_mean") and hasattr(stats, "_std"):
+        norm_state = {"mean": stats._mean.squeeze(0).tolist(), "std": stats._std.squeeze(0).tolist(),
+                      "eps": float(stats.eps)}
 
     cfg = env.cfg
     layout = _obs_layout(env, "policy")
@@ -211,7 +218,7 @@ def export_library_policy(
 
     with torch.inference_mode():
         x = torch.randn(64, obs_dim, device=runner.device) * 2.0
-        live = policy.act_inference(normalizer(x)).cpu()
+        live = live_actions(policy, normalizer, x).cpu()
         jit = torch.jit.load(str(out / "policy.pt"), map_location="cpu")
         exp = jit(x.cpu())
     sidecar["dropbear_tracking"]["parity"] = {"torchscript_max_abs_diff": float((live - exp).abs().max()), "samples": 64}

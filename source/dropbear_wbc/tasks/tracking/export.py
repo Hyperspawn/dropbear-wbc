@@ -16,7 +16,6 @@ tracked by the implicit PD ``tau = kp (q_target - q) - kd dq`` (clipped to effor
 """
 from __future__ import annotations
 
-import copy
 import datetime as _dt
 import json
 import os
@@ -26,7 +25,14 @@ from typing import Any
 import torch
 from dropbear_wbc.isaac.compat import body_quat_wxyz
 
-from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
+from dropbear_wbc.tasks.policy_export import (
+    actor_and_normalizer,
+    actor_obs_dim,
+    effective_normalizer,
+    export_actor_jit,
+    export_actor_onnx,
+    live_actions,
+)
 
 from dropbear_wbc.isaac.launch import sha256_file
 from dropbear_wbc.robots import dropbear_names as N
@@ -51,8 +57,7 @@ class _MotionPolicyOnnx(torch.nn.Module):
 
     def __init__(self, policy, normalizer, command):
         super().__init__()
-        self.actor = copy.deepcopy(policy.actor).cpu()
-        self.normalizer = copy.deepcopy(normalizer).cpu() if normalizer is not None else torch.nn.Identity()
+        self.actor, self.normalizer = actor_and_normalizer(policy, normalizer)
         m = command.motion
         self.register_buffer("joint_pos", m.joint_pos.detach().cpu())
         self.register_buffer("joint_vel", m.joint_vel.detach().cpu())
@@ -127,12 +132,12 @@ def export_tracking_policy(
     policy.eval()
     if hasattr(normalizer, "eval"):
         normalizer.eval()  # EmpiricalNormalization updates its statistics in train mode
-    export_policy_as_jit(policy, normalizer, path=str(out), filename="policy.pt")
-    export_policy_as_onnx(policy, normalizer=normalizer, path=str(out), filename="policy.onnx")
+    export_actor_jit(policy, normalizer, out, "policy.pt")
+    export_actor_onnx(policy, normalizer, out, "policy.onnx")
 
     command = env.command_manager.get_term("motion")
     motion_onnx = _MotionPolicyOnnx(policy, normalizer, command).eval()
-    obs_dim = int(policy.actor[0].in_features)
+    obs_dim = actor_obs_dim(policy)
     torch.onnx.export(
         motion_onnx,
         (torch.zeros(1, obs_dim), torch.zeros(1, 1)),
@@ -163,8 +168,9 @@ def export_tracking_policy(
     default = [float(nominal[i]) for i in motor_ids]
 
     norm_state = {}
-    if hasattr(normalizer, "_mean") and hasattr(normalizer, "_std"):
-        norm_state = {"mean": normalizer._mean.squeeze(0).tolist(), "std": normalizer._std.squeeze(0).tolist(), "eps": float(normalizer.eps)}
+    stats = effective_normalizer(policy, normalizer)
+    if hasattr(stats, "_mean") and hasattr(stats, "_std"):
+        norm_state = {"mean": stats._mean.squeeze(0).tolist(), "std": stats._std.squeeze(0).tolist(), "eps": float(stats.eps)}
 
     cfg = env.cfg
     layout = _obs_layout(env, "policy")
@@ -271,7 +277,7 @@ def export_tracking_policy(
     # parity: TorchScript export vs live policy (+ normalizer) on random observations
     with torch.inference_mode():
         x = torch.randn(64, obs_dim, device=runner.device) * 2.0
-        live = policy.act_inference(normalizer(x)).cpu()
+        live = live_actions(policy, normalizer, x).cpu()
         jit = torch.jit.load(str(out / "policy.pt"), map_location="cpu")
         exp = jit(x.cpu())
     sidecar["dropbear_tracking"]["parity"] = {"torchscript_max_abs_diff": float((live - exp).abs().max()), "samples": 64}
