@@ -71,6 +71,8 @@ class WallSchedule:
         self.period = float(period_s)
         self.clock, self.sleep = clock, sleep
         self.next = clock() if t0 is None else float(t0)
+        self.t0 = self.next
+        self.slot: int | None = None  # grid slot (period index from t0) the current step started in
         self.late_threshold = 0.25 * self.period if late_threshold_s is None else float(late_threshold_s)
         self.steps = self.overrun_steps = self.skipped_slots = 0
         self.late_s: list[float] = []
@@ -87,6 +89,9 @@ class WallSchedule:
             self.skipped_slots += skip
             self.next += skip * self.period  # re-anchor on the period grid: the next slot is in the future
         self.next += self.period
+        # Item 306: the slot this step actually runs in. A burst puts two steps in one slot; a step that is merely
+        # late (or lands just before a re-anchored slot) only shortens the gap to the next one.
+        self.slot = int((now - self.t0) / self.period + 1e-6)
         self.steps += 1
         self.late_s.append(late)
         if late > self.late_threshold:

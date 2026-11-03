@@ -52,6 +52,31 @@ def test_overrun_skips_instead_of_bursting(stall_s, skipped):
     assert len(on_grid) == len(starts) - (1 if stall_s + 0.001 > 0.02 else 0)
     slots = [round(t / 0.02) for t in on_grid]
     assert slots == sorted(set(slots))
+    assert s.slot == 49 + skipped  # slot index counts skipped slots
+
+
+def test_slot_strictly_increases_under_jitter():
+    """Item 306: wake-ups 12-19 ms late (preemption, no skip) and a stall that lands late in its re-anchored slot
+    give gaps under 10 ms between correct steps; the slot index still advances every step and counts the skips."""
+    c = _Clock()
+    over = {5: 0.012, 9: 0.019, 20: 0.017}  # oversleep before step i (s)
+    k = {"i": 0}
+
+    def sleep(d):
+        c.t += d + over.get(k["i"], 0.0)
+
+    s = WallSchedule(0.02, t0=0.0, clock=c, sleep=sleep)
+    slots, starts = [], []
+    for i in range(40):
+        k["i"] = i
+        s.wait()
+        starts.append(c.t)
+        slots.append(s.slot)
+        c.t += 0.001 + (0.110 if i == 29 else 0.0)  # step 29 overruns: 111 ms -> lands 11 ms into slot 34
+    gaps = [b - a for a, b in zip(starts, starts[1:])]
+    assert min(gaps) < 0.01  # the old runner-test bound (min gap > 10 ms) rejects this correct schedule
+    assert all(b > a for a, b in zip(slots, slots[1:])), slots
+    assert slots[-1] - slots[0] + 1 == len(slots) + s.skipped_slots
 
 
 def test_late_ms_reports_full_lateness():
@@ -126,11 +151,22 @@ def _run_runner_with_stall(tmp_path, stall_steps, stall_s, extra=()):
     return rc, json.loads((tmp_path / "s.json").read_text(encoding="utf-8")), steps
 
 
+def lt_skipped(s):
+    return s["loop_timing"]["skipped_slots"]
+
+
 def test_runner_overrun_no_catch_up_burst(tmp_path):
     rc, s, steps = _run_runner_with_stall(tmp_path, (50, 75), 0.105)
     dt_ms = [1e3 * (b["t"] - a["t"]) for a, b in zip(steps, steps[1:])]
     # Base: 4 back-to-back steps (0.2-1.6 ms apart) after each 105 ms stall, 5-7 of them re-using one LowState tick.
-    assert min(dt_ms) > 10.0, sorted(dt_ms)[:6]
+    # Item 306: no burst means one step per 20 ms grid slot, not a 10 ms minimum gap. A step that starts 10-19 ms
+    # late (host preemption) or lands late in its slot after a re-anchor (stall oversleeps) is followed by an
+    # on-grid step <10 ms later; the old gap bound failed those correct runs under load.
+    slots = [r["slot"] for r in steps]
+    dup = [(a["step"], a["slot"], round(d, 2)) for a, b, d in zip(steps, steps[1:], dt_ms) if b["slot"] <= a["slot"]]
+    assert not dup, f"{len(dup)} steps share or reuse a slot: {dup[:6]}"
+    assert slots[-1] - slots[0] + 1 == len(slots) + lt_skipped(s), (slots[0], slots[-1], len(slots), s["loop_timing"])
+    assert min(dt_ms) > 0.0, sorted(dt_ms)[:6]
     lt = s["loop_timing"]
     assert lt["overrun_steps"] >= 2 and lt["skipped_slots"] >= 8, lt
     assert lt["late_ms"]["max"] > 80.0, lt

@@ -362,7 +362,7 @@ def main(argv=None) -> int:
             else:
                 # Item 292: a step that starts a full period late skips the missed slots (no back-to-back catch-up
                 # commands from the same LowState) and every late step is counted in summary["loop_timing"].
-                sched.wait()
+                step_late_s = sched.wait()
                 new = tick_unwrap.state(sub.Read(timeout=0.0))
                 if new is not None:
                     st, last_rx = new, time.perf_counter()
@@ -432,7 +432,10 @@ def main(argv=None) -> int:
                 fall = {"t": t, "tick": st.tick, "tilt_rad": tilt, "root_z": root_z, "fsm": info.state.value}
                 print(f"[runner] FALL detected at t={t:.3f}s tilt={tilt:.2f} rad root_z={root_z}", flush=True)
             if logf is not None:
-                rec = {"step": steps, "t": t, "tick": st.tick, "fsm": info.state.value, "tilt": tilt,
+                rec = {"step": steps, "t": t, "tick": st.tick,
+                       "slot": sched.slot if sched is not None else None,
+                       "late_ms": 1e3 * step_late_s if sched is not None else None,
+                       "fsm": info.state.value, "tilt": tilt,
                        "root_z": root_z, "state_age_ms": step_age_ms, "imu_valid": info.extra.get("imu_valid"),
                        "imu_age_ms": _age_ms(info.extra.get("imu_age_s")), "imu_fault": info.extra.get("imu_fault"),
                        "state_lag_ms": 1e3 * float(info.extra.get("state_lag_s") or 0.0),
