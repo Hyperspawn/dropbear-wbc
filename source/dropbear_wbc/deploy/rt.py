@@ -77,26 +77,39 @@ class WallSchedule:
         self.steps = self.overrun_steps = self.skipped_slots = 0
         self.late_s: list[float] = []
 
-    def wait(self) -> float:
-        """Sleep to the next slot; return how late (s) this step starts relative to its slot."""
+    def wait(self, record: bool = True) -> float:
+        """Sleep to the next slot; return how late (s) this step starts relative to its slot.
+
+        ``record=False`` advances the grid but leaves the counters alone until :meth:`record` is called. The runner uses
+        it so the wait that ends a ``--duration`` run (no command follows it) is not counted as a step (item 311).
+        """
         now = self.clock()
         if self.next > now:
             self.sleep(self.next - now)
             now = self.clock()
         late = max(0.0, now - self.next)  # lateness against the slot this step was due in
-        if late >= self.period:
-            skip = int(late // self.period)
-            self.skipped_slots += skip
-            self.next += skip * self.period  # re-anchor on the period grid: the next slot is in the future
+        skip = int(late // self.period) if late >= self.period else 0
+        self.next += skip * self.period  # re-anchor on the period grid: the next slot is in the future
         self.next += self.period
         # Item 306: the slot this step actually runs in. A burst puts two steps in one slot; a step that is merely
         # late (or lands just before a re-anchored slot) only shortens the gap to the next one.
         self.slot = int((now - self.t0) / self.period + 1e-6)
+        self._pending = (late, skip)
+        if record:
+            self.record()
+        return late
+
+    def record(self) -> None:
+        """Count the step started by the last :meth:`wait` (no-op if it was already counted)."""
+        pending, self._pending = getattr(self, "_pending", None), None
+        if pending is None:
+            return
+        late, skip = pending
+        self.skipped_slots += skip
         self.steps += 1
         self.late_s.append(late)
         if late > self.late_threshold:
             self.overrun_steps += 1
-        return late
 
     def summary(self) -> dict:
         ls = sorted(self.late_s)

@@ -362,7 +362,8 @@ def main(argv=None) -> int:
             else:
                 # Item 292: a step that starts a full period late skips the missed slots (no back-to-back catch-up
                 # commands from the same LowState) and every late step is counted in summary["loop_timing"].
-                step_late_s = sched.wait()
+                # Item 311: counted only once the duration check below lets a command follow it.
+                step_late_s = sched.wait(record=False)
                 new = tick_unwrap.state(sub.Read(timeout=0.0))
                 if new is not None:
                     st, last_rx = new, time.perf_counter()
@@ -383,6 +384,8 @@ def main(argv=None) -> int:
             if t >= args.duration:
                 stop.request("duration")
                 break
+            if sched is not None:
+                sched.record()
             if seq_i < len(schedule) and t >= schedule[seq_i][0] and ctrl.state == FsmState.PASSIVE:
                 ctrl.request(schedule[seq_i][1], st, t)
                 seq_i += 1

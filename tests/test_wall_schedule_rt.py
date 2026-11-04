@@ -176,3 +176,25 @@ def test_runner_overrun_no_catch_up_burst(tmp_path):
 def test_runner_max_overrun_steps_fails_run(tmp_path):
     rc, s, _ = _run_runner_with_stall(tmp_path, (50,), 0.045, extra=("--max-overrun-steps", "0"))
     assert rc == 1 and s["status"] == "failed" and "not real-time" in s["error"], s.get("error")
+
+
+def test_wait_record_false_defers_counters_item311():
+    """Item 311: wait(record=False) advances the grid but counts nothing until record(); an unrecorded final wait (the
+    one that ends a --duration run) leaves steps / overrun / skipped untouched."""
+    from dropbear_wbc.deploy.rt import WallSchedule
+
+    now = [0.0]
+    sched = WallSchedule(0.02, t0=0.0, clock=lambda: now[0], sleep=lambda dt: now.__setitem__(0, now[0] + dt))
+    assert sched.wait() == 0.0 and sched.steps == 1
+    now[0] = 0.02 + 0.065  # 65 ms late: overrun, 3 slots skipped
+    late = sched.wait(record=False)
+    assert late == pytest.approx(0.065) and sched.slot == 4
+    assert (sched.steps, sched.overrun_steps, sched.skipped_slots, len(sched.late_s)) == (1, 0, 0, 1)
+    sched.record()
+    assert (sched.steps, sched.overrun_steps, sched.skipped_slots) == (2, 1, 3)
+    sched.record()  # idempotent: a second record() does not double count
+    assert sched.steps == 2
+    assert sched.next == pytest.approx(0.10)  # grid re-anchored whether or not the step was recorded
+    now[0] = 0.2 + 0.001
+    sched.wait(record=False)  # never recorded, like the wait that ends the run
+    assert sched.summary()["steps"] == 2 and sched.summary()["overrun_steps"] == 1

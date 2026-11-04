@@ -83,9 +83,9 @@ def test_real_runner_log_agrees_with_summary(tmp_path):
     _, s, steps = _run_runner_with_stall(tmp_path, (50, 75), 0.105)
     rep = ltr.check(steps)
     lt = s["loop_timing"]
-    # WallSchedule also counts the final wait() whose LowState ends the --duration run (no LowCmd, no log row), so
-    # loop_timing.steps is one more than the logged/commanded steps; that last wait can add at most one overrun.
-    assert rep["steps"] == s["steps"] == lt["steps"] - 1
-    assert rep["overrun_steps"] <= lt["overrun_steps"] <= rep["overrun_steps"] + 1 and rep["overrun_steps"] >= 2
-    assert rep["skipped_slots"] <= lt["skipped_slots"] and rep["skipped_slots"] >= 8 and rep["dup_slots"] == 0
+    # Item 311: loop_timing counts exactly the commanded/logged steps (the wait that ends the run is not a step).
+    assert rep["steps"] == s["steps"] == lt["steps"]
+    assert rep["overrun_steps"] == lt["overrun_steps"] >= 2
+    assert rep["skipped_slots"] == lt["skipped_slots"]
+    assert rep["skipped_slots"] >= 8 and rep["dup_slots"] == 0
     assert rep["late_ms"]["max"] == pytest.approx(lt["late_ms"]["max"], abs=1e-6) and rep["status"] == "fail"
