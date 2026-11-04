@@ -106,6 +106,11 @@ def parse_args(argv=None) -> argparse.Namespace:
                     help="fail before connecting if any requested --rt-* setting did not take effect")
     ap.add_argument("--max-overrun-steps", type=int, default=None,
                     help="--clock wall: mark the summary failed when more steps than this start >1/4 period late")
+    ap.add_argument("--timing-gate", action="store_true",
+                    help="--clock wall: run the tools/loop_timing_report.py check (p99/max late, overrun, skipped and "
+                         "duplicate slots) on this run's steps and mark the summary failed on any limit (item 312)")
+    ap.add_argument("--timing-limit", action="append", default=[], metavar="KEY=VALUE",
+                    help="override one --timing-gate limit, e.g. max_p99_late_ms=3 (repeatable)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--cmd-port", type=int, default=5555)
     ap.add_argument("--state-port", type=int, default=5556)
@@ -123,7 +128,36 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--no-motor-mode-fsm-gate", action="store_true",
                     help="disable the FSM L4 gate (Passive + latch when an armed motor reports mode != 1; item 157)")
     ap.add_argument("--motor-mode-grace-steps", type=int, default=None, help="override fsm.motor_mode_grace_steps")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if (args.timing_gate or args.timing_limit) and args.clock != "wall":
+        ap.error("--timing-gate/--timing-limit need --clock wall (sim-clock steps carry no slot or lateness)")
+    if args.timing_limit:
+        args.timing_gate = True
+    try:
+        args.timing_limits = _parse_timing_limits(args.timing_limit)
+    except ValueError as e:
+        ap.error(str(e))
+    return args
+
+
+def _loop_timing_report():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("loop_timing_report", ROOT / "tools" / "loop_timing_report.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _parse_timing_limits(items: list[str]) -> dict:
+    """KEY=VALUE overrides of loop_timing_report.DEFAULT_LIMITS (item 312); unknown keys are an error."""
+    defaults = _loop_timing_report().DEFAULT_LIMITS
+    limits = dict(defaults)
+    for it in items:
+        key, sep, val = it.partition("=")
+        if not sep or key not in defaults:
+            raise ValueError(f"--timing-limit {it!r}: expected KEY=VALUE with KEY in {sorted(defaults)}")
+        limits[key] = type(defaults[key])(val)
+    return limits
 
 
 LOADED_STAND_JSON = ROOT / "data/calibration/dropbear_loaded_stand.json"
@@ -262,6 +296,7 @@ def main(argv=None) -> int:
     tick_unwrap = TickUnwrapper()  # item 258: uint32 LowState.tick wraps after 99.4 days
     pub = sub = None
     logf = None
+    timing_rows = None
     try:
         cfg, ctrl = build(args)
         # Item 292: RT setup before connecting. A best-effort failure is logged in summary["rt"]; --rt-required fails.
@@ -335,6 +370,7 @@ def main(argv=None) -> int:
         state_hold_last = 0
         state_lag_max = 0.0
         sched = WallSchedule(cfg.step_dt) if args.clock == "wall" else None
+        timing_rows = [] if (sched is not None and args.timing_gate) else None
         seq_i = 0
         stamp_fallback = None  # item 281: first frame whose stamp stopped being a same-host perf_counter stamp
         while not stop.flag:
@@ -434,6 +470,9 @@ def main(argv=None) -> int:
                                                                 and root_z < args.fall_height_m)):
                 fall = {"t": t, "tick": st.tick, "tilt_rad": tilt, "root_z": root_z, "fsm": info.state.value}
                 print(f"[runner] FALL detected at t={t:.3f}s tilt={tilt:.2f} rad root_z={root_z}", flush=True)
+            if timing_rows is not None:
+                timing_rows.append({"step": steps, "t": t, "slot": sched.slot, "late_ms": 1e3 * step_late_s,
+                                    "fsm": info.state.value})
             if logf is not None:
                 rec = {"step": steps, "t": t, "tick": st.tick,
                        "slot": sched.slot if sched is not None else None,
@@ -509,6 +548,16 @@ def main(argv=None) -> int:
                                 f"(limit {args.max_overrun_steps}, {sched.skipped_slots} slots skipped): the control "
                                 "loop is not real-time on this host (pin it with --rt-cpu/--rt-prio, item 292)")
             print(f"[runner] FAIL: {summary['error']}", flush=True)
+        if timing_rows is not None:
+            # Item 312: the post-run steps.jsonl check, applied in-process so one first-power command is the gate.
+            rep = _loop_timing_report().check(timing_rows, 1e3 * sched.period, args.timing_limits,
+                                              1e3 * sched.late_threshold)
+            summary["timing_gate"] = rep
+            if rep["failures"] and summary["status"] in ("executed", "tripped"):
+                summary["status"] = "failed"
+                summary["error"] = (f"timing gate: {'; '.join(rep['failures'])} (limits {rep['limits']}): the control "
+                                    "loop is not real-time on this host (pin it with --rt-cpu/--rt-prio, item 292)")
+                print(f"[runner] FAIL: {summary['error']}", flush=True)
         if not mode_ok:
             summary["error"] = (
                 "LowState.motor.mode never reached ENABLE=1; robot side never armed or every LowCmd was "

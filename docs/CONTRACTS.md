@@ -773,6 +773,19 @@ needs these details to interoperate. They are additive; nothing above changes.
   On the robot computer, isolate core C with `isolcpus=C nohz_full=C rcu_nocbs=C` and run with `--rt-required`.
 - A real overrun now shows up in `loop_timing` instead of as an unexplained `state_stale` (notes/290: a 39.5 ms step
   faulted the gate with a robot publish gap of only 7.9 ms).
+- First-power timing gate (item 312). `--timing-gate` runs the `tools/loop_timing_report.py` check on the run's own
+  steps when the run ends: p99 late <= 2 ms, max late <= 5 ms, 0 overrun, 0 skipped and 0 duplicate slots. These are
+  provisional 50 Hz limits. If any limit fails, `summary.status` becomes `failed`, the exit code is 1, and the report is
+  saved in `summary.timing_gate`. Use `--timing-limit KEY=VALUE` to change one limit; giving it also turns the gate on.
+  The order on the robot computer is:
+  1. Baseline the isolated core with no runner: `cyclictest -m -p 90 -a C -i 1000 -D 10m -q`. Record max latency.
+  2. Hold mode, 10 min, gate on, against the robot or HAL:
+     `policy_runner.py --mode hold --clock wall --duration 600 --rt-cpu C --rt-prio 80 --rt-lock-memory --rt-required
+     --timing-gate --log steps.jsonl --summary summary.json`. It must exit 0.
+  3. Plot it: `loop_timing_report.py steps.jsonl --png timing.png --json timing.json`. This applies the same limits
+     after the run and splits them by FSM state.
+  4. Change a limit only from the step 1 and 2 measurements, and write the measured numbers next to the new value.
+     Do not loosen a limit to make a run pass.
 
 ## 7. Velocity locomotion task `dropbear-velocity-v1` (H1 flat port; added by the locomotion component, 2026-09-24)
 
