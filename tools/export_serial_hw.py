@@ -40,7 +40,7 @@ def main(argv=None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / f"dropbear_serial_{prof}.xml").write_text(sh.hw_mjcf_text(xml, sur, a.map))
     meta = {"schema": "dropbear-serial-hw-surrogate-v1", "source_xml_sha256": sha, "map": a.map, "profile": prof,
-            "method": "J = dm/ds at standing_semantic_pos; effort = sum|J| x peak|rated; velocity = min no_load/|J|; "
+            "method": "J = dm/ds at standing_semantic_pos; effort = sum|J| x peak|rated|saturation; velocity = min no_load/|J|; "
                       "armature = sum J^2 rotor N^2; kp/kd = sum J^2 HW_GAINS",
             "joints": sur, "legacy": sh.legacy_surrogates(jac, si)}
     (a.out / f"dropbear_serial_{prof}.json").write_text(json.dumps(meta, indent=1))

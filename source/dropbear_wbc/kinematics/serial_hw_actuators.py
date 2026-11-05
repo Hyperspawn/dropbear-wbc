@@ -59,11 +59,17 @@ def legacy_surrogates(jac: np.ndarray, semantic_index: dict[str, int]) -> dict[s
 
 def hw_surrogates(jac: np.ndarray, semantic_index: dict[str, int], map_name: str = "user_2026_09_25",
                   tol: float = 1e-3) -> dict[str, dict]:
+    """Per semantic joint: peak/rated/saturation effort (sum |J| x motor value), velocity (min no-load / |J|), armature
+    and gains (sum J^2). ``effort_saturation`` is the torque-speed line's w = 0 intercept, so the joint-side envelope is
+    min(effort_peak, effort_saturation * (1 - |w| / velocity)) (exact for a single-motor joint). The MJCF/URDF only
+    carry the constant ``effort_peak`` clip; maps that differ only in the motor torque-speed line (cem6 vs cem6_p330)
+    therefore export identical XML/URDF and differ only in this JSON field."""
     mm = hw.JOINT_MOTOR_MAPS[map_name]
     models = [hw.MOTOR_MODELS[mm[m]] for m in MOTOR_NAMES]
     pk = np.array([x.peak_torque for x in models])
     rt = np.array([x.rated_torque for x in models])
     nl = np.array([x.no_load_speed for x in models])
+    sat = np.array([x.saturation_effort for x in models])
     ar = np.array([x.armature for x in models])
     kp = np.array([hw.HW_GAINS[hw.JOINT_ROLES[m]][0] for m in MOTOR_NAMES])
     kd = np.array([hw.HW_GAINS[hw.JOINT_ROLES[m]][1] for m in MOTOR_NAMES])
@@ -72,10 +78,16 @@ def hw_surrogates(jac: np.ndarray, semantic_index: dict[str, int], map_name: str
         c = jac[:, i]
         nz = np.abs(c) > tol
         out[jn] = {"effort_peak": float(np.sum(np.abs(c) * pk)), "effort_rated": float(np.sum(np.abs(c) * rt)),
+                   "effort_saturation": float(np.sum(np.abs(c) * sat)),
                    "velocity": float(np.min(nl[nz] / np.abs(c[nz]))), "armature": float(np.sum(c**2 * ar)),
                    "kp": float(np.sum(c**2 * kp)), "kd": float(np.sum(c**2 * kd)),
                    "motors": {MOTOR_NAMES[k]: mm[MOTOR_NAMES[k]] for k in np.nonzero(nz)[0]}}
     return out
+
+
+def envelope_effort(rec: dict, speed: float) -> float:
+    """Joint-side torque limit [N*m] at joint speed ``speed`` [rad/s] for one :func:`hw_surrogates` record."""
+    return max(0.0, min(rec["effort_peak"], rec["effort_saturation"] * (1.0 - abs(speed) / rec["velocity"])))
 
 
 def semantic_index(meta_path: str | Path = SERIAL_META) -> dict[str, int]:

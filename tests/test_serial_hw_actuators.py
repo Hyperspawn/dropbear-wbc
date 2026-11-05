@@ -1,6 +1,7 @@
 """hw-map surrogates for the DERIVED serial model + URDF export (item 62, dropbear-backlog notes/62)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 
@@ -97,13 +98,60 @@ def test_hw_mjcf_and_urdf_roundtrip(tmp_path, jac_si):
             np.testing.assert_allclose(rs.T @ (ds.xipos[b] - ds.xpos[ps]), ru.T @ (du.xipos[bu] - du.xpos[pu]), atol=1e-7)
 
 
-@pytest.mark.parametrize("profile,map_name", [("hw_cem6", "cem6_2026_10_16"), ("hw_v4", "v4_2026_10_16")])
-def test_current_build_surrogates_are_up_to_date(jac_si, profile, map_name):
-    """The committed hw_cem6 / hw_v4 surrogate JSON matches what the exporter computes from hw_motor_specs today."""
+COMMITTED_HW_JSON = sorted(sh.SERIAL_XML.parent.glob("dropbear_serial_hw_*.json"))
+
+
+@pytest.mark.parametrize("path", COMMITTED_HW_JSON, ids=lambda p: p.stem)
+def test_committed_surrogates_are_up_to_date(jac_si, path):
+    """Every committed hw surrogate (JSON + MJCF) matches what tools/export_serial_hw.py computes from hw_motor_specs
+    today, field by field; a motor-map or motor-model edit without a re-export fails here."""
     jac, si = jac_si
-    path = sh.SERIAL_XML.parent / f"dropbear_serial_{profile}.json"
     meta = json.loads(path.read_text(encoding="utf-8"))
-    assert meta["map"] == map_name
+    profile, map_name = path.stem.removeprefix("dropbear_serial_"), meta["map"]
+    assert meta["profile"] == profile
+    assert hw.HW_PROFILE_MAPS.get(profile, map_name) == map_name, (profile, map_name)
+    assert meta["source_xml_sha256"] == hashlib.sha256(sh.SERIAL_XML.read_bytes()).hexdigest()
     fresh = sh.hw_surrogates(jac, si, map_name)
+    assert set(meta["joints"]) == set(fresh)
     for j, rec in fresh.items():
-        assert abs(meta["joints"][j]["effort_peak"] - rec["effort_peak"]) < 1e-6, j
+        assert set(meta["joints"][j]) == set(rec), j
+        for k, v in rec.items():
+            if isinstance(v, float):
+                assert meta["joints"][j][k] == pytest.approx(v, rel=1e-9, abs=1e-12), (j, k)
+            else:
+                assert meta["joints"][j][k] == v, (j, k)
+    xml = path.with_suffix(".xml")
+    assert xml.read_text(encoding="utf-8") == sh.hw_mjcf_text(sh.SERIAL_XML.read_text(), fresh, map_name)
+
+
+def test_current_builds_have_committed_surrogates():
+    """Build A / Build B and their power-consistent CEM-60 replays (notes/213) all ship a surrogate."""
+    have = {p.stem.removeprefix("dropbear_serial_") for p in COMMITTED_HW_JSON}
+    assert {"hw_cem6", "hw_v4", "hw_cem6_p330", "hw_v2ie_p330"} <= have
+
+
+def test_p330_differs_only_in_the_torque_speed_line(jac_si):
+    """P330 halves the CEM-60 saturation (240 -> 120 N*m): same peak/velocity/armature, so identical MJCF, but the
+    full 75 N*m knee torque ends at 30 rpm motor-equivalent instead of 55 rpm."""
+    jac, si = jac_si
+    a, b = sh.hw_surrogates(jac, si, "cem6_2026_10_16"), sh.hw_surrogates(jac, si, "cem6_p330_2026_10_20")
+    for j in a:
+        for k in ("effort_peak", "effort_rated", "velocity", "armature", "kp", "kd"):
+            assert a[j][k] == b[j][k], (j, k)
+    knee = "left_knee"
+    assert b[knee]["effort_saturation"] == pytest.approx(0.5 * a[knee]["effort_saturation"], rel=1e-9)
+    w = 0.5 * b[knee]["velocity"]  # half no-load speed: the P330 line is below peak, the old one is not
+    assert sh.envelope_effort(a[knee], w) == pytest.approx(a[knee]["effort_peak"])
+    assert sh.envelope_effort(b[knee], w) < 0.85 * a[knee]["effort_peak"]
+    xml = sh.SERIAL_XML.read_text()
+    assert sh.hw_mjcf_text(xml, a, "m") == sh.hw_mjcf_text(xml, b, "m")
+
+
+def test_envelope_effort_single_motor_matches_motor_model(jac_si):
+    jac, si = jac_si
+    rec = sh.hw_surrogates(jac, si, "cem6_p330_2026_10_20")["left_knee"]
+    m = hw.MOTOR_MODELS["EPS-CEM-60-V2-P330"]
+    g = m.no_load_speed / rec["velocity"]  # |J| of the single knee motor (velocity = no-load / |J|)
+    for frac in (0.0, 0.3, 0.6, 0.9, 1.0, 1.2):
+        w = frac * rec["velocity"]
+        assert sh.envelope_effort(rec, w) == pytest.approx(g * hw.envelope_torque(m, g * w), rel=1e-9, abs=1e-9)
