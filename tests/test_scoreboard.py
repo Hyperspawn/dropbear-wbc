@@ -111,3 +111,73 @@ def test_allow_profiles_and_every_hw_profile_resolves():
 def test_registry_glob_points_at_library_runner():
     reg = json.loads((sb.ROOT / "tools" / "skills.json").read_text())
     assert "dropbear_tracking_library/" in reg["skills"]["motion_library_tracker"]["summary_glob"]
+
+
+def _track(falls=0, profile=PROFILE, perturbed=True, per=None, per_clip=None,
+           created="2026-10-14T10:40:00+05:30"):
+    """Tracking summary. ``per`` is the pooled motor_torque; ``per_clip`` maps clip -> per_motor or False
+    (False = clip entry without a motor_torque block)."""
+    s = {"finite": True, "falls": {"envs_with_a_fall": falls}, "actuator_profile": profile, "created": created,
+         "eval_design": {"perturbed": perturbed}, "num_envs": 8}
+    if per is not False:
+        s["motor_torque"] = {"per_motor": per if per is not None else _per_motor()}
+    if per_clip is not None:
+        clips = {}
+        for i, (name, block) in enumerate(per_clip.items()):
+            entry = {"envs": [2 * i, 2 * i + 1], "falls": 0}
+            if block is not False:
+                entry["motor_torque"] = {"per_motor": block if block is not None else _per_motor()}
+            clips[name] = entry
+        s["per_clip"] = clips
+    return s
+
+
+def test_tracking_worst_per_clip_torque_gates_hot_clip():
+    """notes/54 case C: boxing RH elbow 1.35x rated pools to ~0.85x over 4 clips and used to PASS.
+
+    Pass/fail must use the worst clip (FAIL with [clip boxing]); a mutant that only reads the pooled
+    block still PASSes and fails this test. Case D (boxing alone) stays FAIL.
+    """
+    hot = "RH_elbow_joint"
+    rated = sb.motor_specs(PROFILE)[hot]["rated"]
+    clean = _per_motor(rms=0.60, mx=0.80, speed=0.60)
+    boxing = _per_motor(rms=0.60, mx=0.80, speed=0.60,
+                        override={hot: {"rms_Nm": 1.35 * rated}})
+    # Equal weight over 4 clips -> pooled rms factor (3*0.60 + 1.35)/4 = 0.7875; use 0.85 as in notes/54 C
+    pooled = _per_motor(rms=0.85, mx=0.80, speed=0.60)
+    per_clip = {"walk": clean, "wave": clean, "boxing": boxing, "squat": clean}
+
+    r = sb.evaluate("tracking", _track(per=pooled, per_clip=per_clip))
+    assert not r["pass"], r["why"]
+    assert any("rms 1.35x rated" in w and "[clip boxing]" in w for w in r["why"]), r["why"]
+    assert abs(r["torque"]["rms_over_rated"]["value"] - 1.35) < 1e-6
+    assert r["torque"]["rms_over_rated"]["motor"] == hot
+    # Pooled-only mutant: same summary without reading per_clip would PASS at 0.85x
+    pooled_only = sb._per_motor_torque_check(pooled, sb.motor_specs(PROFILE))
+    assert pooled_only[0]["rms_over_rated"]["value"] < 1.0 + sb._EPS
+    assert not pooled_only[1], pooled_only[1]
+
+    # notes/54 D: boxing alone — FAIL (per_clip with one hot clip, or pooled alone)
+    r_d = sb.evaluate("tracking", _track(per=boxing, per_clip={"boxing": boxing}))
+    assert not r_d["pass"] and any("1.35x rated" in w and "[clip boxing]" in w for w in r_d["why"])
+
+    # Clean library: PASS; torque columns come from the (equal) worst clip
+    r_ok = sb.evaluate("tracking", _track(per=clean, per_clip={n: clean for n in per_clip}))
+    assert r_ok["pass"], r_ok["why"]
+    assert abs(r_ok["torque"]["rms_over_rated"]["value"] - 0.60) < 1e-6
+
+
+def test_tracking_per_clip_missing_motor_torque_is_unknown():
+    """per_clip present but a clip lacks motor_torque -> UNKNOWN FAIL for that clip (not pooled rescue)."""
+    clean = _per_motor()
+    pooled = _per_motor(rms=0.5)  # would PASS if pooled-only
+    r = sb.evaluate("tracking", _track(per=pooled, per_clip={"walk": clean, "boxing": False}))
+    assert not r["pass"]
+    assert any("torque UNKNOWN (no motor_torque block) [clip boxing]" in w for w in r["why"]), r["why"]
+    # No per_clip (old summary): pooled-only behaviour unchanged
+    r_old = sb.evaluate("tracking", _track(per=pooled, per_clip=None))
+    # _track without per_clip still needs falls structure; without per_clip key evaluate uses pooled
+    s = _track(per=pooled)
+    assert "per_clip" not in s
+    r_old = sb.evaluate("tracking", s)
+    assert r_old["pass"], r_old["why"]

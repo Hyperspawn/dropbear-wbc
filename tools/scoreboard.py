@@ -10,6 +10,9 @@ the summary was simulated with (``robots.hw_motor_specs.HW_PROFILE_MAPS[actuator
 * perturbed play (``eval_design.perturbed``): nominal play is deterministic, N = 1 per scenario
 * 0 falls, finite simulation
 * a ``motor_torque`` block with every motor present; missing block or motor = UNKNOWN = FAIL (never skipped)
+* tracking libraries with ``per_clip``: gate on the *worst* clip's ``motor_torque`` (pooled block alone can hide a
+  hot clip); a clip missing its block is UNKNOWN = FAIL for that clip. Summaries without ``per_clip`` keep the
+  pooled-only check
 * per motor: rms <= rated (thermal proxy until a thermal model exists), max <= peak, clip_frac <= 1 %,
   max |joint speed| <= no-load speed, and the summary's sim peak limit equals the map's peak (catches a wrong map)
 
@@ -45,18 +48,18 @@ def motor_specs(profile: str) -> dict[str, dict]:
                 "no_load": float(p["no_load_speed"])} for n, p in joint_hw_params(HW_PROFILE_MAPS[profile]).items()}
 
 
-def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]]:
-    """Worst per-motor ratios + failure reasons. Missing torque block / motor -> failure, never a skip."""
-    per = (summary.get("motor_torque") or {}).get("per_motor")
+def _per_motor_torque_check(per: dict, specs: dict[str, dict], *, clip: str | None = None) -> tuple[dict, list[str]]:
+    """Worst per-motor ratios + failure reasons for one ``per_motor`` block. ``clip`` tags each reason."""
+    tag = f" [clip {clip}]" if clip is not None else ""
     if not per:
-        return {}, ["torque UNKNOWN (no motor_torque block)"]
+        return {}, [f"torque UNKNOWN (no motor_torque block){tag}"]
     why: list[str] = []
     missing = [n for n in MOTOR_NAMES if n not in per]
     extra = sorted(set(per) - set(MOTOR_NAMES))
     if missing:
-        why.append(f"torque UNKNOWN for {len(missing)} motors ({', '.join(missing[:3])}{'...' if len(missing) > 3 else ''})")
+        why.append(f"torque UNKNOWN for {len(missing)} motors ({', '.join(missing[:3])}{'...' if len(missing) > 3 else ''}){tag}")
     if extra:
-        why.append(f"unknown motors in summary: {', '.join(extra[:3])}")
+        why.append(f"unknown motors in summary: {', '.join(extra[:3])}{tag}")
     worst = {k: (0.0, None) for k in GATE}
     mism = []
     for n in MOTOR_NAMES:
@@ -68,7 +71,7 @@ def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]
             vals = {"rms_over_rated": float(m["rms_Nm"]) / sp["rated"], "max_over_peak": float(m["max_Nm"]) / sp["peak"],
                     "clip_frac": float(m["clip_frac"]), "speed_over_no_load": float(m["max_speed_rad_s"]) / sp["no_load"]}
         except (KeyError, TypeError, ValueError) as exc:
-            why.append(f"{n}: torque block incomplete ({exc.__class__.__name__}: {exc})")
+            why.append(f"{n}: torque block incomplete ({exc.__class__.__name__}: {exc}){tag}")
             continue
         for k, v in vals.items():
             if v > worst[k][0]:
@@ -77,14 +80,43 @@ def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]
         if lim is None or abs(float(lim) - sp["peak"]) > PEAK_MATCH_TOL * sp["peak"]:
             mism.append(f"{n} {lim} vs {sp['peak']:g}")
     if mism:
-        why.append(f"sim peak limit != motor-map peak on {len(mism)} motors ({'; '.join(mism[:2])})")
+        why.append(f"sim peak limit != motor-map peak on {len(mism)} motors ({'; '.join(mism[:2])}){tag}")
     labels = {"rms_over_rated": "rms {v:.2f}x rated", "max_over_peak": "max {v:.2f}x peak",
               "clip_frac": "clip {v:.1%}", "speed_over_no_load": "speed {v:.2f}x no-load"}
     for k, lim in GATE.items():
         v, n = worst[k]
         if v > lim + _EPS:
-            why.append(f"{labels[k].format(v=v)} ({n}, {specs[n]['model']})")
+            why.append(f"{labels[k].format(v=v)} ({n}, {specs[n]['model']}){tag}")
     return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
+
+
+def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]]:
+    """Worst per-motor ratios + failure reasons. Missing torque block / motor -> failure, never a skip.
+
+    When ``summary["per_clip"]`` is a dict (tracking libraries), pass/fail uses the *worst* clip's
+    ``motor_torque`` block under the same GATE; reasons name the failing clip. A clip without a block is
+    UNKNOWN = FAIL. Summaries without ``per_clip`` keep the pooled ``summary["motor_torque"]`` check.
+    The returned ``torque`` dict is the worst-clip (or pooled) ratios for the scoreboard columns.
+    """
+    clips = summary.get("per_clip")
+    if isinstance(clips, dict):
+        why: list[str] = []
+        worst = {k: (0.0, None) for k in GATE}
+        any_block = False
+        for name in clips:
+            per = ((clips.get(name) or {}).get("motor_torque") or {}).get("per_motor")
+            tw, tw_why = _per_motor_torque_check(per, specs, clip=str(name))
+            why += tw_why
+            if tw:
+                any_block = True
+                for k, info in tw.items():
+                    v, n = info["value"], info["motor"]
+                    if v > worst[k][0]:
+                        worst[k] = (v, n)
+        if not any_block:
+            return {}, why
+        return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
+    return _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs)
 
 
 def _perturbed(s: dict) -> bool | None:
@@ -127,8 +159,12 @@ def evaluate(kind: str, s: dict, allow_profiles: tuple[str, ...] = ()) -> dict:
     else:
         torque, twhy = torque_check(s, motor_specs(profile))
         why += twhy
-    if not torque and not (s.get("motor_torque") or {}).get("per_motor"):
-        if "torque UNKNOWN (no motor_torque block)" not in why:
+    clips = s.get("per_clip")
+    has_pooled = bool((s.get("motor_torque") or {}).get("per_motor"))
+    has_clip_torque = isinstance(clips, dict) and any(
+        ((c or {}).get("motor_torque") or {}).get("per_motor") for c in clips.values())
+    if not torque and not has_pooled and not has_clip_torque:
+        if not any(w.startswith("torque UNKNOWN") for w in why):
             why.append("torque UNKNOWN (no motor_torque block)")
     tx = max((torque[k]["value"] for k in ("rms_over_rated", "max_over_peak")), default=None) if torque else None
     return {"scenarios": scenarios, "envs": envs, "falls": falls, "profile": profile, "perturbed": pert,
@@ -194,7 +230,8 @@ def render(rows: list[dict]) -> str:
                    + ("PASS" if r["pass"] else "FAIL: " + "; ".join(r["why"])))
     ok = sum(r["pass"] for r in rows)
     out.append(f"\n{ok}/{len(rows)} skills pass the hardware gate (hw_* profile, perturbed, 0 falls, per motor: "
-               f"rms <= rated, max <= peak, clip <= {GATE['clip_frac']:.0%}, speed <= no-load)")
+               f"rms <= rated, max <= peak, clip <= {GATE['clip_frac']:.0%}, speed <= no-load; "
+               f"tracking libraries: worst per_clip motor_torque)")
     return "\n".join(out)
 
 
