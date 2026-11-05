@@ -45,12 +45,20 @@ def test_uniform_lerobot_timestamps_and_reported_drift(tmp_path):
 
 
 def test_background_reload_never_blocks_the_loop(tmp_path):
+    """The 0.5 s factory runs off the 50 Hz loop.
+
+    A blocking reload shows up as one gap of about the factory time (>= 0.45 s) and no loop ticks while the build
+    runs. The old bound (every gap < 50 ms) also failed on shared-runner stalls unrelated to the reload (main 3001e16
+    CI: 'control loop blocked for 123 ms'), so the test asserts on that signature instead: worst gap below half the
+    factory time, and the loop keeps ticking through the build window.
+    """
+    factory_s = 0.5  # ~ DropbearArmIK._load on this machine
     f = tmp_path / "calib.json"
     f.write_text('{"v": 1}')
     built = []
 
     def slow_factory():
-        time.sleep(0.5)  # ~ DropbearArmIK._load on this machine
+        time.sleep(factory_s)
         built.append(f.read_text())
         return ("ik", "grav")
 
@@ -58,7 +66,7 @@ def test_background_reload_never_blocks_the_loop(tmp_path):
 
     r = BackgroundReloader(f, slow_factory, hashlib.sha256(f.read_bytes()).hexdigest(), poll_s=0.05).start()
     try:
-        gaps, swapped, last = [], None, time.perf_counter()
+        gaps, ticks, swapped, t_swap, last = [], [], None, None, time.perf_counter()
         t_end = time.perf_counter() + 2.0
         touched = False
         while time.perf_counter() < t_end:
@@ -67,13 +75,21 @@ def test_background_reload_never_blocks_the_loop(tmp_path):
                 touched = True
             got = r.take()
             if got is not None:
-                swapped = got
+                swapped, t_swap = got, time.perf_counter()
             time.sleep(0.02)  # 50 Hz loop
             now = time.perf_counter()
             gaps.append(now - last)
+            ticks.append(now)
             last = now
         assert swapped is not None and swapped[1] == ("ik", "grav") and swapped[2] >= 0.45
-        assert max(gaps) < 0.05, f"control loop blocked for {max(gaps) * 1e3:.0f} ms"
+        build_s = swapped[2]
+        during = sum(1 for t in ticks if t_swap - build_s <= t < t_swap)
+        nominal = build_s / 0.02
+        slow = sum(1 for g in gaps if g >= 0.05)
+        print(f"build {build_s:.3f} s; loop ticks during build {during} (nominal {nominal:.0f}); "
+              f"worst gap {1e3 * max(gaps):.1f} ms; gaps >= 50 ms: {slow}/{len(gaps)}")
+        assert max(gaps) < factory_s / 2, f"control loop blocked for {max(gaps) * 1e3:.0f} ms (reload on the loop?)"
+        assert during >= 0.4 * nominal, f"loop ticked {during}x during the {build_s:.2f} s build (nominal {nominal:.0f})"
     finally:
         r.close()
 
