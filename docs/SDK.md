@@ -108,7 +108,7 @@ docstrings are authoritative.
 |---|---|---|
 | `version[2]` | none | Replaced by `schema`. |
 | `mode_pr`, `mode_machine` | none | See 3.2 |
-| `tick` (uint32) | `tick` (uint32) | Bridge control tick at 500 Hz. It starts at 0 when the first command unpauses the bridge. |
+| `tick` (uint32) | `tick` (uint32) | MCU / bridge **sample** counter at 500 Hz (time-driven; not a publish counter — see CONTRACTS §6 / item 282). Starts at 0 when the first command unpauses the bridge. |
 | (none) | `stamp_ns` (int64) | Publish time (same-host clock). The runner reports `state_age_ms` from it. |
 | `imu_state.quaternion[4]` (wxyz) | `imu.quat_wxyz` (wire key `quat_wxyz`) | Body to world, z up. The IMU body is the articulation root `world`. Alias `imu_state.quaternion`. |
 | `imu_state.gyroscope[3]` | `imu.gyro` (`gyro`) | Body-frame angular velocity [rad/s]. Alias `gyroscope`. |
@@ -121,8 +121,10 @@ docstrings are authoritative.
 | `MotorState_.mode` | `motor.mode` (uint8) | Echo of the applied command mode. |
 | `MotorState_.q, dq` | `motor.q, dq` (float32) | Measured joint position and velocity (rad, rad/s). |
 | `MotorState_.ddq` | `motor.ddq` (float32) | Finite difference over one tick. |
-| `MotorState_.tau_est` | `motor.tau_est` (float32) | Simulation: the torque actually applied after clipping. |
+| `MotorState_.tau_est` | `motor.tau_est` (float32) | Simulation: the torque actually applied after clipping. Hardware: 0x500 `t` when `tau_valid=1`, else prefer `iq × Kt`. |
 | `MotorState_.temperature` (int16[2]) | `motor.temperature` (**float32[1]** per slot) | Simulation: constant 25 °C. |
+| (none) | `motor.tau_valid` (uint8[N], key `tau_valid`) | *Item 85.* 1 = `tau_est` trusted. Hardware: 0x500 `t` strictly inside +-24 N·m; at the rail use `iq × Kt` (`tau_est_with_iq_fallback`). Sim: always 1. Absent keys (pre-item-85) decode as all-1 with unknown age; CRC over legacy motor bytes. |
+| (none) | `motor.age_us` (uint32[N], key `age_us`) | *Item 85.* Per-slot sample -> LowState publish [µs]; `0xFFFFFFFF` = unknown. Sim: 0. CRC: appended after `tau_valid` bytes. |
 | `MotorState_.vol`, `sensor[2]`, `motorstate`, `reserve[4]` | none | |
 | `wireless_remote[40]` | none | There is no joystick. The runner FSM is driven by a time schedule (section 6). |
 | `reserve[4]`, `crc` | `crc` | |

@@ -20,6 +20,14 @@ Units and frames:
       (:data:`IMU_AGE_UNKNOWN` = unknown). A default-constructed ``IMUState`` is **invalid** (valid=0, age
       unknown): the identity quaternion it carries is a placeholder, not an upright reading. Consumers must gate
       on both fields (``deploy.fsm`` refuses / leaves ``POLICY``). Added by local patch 0004 (item 137).
+    * ``MotorStateBlock.tau_valid`` (uint8[n], wire ``tau_valid``) is 1 when ``tau_est`` is trusted. On hardware
+      that means the MyActuator motion-mode (0x500) ``t`` field was strictly inside
+      :data:`MOTION_MODE_TAU_RAIL_NM` (+-24 N*m); at the rail, use :func:`tau_est_with_iq_fallback` (``iq * Kt``
+      from 0x9C / 0xA1). Sim always sends 1 (applied torque after clip). ``MotorStateBlock.age_us`` (uint32[n],
+      wire ``age_us``) is sample time -> LowState publish [us] per slot (:data:`MOTOR_AGE_UNKNOWN` = unknown).
+      A pre-health sender omits both keys; decode fills ``tau_valid=1`` (legacy ``tau_est`` kept) and unknown age,
+      and CRC is checked over the legacy motor bytes. Unlike IMU health (fail-closed on absent), motor health
+      fails open on absent so existing sim / bridge frames keep working. Added for item 85.
     * ``SimState`` is privileged, simulation-only ground truth in the world
       frame. It never exists on hardware; policies that need it are sim-only.
 
@@ -28,11 +36,13 @@ Wire format (msgpack map, one message per ZMQ frame)::
     {"schema": "dropbear_hg-v1", "type": "LowCmd"|"LowState", "tick": uint32,
      "stamp_ns": int64, <blocks as maps of little-endian raw array bytes>, "crc": uint32}
 
-``tick`` in a LowState is the simulator/robot control tick (500 Hz). In a LowCmd
-it echoes the LowState tick the command was computed from (0 if unknown), which
-lets the robot side measure command latency in ticks. ``stamp_ns`` is
-``time.perf_counter_ns()`` at send time; it is only comparable between
-processes on the same host (Windows QueryPerformanceCounter is system-wide).
+``tick`` in a LowState is the MCU / simulator **sample** counter at 500 Hz (time-driven:
+it advances with the control period even when a publish is skipped). It must not be a
+publish counter; a publish-counted tick trails wall time under load and trips the deploy
+tick-lag gate on fresh frames (item 280 / 282). In a LowCmd it echoes the LowState tick
+the command was computed from (0 if unknown), which lets the robot side measure command
+latency in ticks. ``stamp_ns`` is ``time.perf_counter_ns()`` at send time; it is only
+comparable between processes on the same host (Windows QueryPerformanceCounter is system-wide).
 
 CRC: Unitree's CRC32 (see :mod:`dropbear_wbc.sdk.crc`) over the canonical byte
 string: ``<I tick``, ``<q stamp_ns``, then every array's little-endian bytes in
@@ -58,6 +68,19 @@ SCHEMA = "dropbear_hg-v1"
 
 IMU_AGE_UNKNOWN = 0xFFFFFFFF
 """``IMUState.age_us`` sentinel: the producer does not know the sample age (treated as stale)."""
+
+MOTOR_AGE_UNKNOWN = 0xFFFFFFFF
+"""``MotorStateBlock.age_us`` sentinel: the producer does not know that slot's sample age (treated as stale)."""
+
+MOTION_MODE_TAU_RAIL_NM = 24.0
+"""MyActuator motion-mode (0x500) ``t`` / ``t_ff`` field ceiling [N*m].
+
+24 % of X10-S2 peak (100), 40 % of CEM-60 peak (60), 60 % of X10 1:7 peak (40). On a knee at
+``kp = 500``, ``kp * |err|`` alone hits the rail at :data:`MOTION_MODE_KP500_RAIL_ERR_RAD` (48 mrad).
+"""
+
+MOTION_MODE_KP500_RAIL_ERR_RAD = MOTION_MODE_TAU_RAIL_NM / 500.0
+"""Position error [rad] at which knee ``kp=500`` alone saturates the 0x500 ``t`` rail (0.048 rad = 48 mrad)."""
 
 
 TICK_MOD = 1 << 32
@@ -169,6 +192,34 @@ def _from_bin(blob: bytes, dtype: np.dtype, n: int, name: str) -> np.ndarray:
     if arr.shape != (n,):
         raise ValueError(f"{name}: expected {n} elements, got {arr.shape[0]}")
     return arr.copy()
+
+
+_U32 = np.dtype("<u4")
+
+
+def motion_mode_tau_valid(tau_nm: Any, rail_nm: float = MOTION_MODE_TAU_RAIL_NM) -> np.ndarray:
+    """Per-slot ``tau_valid`` mask: 1 where ``|tau|`` is strictly inside the 0x500 ``t`` rail.
+
+    A saturated reading (``|tau| >= rail``) is not a usable torque estimate; consumers should fall back to
+    ``iq * Kt`` via :func:`tau_est_with_iq_fallback`. Returns ``uint8`` with the same shape as ``tau_nm``.
+    """
+    t = np.asarray(tau_nm, dtype=np.float64)
+    return (np.abs(t) < float(rail_nm)).astype(_U8, copy=False)
+
+
+def tau_est_with_iq_fallback(tau_est: Any, tau_valid: Any, iq_a: Any, kt_nm_per_a: Any) -> np.ndarray:
+    """Torque [N*m]: ``tau_est`` where ``tau_valid==1``, else ``iq_a * kt_nm_per_a``.
+
+    Hardware producers put the 0x500 ``t`` field in ``tau_est`` and clear ``tau_valid`` at the +-24 N*m rail;
+    ``iq`` comes from 0x9C / 0xA1 (0.01 A/LSB) and ``Kt`` from the datasheet / bench. Sim leaves ``tau_valid`` at 1
+    and never needs the fallback. Output is float32, broadcast against the inputs.
+    """
+    tau = np.asarray(tau_est, dtype=np.float64)
+    valid = np.asarray(tau_valid, dtype=np.uint8)
+    iq = np.asarray(iq_a, dtype=np.float64)
+    kt = np.asarray(kt_nm_per_a, dtype=np.float64)
+    out = np.where(valid != 0, tau, iq * kt)
+    return out.astype(np.float32, copy=False)
 
 
 # --------------------------------------------------------------------------------------
@@ -285,10 +336,13 @@ class MotorState:
     ddq = property(lambda s: float(s._block.ddq[s._i]))
     tau_est = property(lambda s: float(s._block.tau_est[s._i]))
     temperature = property(lambda s: float(s._block.temperature[s._i]))
+    tau_valid = property(lambda s: int(s._block.tau_valid[s._i]))
+    age_us = property(lambda s: int(s._block.age_us[s._i]))
 
     def __repr__(self) -> str:
         return (f"MotorState(mode={self.mode}, q={self.q:.4f}, dq={self.dq:.4f}, ddq={self.ddq:.3f}, "
-                f"tau_est={self.tau_est:.3f}, temperature={self.temperature:.1f})")
+                f"tau_est={self.tau_est:.3f}, temperature={self.temperature:.1f}, "
+                f"tau_valid={self.tau_valid}, age_us={self.age_us})")
 
 
 @dataclass
@@ -300,8 +354,11 @@ class MotorStateBlock:
         q: measured position [rad | m].
         dq: measured velocity [rad/s | m/s].
         ddq: acceleration [rad/s^2 | m/s^2] (finite difference in simulation).
-        tau_est: estimated output torque [N*m | N] (simulation: last applied, clipped torque).
+        tau_est: estimated output torque [N*m | N] (simulation: last applied, clipped torque;
+            hardware: 0x500 ``t`` when ``tau_valid`` else prefer ``iq * Kt``).
         temperature: winding temperature [degC] (simulation: constant).
+        tau_valid: uint8[n]; 1 when ``tau_est`` is trusted (sim: always; HW: 0x500 ``t`` inside +-24 N*m).
+        age_us: uint32[n]; sample -> publish age [us]; :data:`MOTOR_AGE_UNKNOWN` when unknown.
     """
 
     mode: np.ndarray
@@ -310,13 +367,28 @@ class MotorStateBlock:
     ddq: np.ndarray
     tau_est: np.ndarray
     temperature: np.ndarray
+    tau_valid: np.ndarray | None = None
+    age_us: np.ndarray | None = None
 
     FIELDS = ("mode", "q", "dq", "ddq", "tau_est", "temperature")
+    HEALTH_KEYS = ("tau_valid", "age_us")
+
+    def __post_init__(self) -> None:
+        n = int(np.asarray(self.q).reshape(-1).shape[0])
+        if self.tau_valid is None:
+            self.tau_valid = np.ones(n, _U8)  # fail-open: legacy / unset trusts tau_est
+        else:
+            self.tau_valid = np.asarray(self.tau_valid, dtype=_U8).reshape(n).copy()
+        if self.age_us is None:
+            self.age_us = np.full(n, MOTOR_AGE_UNKNOWN, dtype=_U32)
+        else:
+            self.age_us = np.asarray(self.age_us, dtype=_U32).reshape(n).copy()
 
     @classmethod
     def zeros(cls, n: int) -> "MotorStateBlock":
         return cls(mode=np.zeros(n, _U8), q=np.zeros(n, _F32), dq=np.zeros(n, _F32), ddq=np.zeros(n, _F32),
-                   tau_est=np.zeros(n, _F32), temperature=np.zeros(n, _F32))
+                   tau_est=np.zeros(n, _F32), temperature=np.zeros(n, _F32),
+                   tau_valid=np.ones(n, _U8), age_us=np.full(n, MOTOR_AGE_UNKNOWN, dtype=_U32))
 
     def __len__(self) -> int:
         return int(self.q.shape[0])
@@ -335,16 +407,41 @@ class MotorStateBlock:
             want = _U8 if f == "mode" else _F32
             if arr.shape != (n,) or arr.dtype != want:
                 raise ValueError(f"{name}.{f}: expected {want} shape ({n},), got {arr.dtype} {arr.shape}")
+        tv = np.asarray(self.tau_valid)
+        if tv.shape != (n,) or tv.dtype != _U8:
+            raise ValueError(f"{name}.tau_valid: expected {_U8} shape ({n},), got {tv.dtype} {tv.shape}")
+        if not np.isin(tv, (0, 1)).all():
+            raise ValueError(f"{name}.tau_valid: entries must be 0 or 1, got {sorted(set(map(int, tv)))}")
+        au = np.asarray(self.age_us)
+        if au.shape != (n,) or au.dtype != _U32:
+            raise ValueError(f"{name}.age_us: expected {_U32} shape ({n},), got {au.dtype} {au.shape}")
 
     def to_wire(self) -> dict[str, bytes]:
-        return {f: getattr(self, f).tobytes() for f in self.FIELDS}
+        out = {f: getattr(self, f).tobytes() for f in self.FIELDS}
+        out["tau_valid"] = np.asarray(self.tau_valid, dtype=_U8).tobytes()
+        out["age_us"] = np.asarray(self.age_us, dtype=_U32).tobytes()
+        return out
 
     @classmethod
     def from_wire(cls, d: dict, n: int, name: str) -> "MotorStateBlock":
-        return cls(**{f: _from_bin(d[f], _U8 if f == "mode" else _F32, n, f"{name}.{f}") for f in cls.FIELDS})
+        kw = {f: _from_bin(d[f], _U8 if f == "mode" else _F32, n, f"{name}.{f}") for f in cls.FIELDS}
+        if "tau_valid" in d or "age_us" in d:
+            if "tau_valid" not in d or "age_us" not in d:
+                raise ValueError(f"{name}: 'tau_valid' and 'age_us' must both be present or both absent")
+            kw["tau_valid"] = _from_bin(d["tau_valid"], _U8, n, f"{name}.tau_valid")
+            kw["age_us"] = _from_bin(d["age_us"], _U32, n, f"{name}.age_us")
+        return cls(**kw)
 
-    def _canonical(self) -> bytes:
-        return b"".join(getattr(self, f).tobytes() for f in self.FIELDS)
+    @staticmethod
+    def wire_has_health(d: dict) -> bool:
+        """True when the motor map carries both health keys (post item-85 sender)."""
+        return "tau_valid" in d and "age_us" in d
+
+    def _canonical(self, health: bool = True) -> bytes:
+        body = b"".join(getattr(self, f).tobytes() for f in self.FIELDS)
+        if not health:
+            return body
+        return body + np.asarray(self.tau_valid, dtype=_U8).tobytes() + np.asarray(self.age_us, dtype=_U32).tobytes()
 
 
 # --------------------------------------------------------------------------------------
@@ -612,16 +709,17 @@ class LowState:
         if self.neck is not None:
             self.neck.validate(NUM_NECK, "neck")
 
-    def _canonical(self, imu_health: bool = True) -> bytes:
-        parts = [_header(self.tick, self.stamp_ns), self.imu._canonical(imu_health), self.motor._canonical()]
+    def _canonical(self, imu_health: bool = True, motor_health: bool = True) -> bytes:
+        parts = [_header(self.tick, self.stamp_ns), self.imu._canonical(imu_health),
+                 self.motor._canonical(motor_health)]
         if self.neck is not None:
-            parts.append(self.neck._canonical())
+            parts.append(self.neck._canonical(motor_health))
         if self.sim is not None:
             parts.append(self.sim._canonical())
         return b"".join(parts)
 
-    def compute_crc(self, imu_health: bool = True) -> int:
-        return crc32_bytes(self._canonical(imu_health))
+    def compute_crc(self, imu_health: bool = True, motor_health: bool = True) -> int:
+        return crc32_bytes(self._canonical(imu_health, motor_health))
 
     def to_bytes(self) -> bytes:
         """Validate, fill :attr:`crc` and serialize to msgpack."""
@@ -639,11 +737,15 @@ class LowState:
         """Decode msgpack; raise ``ValueError`` on malformed data and :class:`CrcError` on CRC mismatch."""
         d = _check_envelope(msgpack.unpackb(data, raw=False), "LowState")
         neck, sim = d.get("neck"), d.get("sim")
-        health = IMUState.wire_has_health(d["imu"])  # pre-0004 senders: CRC over the legacy canonical bytes
+        # pre-0004 / pre-item-85 senders: CRC over the legacy canonical bytes (no health fields)
+        imu_h = IMUState.wire_has_health(d["imu"])
+        mot_h = MotorStateBlock.wire_has_health(d["motor"])
         msg = cls(tick=int(d["tick"]), stamp_ns=int(d["stamp_ns"]), imu=IMUState.from_wire(d["imu"]),
                   motor=MotorStateBlock.from_wire(d["motor"], NUM_MOTORS, "motor"),
                   neck=None if neck is None else MotorStateBlock.from_wire(neck, NUM_NECK, "neck"),
                   sim=None if sim is None else SimState.from_wire(sim), crc=int(d["crc"]))
-        if verify_crc and msg.compute_crc(health) != msg.crc:
-            raise CrcError(f"LowState CRC mismatch: got {msg.crc:#010x}, computed {msg.compute_crc(health):#010x}")
+        if verify_crc and msg.compute_crc(imu_health=imu_h, motor_health=mot_h) != msg.crc:
+            raise CrcError(
+                f"LowState CRC mismatch: got {msg.crc:#010x}, "
+                f"computed {msg.compute_crc(imu_health=imu_h, motor_health=mot_h):#010x}")
         return msg

@@ -715,6 +715,9 @@ needs these details to interoperate. They are additive; nothing above changes.
   - `tick` echoes the LowState tick the command was computed from.
 - **LowState.** Carries `imu{quat_wxyz,gyro,acc,rpy}` of the root body `world`, `motor{mode,q,dq,ddq,tau_est,temperature}`,
   an optional `neck` block, and an optional `sim` block.
+  - `tick` is the MCU / simulator **sample** counter at 500 Hz (time-driven). It must advance with the control
+    period even when a publish is skipped. A publish-counted tick trails wall time under load and the deploy
+    tick-lag gate trips on fresh frames (notes/280; item 282).
   - `gyro` is the body-frame angular velocity, in rad/s.
   - `acc` is the body-frame specific force, in m/s². It reads +9.81 on z when the robot is upright at rest.
   - `sim` holds privileged ground truth: the root pose and velocity in world, plus the poses of any requested bodies.
@@ -724,9 +727,17 @@ needs these details to interoperate. They are additive; nothing above changes.
     identity quaternion can never pass as "upright". `age_us` = sample time -> LowState publish. A LowState without
     these keys (pre-0004 sender) decodes as invalid. The deploy FSM refuses / leaves `POLICY` on an invalid or stale
     (> 60 ms default) IMU. The schema string stays `dropbear_hg-v1` (additive keys); see backlog for the version bump.
+  - *Added for item 85:* `motor.tau_valid` (uint8[22]) and `motor.age_us` (uint32[22]). `tau_valid = 1` when
+    `tau_est` is trusted. On hardware that means the MyActuator motion-mode (0x500) `t` field was strictly inside
+    +-24 N·m (24 % of X10-S2 peak; knee `kp=500` rails at 48 mrad of error). At the rail, consumers must use
+    `iq × Kt` from 0x9C / 0xA1 (`tau_est_with_iq_fallback`). Sim always sends `tau_valid = 1` (applied torque after
+    clip) and `age_us = 0`. A message without the keys (pre-item-85 sender) decodes with `tau_valid = 1` and
+    unknown age (fail-open, unlike IMU health) and CRC is checked over the legacy motor bytes. Neck slots carry
+    the same keys. Schema string stays `dropbear_hg-v1`.
 - **CRC.** Unitree's `crc32_core` is applied to the canonical bytes (`<I tick`, `<q stamp_ns`, then every
   array in field order), read as little-endian uint32 words. Patch 0004 appends `<II imu.valid imu.age_us` after
-  `imu.rpy`; a message without the keys is checked over the legacy bytes.
+  `imu.rpy`; item 85 appends motor `tau_valid` (uint8×N) then `age_us` (uint32×N) after the motor field arrays
+  (and the same for neck when present). A message without those keys is checked over the legacy bytes.
 - **Safety semantics.** The robot side holds the last command.
   - If no command arrives for more than 100 ms (wall clock), it switches to damping (`kp=0`, `kd=damping`).
   - The Newton bridge stays paused until the first command arrives.

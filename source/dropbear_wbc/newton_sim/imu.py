@@ -71,12 +71,16 @@ class LowStateAssembler:
             age_s = float(self.sensor_model.imu_age_s())
         imu = IMUState(quat_wxyz=f32(qm), gyro=f32(gyro), accel=f32(acc), rpy=quat_wxyz_to_rpy(f32(qm)),
                        valid=1, age_us=int(round(1e6 * max(0.0, age_s))))
+        # Sim applied torque is trusted (tau_valid=1); age_us=0 = sample published in the same tick.
+        n_m, n_n = motors.NUM_MOTORS, motors.NUM_NECK
         motor = MotorStateBlock(mode=np.asarray(motor_mode, np.uint8), q=f32(mq), dq=f32(mdq),
                                 ddq=f32(ddq), tau_est=f32(r.motor_tau),
-                                temperature=np.full(motors.NUM_MOTORS, SIM_TEMPERATURE_C, np.float32))
-        neck = MotorStateBlock(mode=np.ones(motors.NUM_NECK, np.uint8), q=f32(r.neck_q), dq=f32(r.neck_dq),
-                               ddq=np.zeros(motors.NUM_NECK, np.float32), tau_est=np.zeros(motors.NUM_NECK, np.float32),
-                               temperature=np.full(motors.NUM_NECK, SIM_TEMPERATURE_C, np.float32))
+                                temperature=np.full(n_m, SIM_TEMPERATURE_C, np.float32),
+                                tau_valid=np.ones(n_m, np.uint8), age_us=np.zeros(n_m, np.uint32))
+        neck = MotorStateBlock(mode=np.ones(n_n, np.uint8), q=f32(r.neck_q), dq=f32(r.neck_dq),
+                               ddq=np.zeros(n_n, np.float32), tau_est=np.zeros(n_n, np.float32),
+                               temperature=np.full(n_n, SIM_TEMPERATURE_C, np.float32),
+                               tau_valid=np.ones(n_n, np.uint8), age_us=np.zeros(n_n, np.uint32))
         sim = None
         if self.publish_sim:
             sim = SimState(time_s=float(r.time_s), root_pos_w=f32(r.root_pos_w), root_quat_w=f32(q),
