@@ -214,6 +214,18 @@ class FsmCfg:
             item-156 summary gate fails that run instead.
         motor_mode_mask: SDK-order bool mask of gated motors (``None`` = all 22; every motor is hold- or
             policy-controlled in the active states).
+        motor_tau_gate: optional POLICY gate on ``LowState.motor.tau_valid`` / ``age_us`` (item 314, follow-up of
+            item 85). When on, refuse ``POLICY`` and leave it for ``PASSIVE`` in the same step when more than
+            ``motor_tau_max_bad`` gated slots are railed (``tau_valid != 1``) or stale (``age_us`` unknown /
+            above ``motor_tau_max_age_s``, plus LowState-tick re-use time). **Default off**: Newton / legacy
+            producers send ``tau_valid=1`` with unknown age (item 85 fail-open); enabling without a producer that
+            fills real ages false-trips every slot. Turn on once the HAL fills health (item 313).
+        motor_tau_max_age_s: per-slot stale threshold [s]; ``None`` disables the age check (``tau_valid`` only).
+            Default 0.060 matches the IMU gate (notes/39 band + one missed frame).
+        motor_tau_max_bad: trip when the number of gated bad slots is **strictly greater** than this (0 = any
+            single railed/stale slot trips).
+        motor_tau_mask: SDK-order bool mask of gated motors (``None`` = all 22). Restrict to knees/hips when
+            only those slots have a real 0x500 ``t`` path.
     """
 
     move_to_default_s: float = 2.0
@@ -232,6 +244,10 @@ class FsmCfg:
     motor_mode_grace_steps: int = 1
     motor_mode_arm_timeout_s: float | None = 0.5
     motor_mode_mask: np.ndarray | None = None
+    motor_tau_gate: bool = False
+    motor_tau_max_age_s: float | None = 0.060
+    motor_tau_max_bad: int = 0
+    motor_tau_mask: np.ndarray | None = None
 
 
 @dataclass
@@ -445,6 +461,23 @@ def _fsm_from(d: dict | None) -> FsmCfg:
             fsm.motor_mode_mask = np.isin(np.asarray(motors.MOTOR_NAMES), m)
         else:
             fsm.motor_mode_mask = _vec(m, n, "fsm.motor_mode_mask").astype(bool)
+    if "motor_tau_gate" in d:
+        fsm.motor_tau_gate = bool(d["motor_tau_gate"])
+    if "motor_tau_max_age_ms" in d:
+        fsm.motor_tau_max_age_s = None if d["motor_tau_max_age_ms"] is None else float(d["motor_tau_max_age_ms"]) * 1e-3
+    if "motor_tau_max_bad" in d:
+        fsm.motor_tau_max_bad = int(d["motor_tau_max_bad"])
+        if fsm.motor_tau_max_bad < 0:
+            raise ValueError(f"fsm.motor_tau_max_bad must be >= 0, got {fsm.motor_tau_max_bad}")
+    if d.get("motor_tau_mask") is not None:
+        m = d["motor_tau_mask"]
+        if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):
+            bad = [x for x in m if x not in motors.MOTOR_NAMES]
+            if bad:
+                raise ValueError(f"fsm.motor_tau_mask: unknown motor names {bad}")
+            fsm.motor_tau_mask = np.isin(np.asarray(motors.MOTOR_NAMES), m)
+        else:
+            fsm.motor_tau_mask = _vec(m, n, "fsm.motor_tau_mask").astype(bool)
     return fsm
 
 

@@ -39,6 +39,12 @@ that the robot side had armed (``LowState.motor.mode == 1``) and that then repor
 ``PASSIVE`` and latches it; a partially armed robot (some motors never 1 within ``motor_mode_arm_timeout_s``)
 trips the same way. Before this gate the FSM never read ``mode``: a damped/faulted leg stayed "held" with q frozen
 at the last reply.
+
+Motor torque-health gate (item 314, item 85 follow-up): optional (``fsm.motor_tau_gate``, default off). When on,
+``POLICY`` is refused, and left for ``PASSIVE`` in the same step, when more than ``fsm.motor_tau_max_bad`` gated
+slots have ``tau_valid != 1`` (0x500 ``t`` rail) or a stale ``age_us`` (unknown / above ``motor_tau_max_age_s``,
+plus LowState-tick re-use). Matches the IMU gate shape so a producer that fills motor health (item 313) can opt in
+without changing the default sim path (Newton sends ``tau_valid=1``, ``age_us=0``).
 """
 from __future__ import annotations
 
@@ -49,7 +55,7 @@ from enum import Enum
 import numpy as np
 
 from ..sdk import motors
-from ..sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, tick_diff
+from ..sdk.types import MOTOR_AGE_UNKNOWN, LowCmd, LowState, MotorCmdBlock, MotorMode, tick_diff
 from . import quat as Q
 from .config import DeployConfig
 from .motion import MotionReference
@@ -131,6 +137,11 @@ class DeployController:
         self._t_active = None                     # controller time the current active stretch started
         self.latched: dict | None = None          # set by the motor-mode gate; cleared only by clear_latch()
         self.refused: list[dict] = []             # requests refused while latched
+        mask_t = cfg.fsm.motor_tau_mask
+        self._tau_mask = np.ones(n, bool) if mask_t is None else np.asarray(mask_t, bool).reshape(n)
+        self._tau_tick: int | None = None
+        self._tau_tick_t0 = 0.0
+        self._tau_health: tuple[str | None, int, float] = ("motor_tau_unseen", 0, float("inf"))
 
     # ------------------------------------------------------------------ IMU health
 
@@ -160,6 +171,44 @@ class DeployController:
                 fault = "imu_frozen"
         self._imu_health = (fault, age)
         return fault, age
+
+    # ------------------------------------------------------------------ motor tau health (item 314)
+
+    def observe_motor_tau(self, low_state: LowState, t: float) -> tuple[str | None, int, float]:
+        """Update the motor ``tau_valid`` / ``age_us`` tracker at controller time ``t``.
+
+        Returns ``(fault, n_bad, worst_age_s)``: ``fault`` is ``None``, ``"motor_tau_invalid"`` (too many railed
+        slots) or ``"motor_tau_stale"`` (too many stale ages, no rail trip); ``n_bad`` counts gated slots that are
+        railed or stale; ``worst_age_s`` is the max effective age on gated slots (``inf`` when any is unknown).
+        Effective age = ``age_us`` + time this LowState tick has been re-used (same shape as the IMU gate).
+        Idempotent for repeated calls with the same (tick, t). No-op (always healthy) when ``motor_tau_gate`` is off.
+        """
+        fsm = self.cfg.fsm
+        tick = int(low_state.tick)
+        if tick != self._tau_tick:
+            self._tau_tick, self._tau_tick_t0 = tick, t
+        reuse = max(0.0, t - self._tau_tick_t0)
+        tv = np.asarray(low_state.motor.tau_valid, dtype=np.uint8).reshape(-1)
+        au = np.asarray(low_state.motor.age_us, dtype=np.uint32).reshape(-1)
+        if tv.shape[0] != motors.NUM_MOTORS or au.shape[0] != motors.NUM_MOTORS:
+            fault = f"motor_tau(size {tv.shape[0]}/{au.shape[0]} != {motors.NUM_MOTORS})"
+            self._tau_health = (fault, motors.NUM_MOTORS, float("inf"))
+            return self._tau_health
+        age = np.where(au >= MOTOR_AGE_UNKNOWN, np.inf, au.astype(np.float64) * 1e-6) + reuse
+        g = self._tau_mask
+        invalid = g & (tv != 1)
+        if fsm.motor_tau_max_age_s is None:
+            stale = np.zeros(motors.NUM_MOTORS, bool)
+        else:
+            stale = g & ~invalid & (age > fsm.motor_tau_max_age_s)
+        bad = invalid | stale
+        n_bad = int(np.count_nonzero(bad))
+        worst = float(np.max(age[g])) if np.any(g) else 0.0
+        fault = None
+        if fsm.motor_tau_gate and n_bad > fsm.motor_tau_max_bad:
+            fault = "motor_tau_invalid" if np.any(invalid) else "motor_tau_stale"
+        self._tau_health = (fault, n_bad, worst)
+        return fault, n_bad, worst
 
     # ------------------------------------------------------------------ LowState freshness
 
@@ -253,8 +302,8 @@ class DeployController:
 
     def request(self, new: FsmState, low_state: LowState, t: float, state_age_s: float | None = None) -> bool:
         """Enter ``new`` (runs its ``enter`` logic). Returns ``False`` when ``POLICY`` is refused by the IMU gate, the
-        state freshness gate or the tilt check (``bad_orientation``, item 275), or (for any non-Passive state) by the
-        motor-mode latch; the state is then unchanged.
+        optional motor-tau gate (item 314), the state freshness gate or the tilt check (``bad_orientation``, item 275),
+        or (for any non-Passive state) by the motor-mode latch; the state is then unchanged.
 
         Every transition (including refusals) is reported in the next step's ``StepInfo.transitions`` in order, so a
         request followed by a trip in the same step keeps both. An IMU refusal reports
@@ -269,6 +318,8 @@ class DeployController:
             raise RuntimeError("POLICY requested but no ONNX policy is loaded")
         if new == FsmState.POLICY:
             fault, _ = self.observe_imu(low_state, t)
+            if fault is None:
+                fault, _, _ = self.observe_motor_tau(low_state, t)
             if fault is None:
                 fault, _, _ = self.observe_state(low_state, t, state_age_s)
             if fault is None and self._tilted(low_state) is not None:
@@ -326,6 +377,8 @@ class DeployController:
         kp, kd = self.full_kp.copy(), self.full_kd.copy()
         fault, age = self.observe_imu(low_state, t)
         info_extra = {"imu_valid": int(low_state.imu.valid), "imu_age_s": age, "imu_fault": fault}
+        tfault, n_bad, tage = self.observe_motor_tau(low_state, t)
+        info_extra.update(motor_tau_fault=tfault, motor_tau_n_bad=n_bad, motor_tau_age_s=tage)
         sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
         if (fault == "imu_stale" and self._reuse_owned_by_state_gate(low_state, t)):
             # Item 279: the IMU sample was fresh on arrival and has only aged because the whole LowState tick is being
@@ -334,6 +387,8 @@ class DeployController:
             # grace and mislabelled transport/HAL stalls as IMU faults whenever both gates expired on the same step.
             info_extra["imu_stale_deferred"] = True
             fault = None
+        if fault is None and tfault is not None:
+            fault = tfault
         if self.state == FsmState.POLICY and fault is not None:
             # Leave before evaluating the policy: its observations (gravity, gyro, anchor) are not trustworthy.
             self.state = FsmState.PASSIVE

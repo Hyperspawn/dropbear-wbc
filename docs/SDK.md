@@ -239,6 +239,9 @@ MoveToDefault, then Hold, then (policy mode) Policy after `--hold-s`.
 - `--imu-max-age-ms` (config, 60; <= 0 disables), `--imu-frozen-steps` (config, 0 = off; ~25 on hardware),
   `--no-imu-gate` (replaying pre-0004 logs only): IMU health gate of POLICY (patch 0004). The runner retries a
   refused Hold -> Policy request every step until the IMU is healthy.
+- `--motor-tau-gate` (off), `--motor-tau-max-age-ms` (config, 60; <= 0 disables age check), `--motor-tau-max-bad`
+  (config, 0): optional POLICY gate on `motor.tau_valid` / `age_us` (item 314). Default off so Newton / legacy
+  producers (fail-open `tau_valid=1`, unknown age) keep working; enable once the HAL fills real health (item 313).
 - Outputs:
   - `--log` JSONL, one record per step: t, tick, fsm, tilt, root_z, state age, q, q*, tau_est, action.
   - `--summary` JSON:
@@ -292,7 +295,7 @@ Written upstream by `unitree_rl_lab/utils/export_deploy_cfg.py` and read by `uni
 | `observations: {name: {params, clip, scale, history_length[, func, dim]}}` | Ordered terms. `func` defaults to the key (unitree_rl_lab keys are function names). |
 | `policy` (Dropbear extension) | ONNX path relative to the YAML |
 | `motion` (Dropbear extension) | `{file\|npz\|motion_file, source: npz\|csv\|onnx, anchor_body(_name), fps, time_start, time_end, align, anchor_offset_pos, anchor_offset_quat}` |
-| `fsm` (Dropbear extension) | `{move_to_default_s, passive_kd[22], hold_kp[22], hold_kd[22], bad_orientation_rad, imu_gate, imu_max_age_ms, imu_frozen_steps, state_gate, state_max_age_ms, state_stale_grace_steps}` (SDK order; the `imu_*` keys are patch 0004, the `state_*` keys are item 236; runner overrides `--state-max-age-ms`, `--no-state-gate`, `--cross-host`) |
+| `fsm` (Dropbear extension) | `{move_to_default_s, passive_kd[22], hold_kp[22], hold_kd[22], bad_orientation_rad, imu_gate, imu_max_age_ms, imu_frozen_steps, state_gate, state_max_age_ms, state_stale_grace_steps, motor_tau_gate, motor_tau_max_age_ms, motor_tau_max_bad, motor_tau_mask}` (SDK order; the `imu_*` keys are patch 0004, the `state_*` keys are item 236, the `motor_tau_*` keys are item 314 default-off; runner overrides `--state-max-age-ms`, `--no-state-gate`, `--cross-host`, `--motor-tau-gate`, `--motor-tau-max-age-ms`, `--motor-tau-max-bad`) |
 
 The Unitree exporter itself cannot be pointed at the Dropbear Isaac env. It resolves *all* 91 articulation joints
 against the SDK names, and the 63 passive DOFs have no SDK slot. A Dropbear `deploy.yaml` is therefore hand-written or

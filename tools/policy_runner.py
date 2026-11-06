@@ -128,6 +128,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--no-motor-mode-fsm-gate", action="store_true",
                     help="disable the FSM L4 gate (Passive + latch when an armed motor reports mode != 1; item 157)")
     ap.add_argument("--motor-mode-grace-steps", type=int, default=None, help="override fsm.motor_mode_grace_steps")
+    ap.add_argument("--motor-tau-gate", action="store_true",
+                    help="enable the optional FSM POLICY gate on motor.tau_valid / age_us (item 314; default off)")
+    ap.add_argument("--motor-tau-max-age-ms", type=float, default=None,
+                    help="motor tau-health stale threshold [ms] (default: config / 60; <= 0 disables the age check)")
+    ap.add_argument("--motor-tau-max-bad", type=int, default=None,
+                    help="trip POLICY when more than this many gated slots are railed or stale (default: config / 0)")
     args = ap.parse_args(argv)
     if (args.timing_gate or args.timing_limit) and args.clock != "wall":
         ap.error("--timing-gate/--timing-limit need --clock wall (sim-clock steps carry no slot or lateness)")
@@ -260,6 +266,12 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         cfg.fsm.motor_mode_gate = False
     if args.motor_mode_grace_steps is not None:
         cfg.fsm.motor_mode_grace_steps = int(args.motor_mode_grace_steps)
+    if args.motor_tau_gate:
+        cfg.fsm.motor_tau_gate = True
+    if args.motor_tau_max_age_ms is not None:
+        cfg.fsm.motor_tau_max_age_s = None if args.motor_tau_max_age_ms <= 0 else args.motor_tau_max_age_ms * 1e-3
+    if args.motor_tau_max_bad is not None:
+        cfg.fsm.motor_tau_max_bad = int(args.motor_tau_max_bad)
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -316,6 +328,9 @@ def main(argv=None) -> int:
                              "imu_frozen_steps": cfg.fsm.imu_frozen_steps,
                              "state_gate": cfg.fsm.state_gate, "state_max_age_s": cfg.fsm.state_max_age_s,
                              "state_stale_grace_steps": cfg.fsm.state_stale_grace_steps,
+                             "motor_tau_gate": cfg.fsm.motor_tau_gate,
+                             "motor_tau_max_age_s": cfg.fsm.motor_tau_max_age_s,
+                             "motor_tau_max_bad": cfg.fsm.motor_tau_max_bad,
                              "observations": [t.__dict__ for t in cfg.observations],
                              "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)

@@ -120,7 +120,9 @@ def write_contract_npz(path: Path) -> dict[str, np.ndarray]:
 
 
 def low_state(tick: int, q: np.ndarray | None = None, quat_wxyz=(1.0, 0.0, 0.0, 0.0), gyro=(0.0, 0.0, 0.0),
-              sim: bool = True, imu_valid: int = 1, imu_age_us: int = 0) -> LowState:
+              sim: bool = True, imu_valid: int = 1, imu_age_us: int = 0,
+              motor_tau_valid: int | np.ndarray | None = None,
+              motor_age_us: int | np.ndarray | None = None) -> LowState:
     st = LowState(tick=tick, stamp_ns=0)
     st.imu = IMUState(quat_wxyz=np.asarray(quat_wxyz, np.float32), gyro=np.asarray(gyro, np.float32),
                       accel=np.array([0, 0, 9.81], np.float32), rpy=np.zeros(3, np.float32),
@@ -128,6 +130,12 @@ def low_state(tick: int, q: np.ndarray | None = None, quat_wxyz=(1.0, 0.0, 0.0, 
     st.motor = MotorStateBlock.zeros(22)
     if q is not None:
         st.motor.q[:] = np.asarray(q, np.float32)
+    # Item 314: optional motor tau health. Default leaves zeros() (tau_valid=1, age UNKNOWN) so existing
+    # tests stay bit-identical; pass motor_age_us=0 (and tau_valid) when exercising the opt-in tau gate.
+    if motor_tau_valid is not None:
+        st.motor.tau_valid[:] = np.asarray(motor_tau_valid, np.uint8)
+    if motor_age_us is not None:
+        st.motor.age_us[:] = np.asarray(motor_age_us, np.uint32)
     if sim:
         st.sim = SimState(time_s=tick * 0.002, root_pos_w=np.array([0.1, -0.2, 0.9], np.float32),
                           root_quat_w=np.asarray(quat_wxyz, np.float32))
