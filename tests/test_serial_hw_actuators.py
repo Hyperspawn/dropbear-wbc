@@ -165,11 +165,20 @@ def _load_export_tool():
     return mod
 
 
+def _lf_bytes(data: bytes) -> bytes:
+    """Normalize CRLF/CR to LF so a Windows autocrlf (or editor) working tree still matches a fresh LF export."""
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 @pytest.mark.parametrize("path", COMMITTED_HW_JSON, ids=lambda p: p.stem)
 def test_committed_surrogate_files_equal_a_fresh_export(tmp_path, path):
     """Byte-for-byte staleness gate over all three committed artefacts (JSON incl. legacy/method/sha, MJCF, URDF):
     re-run tools/export_serial_hw.py for the file's map into tmp and compare. Catches edits the field-level test
-    above does not see (URDF inertials/limits, legacy block, schema/method text, hand edits)."""
+    above does not see (URDF inertials/limits, legacy block, schema/method text, hand edits).
+
+    Newlines are normalized (CRLF/CR -> LF) on both sides before equality so a core.autocrlf=true checkout does
+    not fail spuriously; a real content change still fails. data/robot/*.{json,xml,urdf} are also eol=lf in
+    .gitattributes so clean checkouts stay LF."""
     tool = _load_export_tool()
     meta = json.loads(path.read_text(encoding="utf-8"))
     profile = path.stem.removeprefix("dropbear_serial_")
@@ -178,5 +187,5 @@ def test_committed_surrogate_files_equal_a_fresh_export(tmp_path, path):
     for suffix in (".json", ".xml", ".urdf"):
         committed, fresh = path.with_suffix(suffix), tmp_path / f"{path.stem}{suffix}"
         assert committed.exists(), f"{committed.name} missing: run tools/export_serial_hw.py --map {meta['map']}"
-        assert committed.read_bytes() == fresh.read_bytes(), (
+        assert _lf_bytes(committed.read_bytes()) == _lf_bytes(fresh.read_bytes()), (
             f"{committed.name} is stale: run tools/export_serial_hw.py --map {meta['map']}")

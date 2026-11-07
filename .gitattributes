@@ -7,6 +7,11 @@ logs/** -text
 tests/fixtures/** -text
 site/data/** -text
 assets_manifest.json -text
+# Serial MJCF/URDF/JSON surrogates are byte-compared in tests/test_serial_hw_actuators.py. Force LF in the
+# working tree even under core.autocrlf=true (overrides data/** -text for these extensions).
+data/robot/*.json text eol=lf
+data/robot/*.xml text eol=lf
+data/robot/*.urdf text eol=lf
 *.npz binary
 *.glb binary
 *.bin binary

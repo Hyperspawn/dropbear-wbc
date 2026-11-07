@@ -8,7 +8,9 @@ onnx
 onnxruntime
 pyzmq
 msgpack
-mujoco
+# Pin <4: 4.0.0 (2026-11) reorders/reformats compiled body frames enough that the committed
+# dropbear_serial_hw_*.urdf byte gate fails on CI while 3.x (local 3.16) still matches.
+mujoco>=3.2.0,<4
 pyarrow
 pillow
 pyyaml
