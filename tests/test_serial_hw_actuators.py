@@ -155,3 +155,28 @@ def test_envelope_effort_single_motor_matches_motor_model(jac_si):
     for frac in (0.0, 0.3, 0.6, 0.9, 1.0, 1.2):
         w = frac * rec["velocity"]
         assert sh.envelope_effort(rec, w) == pytest.approx(g * hw.envelope_torque(m, g * w), rel=1e-9, abs=1e-9)
+
+def _load_export_tool():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("export_serial_hw", sh.SERIAL_XML.parents[2] / "tools" / "export_serial_hw.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("path", COMMITTED_HW_JSON, ids=lambda p: p.stem)
+def test_committed_surrogate_files_equal_a_fresh_export(tmp_path, path):
+    """Byte-for-byte staleness gate over all three committed artefacts (JSON incl. legacy/method/sha, MJCF, URDF):
+    re-run tools/export_serial_hw.py for the file's map into tmp and compare. Catches edits the field-level test
+    above does not see (URDF inertials/limits, legacy block, schema/method text, hand edits)."""
+    tool = _load_export_tool()
+    meta = json.loads(path.read_text(encoding="utf-8"))
+    profile = path.stem.removeprefix("dropbear_serial_")
+    assert tool.PROFILE_FOR_MAP[meta["map"]] == profile, (profile, meta["map"])
+    assert tool.main(["--map", meta["map"], "--out", str(tmp_path)]) == 0
+    for suffix in (".json", ".xml", ".urdf"):
+        committed, fresh = path.with_suffix(suffix), tmp_path / f"{path.stem}{suffix}"
+        assert committed.exists(), f"{committed.name} missing: run tools/export_serial_hw.py --map {meta['map']}"
+        assert committed.read_bytes() == fresh.read_bytes(), (
+            f"{committed.name} is stale: run tools/export_serial_hw.py --map {meta['map']}")
