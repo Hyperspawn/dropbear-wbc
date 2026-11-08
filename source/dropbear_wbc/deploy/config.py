@@ -225,7 +225,16 @@ class FsmCfg:
         motor_tau_max_bad: trip when the number of gated bad slots is **strictly greater** than this (0 = any
             single railed/stale slot trips).
         motor_tau_mask: SDK-order bool mask of gated motors (``None`` = all 22). Restrict to knees/hips when
-            only those slots have a real 0x500 ``t`` path.
+            only those slots have a real 0x500 ``t`` path. Note: in the notes/31 inverse-dynamics traces both knee
+            cranks sit above the +-24 N*m rail on 100 % of stance frames (stand 79 N*m), so a gated knee keeps
+            ``tau_valid=0`` for any debounce; leave the knees out of the mask until the iq*Kt path exists.
+        motor_tau_invalid_steps: rail debounce (item 321). A gated slot counts as railed only after ``tau_valid != 1``
+            on this many **consecutive new LowState ticks** seen by the FSM (one per step at ``step_dt``); a valid
+            sample resets it, a re-used tick does not advance it. ``1`` = trip on the first railed sample (0066
+            behaviour). Stale ages are never debounced, and ``request(POLICY)`` still refuses on any currently railed
+            gated slot. Default 4 (80 ms at 50 Hz): rejects every non-sustained streak in the notes/31 replay (max
+            3 frames) and the notes/313 knee step (rail 5-10 ms = at most 1 FSM sample); sustained rails
+            (>= 100 frames) still trip after 80 ms.
     """
 
     move_to_default_s: float = 2.0
@@ -248,6 +257,7 @@ class FsmCfg:
     motor_tau_max_age_s: float | None = 0.060
     motor_tau_max_bad: int = 0
     motor_tau_mask: np.ndarray | None = None
+    motor_tau_invalid_steps: int = 4
 
 
 @dataclass
@@ -469,6 +479,10 @@ def _fsm_from(d: dict | None) -> FsmCfg:
         fsm.motor_tau_max_bad = int(d["motor_tau_max_bad"])
         if fsm.motor_tau_max_bad < 0:
             raise ValueError(f"fsm.motor_tau_max_bad must be >= 0, got {fsm.motor_tau_max_bad}")
+    if "motor_tau_invalid_steps" in d:
+        fsm.motor_tau_invalid_steps = int(d["motor_tau_invalid_steps"])
+        if fsm.motor_tau_invalid_steps < 1:
+            raise ValueError(f"fsm.motor_tau_invalid_steps must be >= 1, got {fsm.motor_tau_invalid_steps}")
     if d.get("motor_tau_mask") is not None:
         m = d["motor_tau_mask"]
         if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):

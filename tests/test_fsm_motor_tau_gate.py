@@ -93,7 +93,7 @@ def test_fsm_yaml_and_runner_flags():
 # ----------------------------------------------------------------------------- gate behaviour
 
 def test_railed_slot_refuses_and_drops_policy():
-    ctrl, pol = _ctrl(motor_tau_gate=True)
+    ctrl, pol = _ctrl(motor_tau_gate=True, motor_tau_invalid_steps=1)  # 0066 behaviour; debounce: item 321 tests
     t = _to_hold(ctrl)
     assert ctrl.request(FsmState.POLICY, _railed(10), t) is False
     _, info = ctrl.step(_railed(10), t)
@@ -145,7 +145,7 @@ def test_reused_tick_ages_motor_slots():
 
 def test_max_bad_threshold_and_mask():
     # tolerate one railed slot
-    ctrl, pol = _ctrl(motor_tau_gate=True, motor_tau_max_bad=1)
+    ctrl, pol = _ctrl(motor_tau_gate=True, motor_tau_max_bad=1, motor_tau_invalid_steps=1)
     t = _to_hold(ctrl)
     one = _railed(10, slots=(3,))
     assert ctrl.request(FsmState.POLICY, one, t)  # n_bad=1 not > 1
