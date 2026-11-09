@@ -125,6 +125,7 @@ docstrings are authoritative.
 | `MotorState_.temperature` (int16[2]) | `motor.temperature` (**float32[1]** per slot) | Simulation: constant 25 °C. |
 | (none) | `motor.tau_valid` (uint8[N], key `tau_valid`) | *Item 85.* 1 = `tau_est` trusted. Recorded next to the torque: teleop `observation.motor_tau_valid`, runner `--log` `tau_valid` (item 322); no policy observation reads `tau_est`. Hardware: 0x500 `t` strictly inside +-24 N·m; at the rail use `iq × Kt` (`tau_est_with_iq_fallback`). Sim: always 1. Absent keys (pre-item-85) decode as all-1 with unknown age; CRC over legacy motor bytes. |
 | (none) | `motor.age_us` (uint32[N], key `age_us`) | *Item 85.* Per-slot sample -> LowState publish [µs]; `0xFFFFFFFF` = unknown. Sim: 0. CRC: appended after `tau_valid` bytes. |
+| (none) | `motor.tau_src` (uint8[N], key `tau_src`) | *Item 325.* Where `tau_est` came from: 0 = `TAU_SRC_DIRECT` (0x500 `t`; sim applied torque), 1 = `TAU_SRC_IQ_KT` (producer substituted `sign × iq × Kt` for a railed `t`, so `tau_valid=1` but Kt error applies). `tau_src=1` requires `tau_valid=1`; railed with no fresh `iq` stays `tau_valid=0, tau_src=0`. Recorded as teleop `observation.motor_tau_src` and runner `--log` `tau_src`. Optional: absent (pre-item-325) decodes as all 0 and is left out of the CRC; when present its bytes follow `age_us`. Neck block likewise. |
 | `MotorState_.vol`, `sensor[2]`, `motorstate`, `reserve[4]` | none | |
 | `wireless_remote[40]` | none | There is no joystick. The runner FSM is driven by a time schedule (section 6). |
 | `reserve[4]`, `crc` | `crc` | |
@@ -250,7 +251,7 @@ MoveToDefault, then Hold, then (policy mode) Policy after `--hold-s`.
   other 18 slots by name until the producer publishes iq x Kt for those joints (item 322).
 - Outputs:
   - `--log` JSONL, one record per step: t, tick, fsm, tilt, root_z, state age, q, q*, tau_est, tau_valid,
-    motor_age_us (null = unknown), action. `tau_est` where `tau_valid=0` is the clipped 0x500 value (item 322).
+    tau_src, motor_age_us (null = unknown), action. `tau_est` where `tau_valid=0` is the clipped 0x500 value (item 322).
   - `--summary` JSON:
     - loop rates and ticks per step;
     - state age and compute latency;

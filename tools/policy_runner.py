@@ -510,6 +510,7 @@ def main(argv=None) -> int:
                        "q": q.tolist(),
                        "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist(),
                        "tau_valid": st.motor.tau_valid.astype(int).tolist(),
+                       "tau_src": st.motor.tau_src.astype(int).tolist(),
                        "motor_age_us": [None if a == MOTOR_AGE_UNKNOWN else int(a) for a in st.motor.age_us],
                        "motor_mode": mode_u8.astype(int).tolist()}
                 if info.action is not None:

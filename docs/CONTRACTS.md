@@ -734,10 +734,14 @@ needs these details to interoperate. They are additive; nothing above changes.
     clip) and `age_us = 0`. A message without the keys (pre-item-85 sender) decodes with `tau_valid = 1` and
     unknown age (fail-open, unlike IMU health) and CRC is checked over the legacy motor bytes. Neck slots carry
     the same keys. Schema string stays `dropbear_hg-v1`.
+  - *Added for item 325:* optional `motor.tau_src` (uint8[22]; neck likewise). 0 = `tau_est` is the producer's
+    native torque (0x500 `t`, sim applied torque); 1 = the producer substituted `sign × iq × Kt` for a railed `t`.
+    `tau_src = 1` with `tau_valid = 0` is rejected by `validate()`. Absent decodes as all 0.
 - **CRC.** Unitree's `crc32_core` is applied to the canonical bytes (`<I tick`, `<q stamp_ns`, then every
   array in field order), read as little-endian uint32 words. Patch 0004 appends `<II imu.valid imu.age_us` after
   `imu.rpy`; item 85 appends motor `tau_valid` (uint8×N) then `age_us` (uint32×N) after the motor field arrays
-  (and the same for neck when present). A message without those keys is checked over the legacy bytes.
+  (and the same for neck when present); item 325 appends `tau_src` (uint8×N) after `age_us` when the key is
+  present. A message without those keys is checked over the legacy bytes.
 - **Safety semantics.** The robot side holds the last command.
   - If no command arrives for more than 100 ms (wall clock), it switches to damping (`kp=0`, `kd=damping`).
   - The Newton bridge stays paused until the first command arrives.

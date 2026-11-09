@@ -78,7 +78,7 @@ def test_legacy_sender_fail_open_without_motor_health():
     st = _state(tau=np.full(22, 3.0, np.float32), tau_valid=np.ones(22, np.uint8), age_us=np.zeros(22, np.uint32))
     st.validate()
     d = msgpack.unpackb(st.to_bytes(), raw=False)
-    del d["motor"]["tau_valid"], d["motor"]["age_us"]
+    del d["motor"]["tau_valid"], d["motor"]["age_us"], d["motor"]["tau_src"]  # pre-85: none of the health keys
     d["crc"] = st.compute_crc(motor_health=False)  # what a pre-85 sender computes (imu health still on)
     back = LowState.from_bytes(msgpack.packb(d, use_bin_type=True))
     assert int(back.motor.tau_valid.sum()) == 22

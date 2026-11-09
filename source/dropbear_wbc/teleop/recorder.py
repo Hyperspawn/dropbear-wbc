@@ -43,6 +43,8 @@ EXTRA_COLUMNS = {
     "observation.motor_tau": (22, "applied motor torque (tau_est) [N*m]"),
     "observation.motor_tau_valid": (22, "LowState motor.tau_valid: 1 = motor_tau trusted, 0 = 0x500 +-24 N*m rail or "
                                         "unknown (motor_tau is the clipped value; do not train on it)"),
+    "observation.motor_tau_src": (22, "LowState motor.tau_src: 0 = motor_tau is the 0x500 t / sim applied torque, "
+                                      "1 = producer substituted iq*Kt (Kt calibration error applies)"),
     "action.motor_q": (10, "commanded arm motor targets, SDK slots 12..21 [rad]"),
     "action.tau_ff": (10, "arm gravity feed-forward torque [N*m]"),
     "action.ik_q": (10, "raw IK solution before the joint-velocity limit (semantic) [rad]"),
