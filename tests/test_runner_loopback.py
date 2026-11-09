@@ -28,7 +28,8 @@ EP = Endpoints(cmd_port=27555, state_port=27556)
 
 class FakeRobot(threading.Thread):
     def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True, tick_offset: int = 0,
-                 freeze_after: int | None = None, restart_after: int | None = None):
+                 freeze_after: int | None = None, restart_after: int | None = None,
+                 tau_valid: np.ndarray | None = None, age_us: np.ndarray | None = None):
         super().__init__(daemon=True)
         self.endpoints = endpoints
         self.running = True
@@ -42,6 +43,8 @@ class FakeRobot(threading.Thread):
         self.restart_after = restart_after  # item 263: tick jumps back to 0 once (producer restart)
         self.mode = np.zeros(22, dtype=np.uint8)
         self.last_kp = None
+        self.tau_valid = tau_valid  # item 322: per-slot motor health to publish (None = fixture default)
+        self.age_us = age_us
 
     def run(self):
         pub = ChannelPublisher(LOWSTATE, LowState, endpoints=self.endpoints, role="robot")
@@ -65,6 +68,10 @@ class FakeRobot(threading.Thread):
                         self.ticks, self.restart_after = 0, None
                 st = fx.low_state((self.ticks + self.tick_offset) & 0xFFFFFFFF, self.q)
                 st.motor.mode[:] = self.mode
+                if self.tau_valid is not None:
+                    st.motor.tau_valid[:] = self.tau_valid
+                if self.age_us is not None:
+                    st.motor.age_us[:] = self.age_us
                 pub.Write(st)
                 time.sleep(0.0002)
         finally:

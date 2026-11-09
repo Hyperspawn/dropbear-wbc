@@ -27,6 +27,9 @@ EP = Endpoints(cmd_port=28555, state_port=28556)
 pytestmark = pytest.mark.skipif(not DEFAULT_CALIBRATION.exists(), reason="no semantic calibration JSON")
 
 
+KNEE_SLOTS = tuple(i for i, nm in enumerate(motors.MOTOR_NAMES) if "knee" in nm)
+
+
 class FakeArmRobot(threading.Thread):
     def __init__(self, ik):
         super().__init__(daemon=True)
@@ -44,6 +47,7 @@ class FakeArmRobot(threading.Thread):
                           valid=1, age_us=0)
         st.motor = MotorStateBlock.zeros(22)
         st.motor.q[:] = self.q.astype(np.float32)
+        st.motor.tau_valid[list(KNEE_SLOTS)] = 0  # item 322: hardware-like knee 0x500 rail under load
         sem = self.ik.motor_to_semantic_arms_fast(self.q)
         pos = []
         for k, side in enumerate(("left", "right")):
@@ -113,6 +117,8 @@ def test_teleop_scripted_session_over_zmq(tmp_path):
     assert mod["state"]["right_arm"] == {"start": 5, "end": 10} and mod["action"]["left_arm"] == {"start": 0, "end": 5}
     assert (rec / "meta" / "episodes.jsonl").exists() and (rec / "meta" / "tasks.jsonl").exists()
     assert (rec / "extras" / "episode_000000.npz").exists()
+    tv = np.load(rec / "extras" / "episode_000000.npz")["observation__motor_tau_valid"]
+    assert tv.shape == (n, 22) and (tv[:, list(KNEE_SLOTS)] == 0).all() and tv.sum() == 20 * n  # item 322
     try:
         import pyarrow.parquet as pq
     except ImportError:

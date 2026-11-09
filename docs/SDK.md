@@ -123,7 +123,7 @@ docstrings are authoritative.
 | `MotorState_.ddq` | `motor.ddq` (float32) | Finite difference over one tick. |
 | `MotorState_.tau_est` | `motor.tau_est` (float32) | Simulation: the torque actually applied after clipping. Hardware: 0x500 `t` when `tau_valid=1`, else prefer `iq × Kt`. |
 | `MotorState_.temperature` (int16[2]) | `motor.temperature` (**float32[1]** per slot) | Simulation: constant 25 °C. |
-| (none) | `motor.tau_valid` (uint8[N], key `tau_valid`) | *Item 85.* 1 = `tau_est` trusted. Hardware: 0x500 `t` strictly inside +-24 N·m; at the rail use `iq × Kt` (`tau_est_with_iq_fallback`). Sim: always 1. Absent keys (pre-item-85) decode as all-1 with unknown age; CRC over legacy motor bytes. |
+| (none) | `motor.tau_valid` (uint8[N], key `tau_valid`) | *Item 85.* 1 = `tau_est` trusted. Recorded next to the torque: teleop `observation.motor_tau_valid`, runner `--log` `tau_valid` (item 322); no policy observation reads `tau_est`. Hardware: 0x500 `t` strictly inside +-24 N·m; at the rail use `iq × Kt` (`tau_est_with_iq_fallback`). Sim: always 1. Absent keys (pre-item-85) decode as all-1 with unknown age; CRC over legacy motor bytes. |
 | (none) | `motor.age_us` (uint32[N], key `age_us`) | *Item 85.* Per-slot sample -> LowState publish [µs]; `0xFFFFFFFF` = unknown. Sim: 0. CRC: appended after `tau_valid` bytes. |
 | `MotorState_.vol`, `sensor[2]`, `motorstate`, `reserve[4]` | none | |
 | `wireless_remote[40]` | none | There is no joystick. The runner FSM is driven by a time schedule (section 6). |
@@ -245,9 +245,12 @@ MoveToDefault, then Hold, then (policy mode) Policy after `--hold-s`.
   `--motor-tau-invalid-steps` (config, 4): rail debounce (item 321). In POLICY a gated slot counts as railed only
   after `tau_valid != 1` on that many consecutive new LowState ticks, so a 5-10 ms 0x500 rail does not drop to
   PASSIVE; stale ages trip on the first sample and Hold -> Policy still refuses on any railed slot. Keep the knees
-  out of `motor_tau_mask` on hardware: stance knee torque (79 N*m standing, notes/31) is above the rail all the time.
+  out of `motor_tau_mask` on hardware: stance knee torque (79 N*m standing, notes/31) is above the rail all the time,
+  and `PG_left_leg_pitch` / `PG_right_leg_pitch` too (railed 23 % of weight_shift, 160-frame streak): gate the
+  other 18 slots by name until the producer publishes iq x Kt for those joints (item 322).
 - Outputs:
-  - `--log` JSONL, one record per step: t, tick, fsm, tilt, root_z, state age, q, q*, tau_est, action.
+  - `--log` JSONL, one record per step: t, tick, fsm, tilt, root_z, state age, q, q*, tau_est, tau_valid,
+    motor_age_us (null = unknown), action. `tau_est` where `tau_valid=0` is the clipped 0x500 value (item 322).
   - `--summary` JSON:
     - loop rates and ticks per step;
     - state age and compute latency;

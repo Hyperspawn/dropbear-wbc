@@ -551,6 +551,7 @@ def main(argv=None) -> int:
                     "observation.state": q_sem_meas, "action": q_cmd10, "timestamp": t - t_teleop0,
                     "observation.motor_q": q_meas22, "observation.motor_dq": st.motor.dq.astype(float),
                     "observation.motor_tau": st.motor.tau_est.astype(float),
+                    "observation.motor_tau_valid": st.motor.tau_valid.astype(float),
                     "action.motor_q": q_des22[list(ARM_MOTOR_SLOTS)], "action.tau_ff": tau_ff10,
                     "action.ik_q": q_ik10,
                     "target.left_wrist": pose7(tl), "target.right_wrist": pose7(tr),

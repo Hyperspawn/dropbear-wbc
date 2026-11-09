@@ -48,7 +48,9 @@ from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.signals import StopRequest, install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints  # noqa: E402
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock, MotorMode, TickStallWatch, TickUnwrapper  # noqa: E402
+from dropbear_wbc.sdk.types import (  # noqa: E402
+    MOTOR_AGE_UNKNOWN, LowCmd, LowState, MotorCmdBlock, MotorMode, TickStallWatch, TickUnwrapper,
+)
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -507,6 +509,8 @@ def main(argv=None) -> int:
                        "state_fault": info.extra.get("state_fault"),
                        "q": q.tolist(),
                        "q_des": info.q_des.tolist(), "tau_est": st.motor.tau_est.astype(float).tolist(),
+                       "tau_valid": st.motor.tau_valid.astype(int).tolist(),
+                       "motor_age_us": [None if a == MOTOR_AGE_UNKNOWN else int(a) for a in st.motor.age_us],
                        "motor_mode": mode_u8.astype(int).tolist()}
                 if info.action is not None:
                     rec["action"] = info.action.tolist()
