@@ -142,6 +142,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--motor-tau-trust-iq", action="store_true",
                     help="count iq*Kt-substituted torque slots (LowState motor.tau_src=1) as valid in the motor tau "
                          "gate (item 327; default: config / off = treat them as railed until Kt is bench-confirmed)")
+    ap.add_argument("--motor-tau-trust-iq-models", default=None,
+                    help="comma-separated motor names and/or motor model names (e.g. EPS-CEM-60) whose iq*Kt torque "
+                         "the motor tau gate trusts; the rest stay untrusted (item 328; overrides config)")
     args = ap.parse_args(argv)
     if (args.timing_gate or args.timing_limit) and args.clock != "wall":
         ap.error("--timing-gate/--timing-limit need --clock wall (sim-clock steps carry no slot or lateness)")
@@ -284,8 +287,16 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         if args.motor_tau_invalid_steps < 1:
             raise SystemExit("--motor-tau-invalid-steps must be >= 1")
         cfg.fsm.motor_tau_invalid_steps = int(args.motor_tau_invalid_steps)
+    if args.motor_tau_trust_iq and args.motor_tau_trust_iq_models:
+        raise SystemExit("--motor-tau-trust-iq and --motor-tau-trust-iq-models are exclusive")
     if args.motor_tau_trust_iq:
         cfg.fsm.motor_tau_trust_iq = True
+    if args.motor_tau_trust_iq_models:
+        from dropbear_wbc.deploy.config import trust_iq_from
+        try:
+            cfg.fsm.motor_tau_trust_iq = trust_iq_from(args.motor_tau_trust_iq_models)
+        except ValueError as e:
+            raise SystemExit(str(e))
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -300,6 +311,14 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
+
+
+def _trust_meta(trust) -> bool | list[str]:
+    """Run-metadata form of fsm.motor_tau_trust_iq: the bool, or the trusted motor names (item 328)."""
+    if isinstance(trust, (bool, np.bool_)):
+        return bool(trust)
+    from dropbear_wbc.deploy.config import trusted_iq_slots
+    return trusted_iq_slots(trust)
 
 
 def _age_ms(age_s: float | None) -> float | None:
@@ -346,7 +365,7 @@ def main(argv=None) -> int:
                              "motor_tau_max_age_s": cfg.fsm.motor_tau_max_age_s,
                              "motor_tau_max_bad": cfg.fsm.motor_tau_max_bad,
                              "motor_tau_invalid_steps": cfg.fsm.motor_tau_invalid_steps,
-                             "motor_tau_trust_iq": cfg.fsm.motor_tau_trust_iq,
+                             "motor_tau_trust_iq": _trust_meta(cfg.fsm.motor_tau_trust_iq),
                              "observations": [t.__dict__ for t in cfg.observations],
                              "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)

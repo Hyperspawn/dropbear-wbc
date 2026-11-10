@@ -148,6 +148,8 @@ class DeployController:
         self._tau_entry_fault: str | None = "motor_tau_unseen"  # undebounced verdict used by request(POLICY)
         self._tau_n_railed = 0
         self._tau_n_iq = 0
+        # item 328: per-slot iq*Kt trust (bool -> all slots)
+        self._tau_trust_iq = np.broadcast_to(np.asarray(cfg.fsm.motor_tau_trust_iq, dtype=bool), (n,)).copy()
 
     # ------------------------------------------------------------------ IMU health
 
@@ -211,7 +213,7 @@ class DeployController:
               else np.asarray(ts, dtype=np.uint8).reshape(-1) == TAU_SRC_IQ_KT)
         if iq.shape[0] != motors.NUM_MOTORS:
             iq = np.zeros(motors.NUM_MOTORS, bool)
-        iq_untrusted = g & iq & (not fsm.motor_tau_trust_iq)
+        iq_untrusted = g & iq & ~self._tau_trust_iq
         railed = g & ((tv != 1) | iq_untrusted)
         if new_tick:  # item 321: count consecutive railed samples; a re-used tick is not a new sample
             self._tau_rail_steps = np.where(railed, self._tau_rail_steps + 1, 0)

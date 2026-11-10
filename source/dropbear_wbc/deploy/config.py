@@ -240,6 +240,10 @@ class FsmCfg:
             railed exactly like ``tau_valid != 1`` (same debounce, same entry refusal): Kt is not bench-confirmed
             (notes/324: 0.32 * 35 = 11.2 vs 7.455 N*m/A, bench E2). Set ``True`` only after E2 confirms Kt per
             model. Has no effect while ``motor_tau_gate`` is off or on producers that never send ``tau_src=1``.
+            Item 328: may also be an SDK-order bool[22] array (per-slot trust). YAML accepts a bool, a list of 22
+            bools, or a list of motor names and/or motor model names (``hw_motor_specs.MOTOR_MODELS`` keys, e.g.
+            ``EPS-CEM-60``) resolved through ``motor_tau_trust_iq_map`` (default ``user_2026_09_25``), so E2 can
+            trust one confirmed model (e.g. the CEM-60 knees) while the others stay untrusted.
     """
 
     move_to_default_s: float = 2.0
@@ -263,7 +267,7 @@ class FsmCfg:
     motor_tau_max_bad: int = 0
     motor_tau_mask: np.ndarray | None = None
     motor_tau_invalid_steps: int = 4
-    motor_tau_trust_iq: bool = False
+    motor_tau_trust_iq: bool | np.ndarray = False
 
 
 @dataclass
@@ -351,6 +355,51 @@ class DeployConfig:
                 f"policy/hold gains must be inside motion-mode limits {MOTION_MODE_LIMITS} "
                 f"(call clamp_deploy_motion_mode_gains before validate)"
             )
+
+
+def trust_iq_from(value: Any, map_name: str | None = None) -> bool | np.ndarray:
+    """Parse ``fsm.motor_tau_trust_iq`` (item 328): bool -> bool; list of 22 bools -> bool[22]; list of motor
+    names and/or motor model names -> SDK-order bool[22] (models expanded through ``JOINT_MOTOR_MAPS[map_name]``).
+    Unknown names raise; an empty list means trust nothing (False)."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, str):
+        value = [x.strip() for x in value.split(",") if x.strip()]
+    if isinstance(value, np.ndarray) or (isinstance(value, (list, tuple)) and value
+                                         and not isinstance(value[0], str)):
+        v = np.asarray(value, dtype=bool).reshape(-1)
+        if v.shape[0] != motors.NUM_MOTORS:
+            raise ValueError(f"fsm.motor_tau_trust_iq: need {motors.NUM_MOTORS} values, got {v.shape[0]}")
+        return v
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"fsm.motor_tau_trust_iq: bad value {value!r}")
+    if not value:
+        return False
+    from ..robots import hw_motor_specs as hw
+
+    mname = map_name or hw.BASE_ARM_MAP
+    if mname not in hw.JOINT_MOTOR_MAPS:
+        raise ValueError(f"fsm.motor_tau_trust_iq_map: unknown map {mname!r}")
+    jm = hw.JOINT_MOTOR_MAPS[mname]
+    names = np.asarray(motors.MOTOR_NAMES)
+    out = np.zeros(motors.NUM_MOTORS, bool)
+    bad = []
+    for x in value:
+        if x in motors.MOTOR_NAMES:
+            out |= names == x
+        elif x in hw.MOTOR_MODELS:
+            out |= np.array([jm.get(m) == x for m in motors.MOTOR_NAMES])
+        else:
+            bad.append(x)
+    if bad:
+        raise ValueError(f"fsm.motor_tau_trust_iq: unknown motor/model names {bad}")
+    return out
+
+
+def trusted_iq_slots(trust: bool | np.ndarray) -> list[str]:
+    """Motor names whose iq*Kt torque the gate trusts (for run metadata)."""
+    v = np.broadcast_to(np.asarray(trust, dtype=bool), (motors.NUM_MOTORS,))
+    return [m for m, t in zip(motors.MOTOR_NAMES, v) if t]
 
 
 def _vec(value: Any, n: int, name: str) -> np.ndarray:
@@ -490,7 +539,7 @@ def _fsm_from(d: dict | None) -> FsmCfg:
         if fsm.motor_tau_invalid_steps < 1:
             raise ValueError(f"fsm.motor_tau_invalid_steps must be >= 1, got {fsm.motor_tau_invalid_steps}")
     if "motor_tau_trust_iq" in d:
-        fsm.motor_tau_trust_iq = bool(d["motor_tau_trust_iq"])
+        fsm.motor_tau_trust_iq = trust_iq_from(d["motor_tau_trust_iq"], d.get("motor_tau_trust_iq_map"))
     if d.get("motor_tau_mask") is not None:
         m = d["motor_tau_mask"]
         if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):
