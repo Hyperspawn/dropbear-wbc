@@ -57,7 +57,7 @@ from enum import Enum
 import numpy as np
 
 from ..sdk import motors
-from ..sdk.types import MOTOR_AGE_UNKNOWN, LowCmd, LowState, MotorCmdBlock, MotorMode, tick_diff
+from ..sdk.types import MOTOR_AGE_UNKNOWN, TAU_SRC_IQ_KT, LowCmd, LowState, MotorCmdBlock, MotorMode, tick_diff
 from . import quat as Q
 from .config import DeployConfig
 from .motion import MotionReference
@@ -147,6 +147,7 @@ class DeployController:
         self._tau_rail_steps = np.zeros(n, np.int64)  # consecutive new ticks with tau_valid != 1 (item 321)
         self._tau_entry_fault: str | None = "motor_tau_unseen"  # undebounced verdict used by request(POLICY)
         self._tau_n_railed = 0
+        self._tau_n_iq = 0
 
     # ------------------------------------------------------------------ IMU health
 
@@ -203,7 +204,15 @@ class DeployController:
             return self._tau_health
         age = np.where(au >= MOTOR_AGE_UNKNOWN, np.inf, au.astype(np.float64) * 1e-6) + reuse
         g = self._tau_mask
-        railed = g & (tv != 1)
+        # Item 327: an iq*Kt-substituted slot (tau_src=1) is only as good as Kt, which is not bench-confirmed
+        # (notes/324: 11.2 vs 7.455 N*m/A). Unless motor_tau_trust_iq, count it as railed (same debounce path).
+        ts = getattr(low_state.motor, "tau_src", None)
+        iq = (np.zeros(motors.NUM_MOTORS, bool) if ts is None
+              else np.asarray(ts, dtype=np.uint8).reshape(-1) == TAU_SRC_IQ_KT)
+        if iq.shape[0] != motors.NUM_MOTORS:
+            iq = np.zeros(motors.NUM_MOTORS, bool)
+        iq_untrusted = g & iq & (not fsm.motor_tau_trust_iq)
+        railed = g & ((tv != 1) | iq_untrusted)
         if new_tick:  # item 321: count consecutive railed samples; a re-used tick is not a new sample
             self._tau_rail_steps = np.where(railed, self._tau_rail_steps + 1, 0)
         invalid = railed & (self._tau_rail_steps >= max(1, int(fsm.motor_tau_invalid_steps)))
@@ -220,6 +229,7 @@ class DeployController:
         # Entry verdict (request(POLICY)): undebounced, any currently railed or stale gated slot counts.
         n_entry = int(np.count_nonzero(railed | too_old))
         self._tau_n_railed = int(np.count_nonzero(railed))
+        self._tau_n_iq = int(np.count_nonzero(iq_untrusted))
         self._tau_entry_fault = None
         if fsm.motor_tau_gate and n_entry > fsm.motor_tau_max_bad:
             self._tau_entry_fault = "motor_tau_invalid" if np.any(railed) else "motor_tau_stale"
@@ -397,7 +407,7 @@ class DeployController:
         info_extra = {"imu_valid": int(low_state.imu.valid), "imu_age_s": age, "imu_fault": fault}
         tfault, n_bad, tage = self.observe_motor_tau(low_state, t)
         info_extra.update(motor_tau_fault=tfault, motor_tau_n_bad=n_bad, motor_tau_age_s=tage,
-                          motor_tau_n_railed=self._tau_n_railed,
+                          motor_tau_n_railed=self._tau_n_railed, motor_tau_n_iq_untrusted=self._tau_n_iq,
                           motor_tau_rail_steps_max=int(self._tau_rail_steps.max(initial=0)))
         sfault, sage, slag = self.observe_state(low_state, t, state_age_s)
         if (fault == "imu_stale" and self._reuse_owned_by_state_gate(low_state, t)):

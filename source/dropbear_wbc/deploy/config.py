@@ -235,6 +235,11 @@ class FsmCfg:
             gated slot. Default 4 (80 ms at 50 Hz): rejects every non-sustained streak in the notes/31 replay (max
             3 frames) and the notes/313 knee step (rail 5-10 ms = at most 1 FSM sample); sustained rails
             (>= 100 frames) still trip after 80 ms.
+        motor_tau_trust_iq: item 327. When ``False`` (default) a gated slot whose ``LowState.motor.tau_src`` is
+            ``TAU_SRC_IQ_KT`` (HAL replaced a railed 0x500 ``t`` with ``sign * iq * Kt``, item 324/325) counts as
+            railed exactly like ``tau_valid != 1`` (same debounce, same entry refusal): Kt is not bench-confirmed
+            (notes/324: 0.32 * 35 = 11.2 vs 7.455 N*m/A, bench E2). Set ``True`` only after E2 confirms Kt per
+            model. Has no effect while ``motor_tau_gate`` is off or on producers that never send ``tau_src=1``.
     """
 
     move_to_default_s: float = 2.0
@@ -258,6 +263,7 @@ class FsmCfg:
     motor_tau_max_bad: int = 0
     motor_tau_mask: np.ndarray | None = None
     motor_tau_invalid_steps: int = 4
+    motor_tau_trust_iq: bool = False
 
 
 @dataclass
@@ -483,6 +489,8 @@ def _fsm_from(d: dict | None) -> FsmCfg:
         fsm.motor_tau_invalid_steps = int(d["motor_tau_invalid_steps"])
         if fsm.motor_tau_invalid_steps < 1:
             raise ValueError(f"fsm.motor_tau_invalid_steps must be >= 1, got {fsm.motor_tau_invalid_steps}")
+    if "motor_tau_trust_iq" in d:
+        fsm.motor_tau_trust_iq = bool(d["motor_tau_trust_iq"])
     if d.get("motor_tau_mask") is not None:
         m = d["motor_tau_mask"]
         if isinstance(m, (list, tuple)) and m and isinstance(m[0], str):

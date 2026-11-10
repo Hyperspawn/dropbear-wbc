@@ -139,6 +139,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--motor-tau-invalid-steps", type=int, default=None,
                     help="rail debounce: a slot counts as railed in POLICY only after this many consecutive railed "
                          "LowState ticks (item 321; default: config / 4; 1 = no debounce; stale is never debounced)")
+    ap.add_argument("--motor-tau-trust-iq", action="store_true",
+                    help="count iq*Kt-substituted torque slots (LowState motor.tau_src=1) as valid in the motor tau "
+                         "gate (item 327; default: config / off = treat them as railed until Kt is bench-confirmed)")
     args = ap.parse_args(argv)
     if (args.timing_gate or args.timing_limit) and args.clock != "wall":
         ap.error("--timing-gate/--timing-limit need --clock wall (sim-clock steps carry no slot or lateness)")
@@ -281,6 +284,8 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         if args.motor_tau_invalid_steps < 1:
             raise SystemExit("--motor-tau-invalid-steps must be >= 1")
         cfg.fsm.motor_tau_invalid_steps = int(args.motor_tau_invalid_steps)
+    if args.motor_tau_trust_iq:
+        cfg.fsm.motor_tau_trust_iq = True
     if cfg.target_interp_steps:
         print(f"[runner] NOTE: trained with each new target ramped over {cfg.target_interp_steps} x 5 ms; the robot "
               f"side must ramp too (newton_bridge.py --target-ramp-ms {5 * cfg.target_interp_steps}; ESP32 firmware)",
@@ -341,6 +346,7 @@ def main(argv=None) -> int:
                              "motor_tau_max_age_s": cfg.fsm.motor_tau_max_age_s,
                              "motor_tau_max_bad": cfg.fsm.motor_tau_max_bad,
                              "motor_tau_invalid_steps": cfg.fsm.motor_tau_invalid_steps,
+                             "motor_tau_trust_iq": cfg.fsm.motor_tau_trust_iq,
                              "observations": [t.__dict__ for t in cfg.observations],
                              "motion_mode_gains_clamped": cfg.meta.get("motion_mode_gains_clamped")}
         ep = Endpoints(args.host, args.cmd_port, args.state_port)
