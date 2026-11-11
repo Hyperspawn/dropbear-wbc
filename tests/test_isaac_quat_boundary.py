@@ -34,8 +34,12 @@ RAW_READ = re.compile(
     r"|body_link_state_w|body_link_pose_w|root_com_state_w|root_com_pose_w|body_com_state_w|body_com_pose_w)\b"
 )
 RAW_WRITE = re.compile(r"\.write_root_(state|pose|link_pose|link_state|com_pose|com_state)_to_sim(_index|_mask)?\(")
-# tools/ + scripts/ raw reads at 9663167 (23 + 8); lower this as they are ported, never raise it
-OUTSIDE_PKG_BASELINE = 31
+# tools/ + scripts/ raw reads: 31 at 9663167 (23 + 8); 4 after item 300 (all order-free torch.isfinite checks).
+# Lower this as they are ported, never raise it.
+OUTSIDE_PKG_BASELINE = 4
+# a raw read outside the package is allowed only if the line uses it order-free
+ORDER_FREE = re.compile(r"torch\.isfinite\(")
+RAW_MATH_IMPORT = re.compile(r"^\s*(from isaaclab\.utils\.math import|import isaaclab\.utils\.math|from isaaclab\.utils import math)")
 
 
 def _hits(paths, rx):
@@ -65,6 +69,21 @@ def test_tools_scripts_raw_reads_do_not_grow():
     files = [p for d in ("tools", "scripts") for p in (ROOT / d).rglob("*.py")]
     n = len(_hits(files, RAW_READ))
     assert n <= OUTSIDE_PKG_BASELINE, f"{n} raw Isaac quat reads in tools/+scripts/ (baseline {OUTSIDE_PKG_BASELINE})"
+
+
+def _outside_files():
+    return [p for d in ("tools", "scripts") for p in (ROOT / d).rglob("*.py") if "__pycache__" not in p.parts]
+
+
+def test_tools_scripts_raw_reads_are_order_free():
+    bad = [h for h in _hits(_outside_files(), RAW_READ) if not ORDER_FREE.search(h)]
+    assert not bad, "quaternion consumer in tools/scripts: use compat.root_quat_wxyz/body_quat_wxyz:\n" + "\n".join(bad)
+
+
+def test_tools_scripts_use_wxyz_qmath():
+    # compat accessors return wxyz; isaaclab.utils.math is xyzw on Lab 3.0, so mixing them is the bug
+    hits = _hits(_outside_files(), RAW_MATH_IMPORT)
+    assert not hits, "import quaternion math from dropbear_wbc.isaac.qmath:\n" + "\n".join(hits)
 
 
 def test_gate_regex_catches_planted_reads():
@@ -227,3 +246,35 @@ def test_import_does_not_pull_isaaclab():
                        env={**__import__('os').environ, "PYTHONPATH": str(ROOT / "source")})
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "False"
+
+
+# --------------------------------------------------------------------------- closure gaps on Lab 3.0
+
+def _quat_apply_wxyz(q, v):
+    w, xyz = q[..., :1], q[..., 1:]
+    t = 2.0 * torch.linalg.cross(xyz, v, dim=-1)
+    return v + w * t + torch.linalg.cross(xyz, t, dim=-1)
+
+
+@needs_torch
+def test_closure_monitor_needs_wxyz_feed_on_lab3(monkeypatch):
+    """Item 300: tools/scripts fed raw body_link_quat_w into ClosureMonitor (wxyz contract). On Lab 3.0
+    that is xyzw, so every reported closure gap would be wrong; body_quat_wxyz keeps it exact."""
+    from dropbear_wbc.isaac import qmath
+    from dropbear_wbc.isaac.closures import Closure, ClosureMonitor
+
+    monkeypatch.setitem(vars(qmath), "quat_apply", _quat_apply_wxyz)
+    n, b = 64, 2
+    g = torch.Generator().manual_seed(7)
+    q = _rand_wxyz(n * b, seed=11).reshape(n, b, 4).float()
+    l0, l1 = (0.05, 0.02, -0.03), (-0.04, 0.01, 0.06)
+    p0 = torch.randn(n, 3, generator=g)
+    p1 = p0 + _quat_apply_wxyz(q[:, 0], torch.tensor(l0).expand(n, 3)) - _quat_apply_wxyz(q[:, 1], torch.tensor(l1).expand(n, 3))
+    pos = torch.stack([p0, p1], dim=1)
+    mon = ClosureMonitor([Closure("c", "spherical", "a", "b", 0, 1, l0, l1)], "cpu")
+
+    monkeypatch.setenv("DROPBEAR_ISAAC_QUAT_ORDER", "xyzw")
+    lab3 = _Lab3Asset(torch.roll(q[:, 0], -1, -1), torch.roll(q, -1, -1))
+    assert float(mon.worst(pos, compat.body_quat_wxyz(lab3, link=True)).max()) < 1e-6
+    raw = lab3.data.body_link_quat_w.torch  # what the unported tools passed
+    assert float(mon.worst(pos, raw).max()) > 0.02  # spurious gap of the order of the 5-7 cm anchors

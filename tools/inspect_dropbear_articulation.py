@@ -32,6 +32,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -62,7 +63,7 @@ def main(report: dict) -> int:  # noqa: C901
     from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
     from isaaclab.terrains import TerrainImporterCfg
     from isaaclab.utils import configclass
-    from isaaclab.utils.math import quat_apply_inverse, quat_error_magnitude, quat_inv, quat_mul
+    from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_error_magnitude, quat_inv, quat_mul
 
     from dropbear_wbc.isaac.closures import ClosureMonitor, find_closures
     from dropbear_wbc.isaac.launch import sha256_file
@@ -201,9 +202,9 @@ def main(report: dict) -> int:  # noqa: C901
     def rel_pose(robot: Articulation, ids: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
         """Body poses in the root link frame: pos (len(ids),3), quat (len(ids),4)."""
         rp = robot.data.root_link_pos_w[0:1]
-        rq = robot.data.root_link_quat_w[0:1]
+        rq = root_quat_wxyz(robot, link=True)[0:1]
         bp = robot.data.body_link_pos_w[0, ids]
-        bq = robot.data.body_link_quat_w[0, ids]
+        bq = body_quat_wxyz(robot, ids, link=True)[0]
         p = quat_apply_inverse(rq.expand(len(ids), 4), bp - rp)
         q = quat_mul(quat_inv(rq).expand(len(ids), 4), bq)
         return p, q
@@ -212,7 +213,7 @@ def main(report: dict) -> int:  # noqa: C901
     closures = find_closures(fixed.cfg.prim_path.replace("{ENV_REGEX_NS}", "/World/envs/env_0").replace(".*", "0"), bn)
     mon = ClosureMonitor(closures, sim.device)
     scene.update(dt)
-    gap0 = mon.gaps(fixed.data.body_link_pos_w, fixed.data.body_link_quat_w)[0]
+    gap0 = mon.gaps(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]
     report["closures"] = {
         "count": len(closures),
         "names": mon.names,
@@ -223,8 +224,8 @@ def main(report: dict) -> int:  # noqa: C901
 
     # ------------------------------------------------------------------ 2. rest frames (at spawn, fixed robot)
     p_rel, q_rel = rel_pose(fixed, [body_idx[n] for n in set(D.KEY_BODIES.values())])
-    anchor_frame = quat_mul(fixed.data.body_link_quat_w[0:1, anchor_i], offset)
-    anchor_vs_root_deg = math.degrees(float(quat_error_magnitude(anchor_frame, fixed.data.root_link_quat_w[0:1])[0]))
+    anchor_frame = quat_mul(body_quat_wxyz(fixed, link=True)[0:1, anchor_i], offset)
+    anchor_vs_root_deg = math.degrees(float(quat_error_magnitude(anchor_frame, root_quat_wxyz(fixed, link=True)[0:1])[0]))
     report["rest_frames"] = {
         "key_body_pos_in_root": {
             n: [round(float(v), 4) for v in p_rel[k]] for k, n in enumerate(set(D.KEY_BODIES.values()))
@@ -296,7 +297,7 @@ def main(report: dict) -> int:  # noqa: C901
         settle_trace[f"{0.5 * (k + 1):.1f}s"] = {
             n: round(float(fixed.data.joint_pos[0, i]), 4) for n, i in zip(motor_names, motor_ids)
         }
-    gap_settled = mon.gaps(fixed.data.body_link_pos_w, fixed.data.body_link_quat_w)[0]
+    gap_settled = mon.gaps(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]
     report["closures"]["settled_gap_max_m"] = float(gap_settled.max())
     report["closures"]["settled_gap_by_joint_m"] = {n: round(float(g), 6) for n, g in zip(mon.names, gap_settled)}
     report["settle_from_zero_nominal_gains"] = settle_trace
@@ -355,7 +356,7 @@ def main(report: dict) -> int:  # noqa: C901
         motor_track[m_name] = {
             "target": round(float(target[0, m_id]), 4),
             "reached": round(float(fixed.data.joint_pos[0, m_id]), 4),
-            "closure_gap_max_m": round(float(mon.worst(fixed.data.body_link_pos_w, fixed.data.body_link_quat_w)[0]), 6),
+            "closure_gap_max_m": round(float(mon.worst(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]), 6),
         }
         matrix_pos[m_name] = {b: round(float(v), 2) for b, v in zip(D.TRACKED_BODIES, dp)}
         matrix_rot[m_name] = {b: round(float(v), 2) for b, v in zip(D.TRACKED_BODIES, dq)}

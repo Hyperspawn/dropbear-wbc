@@ -30,6 +30,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -132,7 +133,7 @@ def main() -> int:  # noqa: C901
     import gymnasium as gym
     import torch
 
-    from isaaclab.utils.math import quat_apply, quat_apply_inverse, yaw_quat
+    from dropbear_wbc.isaac.qmath import quat_apply, quat_apply_inverse, yaw_quat
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
     from dropbear_wbc.tasks.locomotion.config.dropbear import TASK_IDS  # noqa: F401
@@ -271,7 +272,7 @@ def main() -> int:  # noqa: C901
             on = (step >= p_start) & (step < p_start + push_steps) & (f_mag > 0)
             if bool(on.any()) or pushing:  # touch the wrench buffers only while some push is on (and once after)
                 w = torch.zeros(num_envs, 3, device=dev)
-                w[on] = quat_apply(yaw_quat(robot.data.root_quat_w)[on], f_local[on])
+                w[on] = quat_apply(yaw_quat(root_quat_wxyz(robot))[on], f_local[on])
                 robot.set_external_force_and_torque(w[:, None, :], torch.zeros(num_envs, 1, 3, device=dev),
                                                     body_ids=[base], is_global=True)
                 pushing = bool(on.any())
@@ -288,7 +289,7 @@ def main() -> int:  # noqa: C901
             fall_term[e] = next((n for n in uw.termination_manager.active_terms
                                  if bool(uw.termination_manager.get_term(n)[e])), "?")
         alive &= ~terminated
-        g = quat_apply_inverse(robot.data.root_quat_w, torch.tensor([0.0, 0.0, -1.0], device=dev).expand(num_envs, 3))
+        g = quat_apply_inverse(root_quat_wxyz(robot), torch.tensor([0.0, 0.0, -1.0], device=dev).expand(num_envs, 3))
         tilt = torch.rad2deg(torch.acos(torch.clamp(-g[:, 2], -1.0, 1.0)))
         tilt_max = torch.where(alive, torch.maximum(tilt_max, tilt), tilt_max)
         if args.mode == "terrain":

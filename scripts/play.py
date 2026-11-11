@@ -26,6 +26,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -479,7 +480,7 @@ def main() -> int:  # noqa: C901
         if roll is not None:
             _record_state()
         finite &= bool(torch.isfinite(obs).all()) and bool(torch.isfinite(actions).all())
-        gap_hist.append(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w).cpu())
+        gap_hist.append(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).cpu())
         alive_steps += 1
         d = dones.bool()
         # torque/speed sample: every env except the ones reset this step (fall or time-out: Isaac Lab wrote the reset

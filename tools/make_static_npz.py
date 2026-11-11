@@ -31,6 +31,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -96,7 +97,7 @@ def main(report: dict) -> int:  # noqa: C901
     from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
     from isaaclab.terrains import TerrainImporterCfg
     from isaaclab.utils import configclass
-    from isaaclab.utils.math import quat_apply
+    from dropbear_wbc.isaac.qmath import quat_apply
 
     from dropbear_wbc.isaac.closures import ClosureMonitor, find_closures
     from dropbear_wbc.isaac.launch import sha256_file
@@ -162,7 +163,7 @@ def main(report: dict) -> int:  # noqa: C901
         vmax = float(robot.data.joint_vel.abs().max())
         vmot = float(robot.data.joint_vel[:, mids].abs().max())
         vbody = float(robot.data.body_link_lin_vel_w.norm(dim=-1).max())
-        gap = float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)[0])
+        gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[0])
         trace.append({"t_s": round(args.ramp_s + t_hold, 2), "drift_1s_m": round(drift, 7), "max_joint_vel": round(vmax, 5),
                       "max_motor_vel": round(vmot, 5), "max_body_speed_m_s": round(vbody, 5), "closure_gap_m": round(gap, 6)})
         if drift < args.drift_tol and vmot < args.motor_vel_tol * 5 and t_hold >= 2.0:
@@ -181,9 +182,9 @@ def main(report: dict) -> int:  # noqa: C901
 
     body_names = list(robot.body_names)
     pos = robot.data.body_link_pos_w[0].clone() - scene.env_origins[0]
-    quat = robot.data.body_link_quat_w[0].clone()
+    quat = body_quat_wxyz(robot, link=True)[0].clone()
     joint_pos = robot.data.joint_pos[0].clone()
-    closure = float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)[0])
+    closure = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[0])
 
     # 3. lowest collision vertex -> ground
     pts = collision_points_body_frame("/World/envs/env_0/Robot", body_names)

@@ -24,6 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -111,7 +112,7 @@ def main(report: dict) -> int:  # noqa: C901
 
     if args.mode == "smoke":
         mon = ClosureMonitor(find_closures("/World/envs/env_0/Robot", list(robot.body_names)), uw.device)
-        g0 = mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)
+        g0 = mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))
         report["gap_after_reset_m"] = {"median": float(g0.median()), "max": float(g0.max()),
                                        "npz_closure_residual_max_m": float(uw.command_manager.get_term("motion").motion.arrays_closure_max)}
         feet_ids = [contact.body_names.index(n) for n in N.FOOT_BODIES]
@@ -136,7 +137,7 @@ def main(report: dict) -> int:  # noqa: C901
                 term_counts[n] += int((uw.termination_manager.get_term(n) & done).sum())
             for i, n in enumerate(rew_names):
                 rew_sums[n] += float(uw.reward_manager._step_reward[:, i].mean())
-            gap = float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w).max())
+            gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).max())
             worst_gap = max(worst_gap, gap)
             if step % 25 == 0 or step == args.steps - 1:
                 gap_trace.append({"step": step, "worst_closure_gap_m": round(gap, 6),
@@ -215,7 +216,7 @@ def standing_hold(env, robot, actions, steps: int) -> dict:
     a_idx = robot.body_names.index(N.ANCHOR_BODY)
     n = uw.num_envs
     alive = torch.ones(n, dtype=torch.bool, device=uw.device)
-    gap0 = mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)
+    gap0 = mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))
     samples, per_closure = [], torch.zeros(len(mon.names), device=uw.device)
     standing_frac = []
     for _ in range(steps):
@@ -225,7 +226,7 @@ def standing_hold(env, robot, actions, steps: int) -> dict:
         standing = alive & (dz < 0.05)
         standing_frac.append(float(standing.float().mean()))
         if bool(standing.any()):
-            g = mon.gaps(robot.data.body_link_pos_w, robot.data.body_link_quat_w)[standing]
+            g = mon.gaps(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[standing]
             samples.append(g.max(dim=-1).values)
             per_closure = torch.maximum(per_closure, g.max(dim=0).values)
     out = {

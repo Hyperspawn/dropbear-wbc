@@ -24,6 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -45,7 +46,7 @@ def main(report: dict) -> int:  # noqa: C901
     import gymnasium as gym
     import torch
 
-    from isaaclab.utils.math import quat_apply_inverse, quat_mul
+    from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_mul
 
     from dropbear_wbc.isaac.closures import ClosureMonitor, find_closures
     from dropbear_wbc.robots import dropbear_names as N
@@ -92,7 +93,7 @@ def main(report: dict) -> int:  # noqa: C901
     foot_ids = [names.index(n) for n in N.FOOT_BODIES]
     # contact forces need a physics step: measure after ONE zero-action policy step (0.02 s after the reset);
     # the kinematic checks below (closure gaps, joint row, anchor) are taken before it, right after env.reset()
-    kin = {"body_pos": robot.data.body_link_pos_w.clone(), "body_quat": robot.data.body_link_quat_w.clone(),
+    kin = {"body_pos": robot.data.body_link_pos_w.clone(), "body_quat": body_quat_wxyz(robot, link=True).clone(),
            "joint_pos": robot.data.joint_pos.clone(), "g_root": robot.data.projected_gravity_b.clone()}
     zero = torch.zeros(uw.num_envs, uw.action_manager.total_action_dim, device=uw.device)
     _, _, term0, trunc0, _ = env.step(zero)
@@ -171,7 +172,7 @@ def main(report: dict) -> int:  # noqa: C901
                         contact_bodies_at_termination[names[b]] = contact_bodies_at_termination.get(names[b], 0) + 1
         for i, n in enumerate(rew_names):
             rew_sums[n] += float(uw.reward_manager._step_reward[:, i].mean())
-        gap = float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w).max())
+        gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).max())
         worst_gap = max(worst_gap, gap)
         if step % 10 == 0 or step == args.steps - 1:
             az = robot.data.body_link_pos_w[:, anchor, 2]

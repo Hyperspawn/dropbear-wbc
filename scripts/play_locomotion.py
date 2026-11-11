@@ -29,6 +29,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -108,7 +109,7 @@ def main() -> int:  # noqa: C901
     import gymnasium as gym
     import torch
 
-    from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+    from dropbear_wbc.isaac.qmath import quat_apply_inverse, yaw_quat
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
     from dropbear_wbc.isaac.closures import ClosureMonitor, find_closures
@@ -313,7 +314,7 @@ def main() -> int:  # noqa: C901
                                  if bool(uw.termination_manager.get_term(n)[e])), "?")
         # stats for envs still alive (before this step's fall)
         live = alive & ~terminated
-        vel_yaw = quat_apply_inverse(yaw_quat(robot.data.root_quat_w), robot.data.root_lin_vel_w)
+        vel_yaw = quat_apply_inverse(yaw_quat(root_quat_wxyz(robot)), robot.data.root_lin_vel_w)
         wz = robot.data.root_ang_vel_w[:, 2]
         ct = sensor.data.current_contact_time[:, groups]
         in_contact = (ct > 0.0).any(dim=-1)
@@ -338,7 +339,7 @@ def main() -> int:  # noqa: C901
             acc["td_l"] += m * touchdown[:, 0].float()
             acc["td_r"] += m * touchdown[:, 1].float()
             anchor_min = torch.where(live, torch.minimum(anchor_min, robot.data.body_link_pos_w[:, anchor, 2]), anchor_min)
-            worst_gap = max(worst_gap, float(mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w)[live].max())
+            worst_gap = max(worst_gap, float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[live].max())
                             if bool(live.any()) else 0.0)
             torque.add(robot.data.joint_vel[:, motor_ids], live)
         end_xy = torch.where(live.unsqueeze(-1), robot.data.root_pos_w[:, :2], end_xy)

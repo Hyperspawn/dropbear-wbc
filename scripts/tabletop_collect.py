@@ -35,6 +35,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -238,10 +239,10 @@ def main() -> int:  # noqa: C901
             dq22_all = robot.data.joint_vel[:, motor_ids].cpu().numpy().astype(np.float64)
             org = uw.scene.env_origins
             bpos = (uw.scene["block"].data.root_pos_w - org - root_w).cpu().numpy()
-            bquat = uw.scene["block"].data.root_quat_w.cpu().numpy()
+            bquat = root_quat_wxyz(uw.scene["block"]).cpu().numpy()
             zpos = zone_pos_root(uw).cpu().numpy()
             hpos = (robot.data.body_pos_w[:, hand_ids] - org[:, None] - root_w).cpu().numpy()
-            hquat = robot.data.body_quat_w[:, hand_ids].cpu().numpy()
+            hquat = body_quat_wxyz(robot, hand_ids).cpu().numpy()
             succ_now = success_now(uw).cpu().numpy()
             images = {}
             if args.record is not None:

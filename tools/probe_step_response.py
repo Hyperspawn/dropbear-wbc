@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
+from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
@@ -134,7 +135,7 @@ def child(tag: str) -> int:
             while t < cs - 1e-9:
                 step(1)
                 t += dt
-                gap_max = torch.maximum(gap_max, mon.worst(robot.data.body_link_pos_w, robot.data.body_link_quat_w))
+                gap_max = torch.maximum(gap_max, mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)))
             hist[cs] = robot.data.joint_pos[:, mids].clone()
         rows = []
         for c in cases:
