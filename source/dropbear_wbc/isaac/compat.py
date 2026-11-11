@@ -60,6 +60,28 @@ def as_tensor(x: Any) -> Any:
     return x if t is None or callable(t) else t
 
 
+def gravity_dir_w(asset: Any) -> Any:
+    """Unit world gravity direction per env, (N, 3); (0, 0, -1) under default gravity.
+
+    ``data.GRAVITY_VEC_W`` is a unit vector on Isaac Lab 2.x and on the 3.0 PhysX backend, but the 3.0
+    Newton backend binds it to ``model.gravity`` in m/s^2 (|g| = 9.81; "consumers normalize on read",
+    isaaclab_newton ArticulationData). Raw use scales every gravity-in-body-frame term by |g|.
+    A zero vector (gravity disabled) stays zero.
+    """
+    g = as_tensor(asset.data.GRAVITY_VEC_W)
+    try:
+        import torch
+
+        if isinstance(g, torch.Tensor):
+            return g / g.norm(dim=-1, keepdim=True).clamp_min(1e-9)
+    except ImportError:  # pragma: no cover
+        pass
+    import numpy as np
+
+    g = np.asarray(g, dtype=float)
+    return g / np.maximum(np.linalg.norm(g, axis=-1, keepdims=True), 1e-9)
+
+
 def _roll(q: Any, shift: int) -> Any:
     try:
         import torch

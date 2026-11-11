@@ -8,6 +8,7 @@ import torch
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 from dropbear_wbc.isaac.qmath import quat_error_magnitude
+from dropbear_wbc.isaac.compat import as_tensor
 
 from .commands import MotionCommand
 
@@ -70,7 +71,7 @@ def motion_global_body_angular_velocity_error_exp(
 def feet_contact_time(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float) -> torch.Tensor:
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     first_air = contact_sensor.compute_first_air(env.step_dt, env.physics_dt)[:, sensor_cfg.body_ids]
-    last_contact_time = contact_sensor.data.last_contact_time[:, sensor_cfg.body_ids]
+    last_contact_time = as_tensor(contact_sensor.data.last_contact_time)[:, sensor_cfg.body_ids]
     return torch.sum((last_contact_time < threshold) * first_air, dim=-1)
 
 

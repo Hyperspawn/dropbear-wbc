@@ -27,7 +27,7 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
 import torch
-from dropbear_wbc.isaac.compat import body_quat_wxyz, write_root_state
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, write_root_state
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm, CommandTermCfg
@@ -187,7 +187,7 @@ class MotionCommand(CommandTerm):
         self.npz_default_pose_max_abs_diff: float | None = None
         npz_default = self.motion.arrays_meta.get("default_motor_pos")
         if isinstance(npz_default, dict) and all(n in npz_default for n in cfg.joint_names):
-            live = self.robot.data.default_joint_pos[0, self.motor_ids].cpu()
+            live = as_tensor(self.robot.data.default_joint_pos)[0, self.motor_ids].cpu()
             ref = torch.tensor([float(npz_default[n]) for n in cfg.joint_names])
             self.npz_default_pose_max_abs_diff = float((live - ref).abs().max())
             if self.npz_default_pose_max_abs_diff > 0.02:
@@ -264,15 +264,15 @@ class MotionCommand(CommandTerm):
     # ------------------------------------------------------------------ robot state
     @property
     def robot_joint_pos(self) -> torch.Tensor:
-        return self.robot.data.joint_pos[:, self.motor_ids]
+        return as_tensor(self.robot.data.joint_pos)[:, self.motor_ids]
 
     @property
     def robot_joint_vel(self) -> torch.Tensor:
-        return self.robot.data.joint_vel[:, self.motor_ids]
+        return as_tensor(self.robot.data.joint_vel)[:, self.motor_ids]
 
     @property
     def robot_body_pos_w(self) -> torch.Tensor:
-        return self.robot.data.body_pos_w[:, self.body_indexes]
+        return as_tensor(self.robot.data.body_pos_w)[:, self.body_indexes]
 
     @property
     def robot_body_quat_w(self) -> torch.Tensor:
@@ -280,15 +280,15 @@ class MotionCommand(CommandTerm):
 
     @property
     def robot_body_lin_vel_w(self) -> torch.Tensor:
-        return self.robot.data.body_lin_vel_w[:, self.body_indexes]
+        return as_tensor(self.robot.data.body_lin_vel_w)[:, self.body_indexes]
 
     @property
     def robot_body_ang_vel_w(self) -> torch.Tensor:
-        return self.robot.data.body_ang_vel_w[:, self.body_indexes]
+        return as_tensor(self.robot.data.body_ang_vel_w)[:, self.body_indexes]
 
     @property
     def robot_anchor_pos_w(self) -> torch.Tensor:
-        return self.robot.data.body_pos_w[:, self.robot_anchor_body_index]
+        return as_tensor(self.robot.data.body_pos_w)[:, self.robot_anchor_body_index]
 
     @property
     def robot_anchor_quat_w(self) -> torch.Tensor:
@@ -296,11 +296,11 @@ class MotionCommand(CommandTerm):
 
     @property
     def robot_anchor_lin_vel_w(self) -> torch.Tensor:
-        return self.robot.data.body_lin_vel_w[:, self.robot_anchor_body_index]
+        return as_tensor(self.robot.data.body_lin_vel_w)[:, self.robot_anchor_body_index]
 
     @property
     def robot_anchor_ang_vel_w(self) -> torch.Tensor:
-        return self.robot.data.body_ang_vel_w[:, self.robot_anchor_body_index]
+        return as_tensor(self.robot.data.body_ang_vel_w)[:, self.robot_anchor_body_index]
 
     # ------------------------------------------------------------------ manager hooks
     def _update_metrics(self):
@@ -384,7 +384,7 @@ class MotionCommand(CommandTerm):
         ):
             if len(cols) and (lo != 0.0 or hi != 0.0):
                 motor_pos[:, cols] += sample_uniform(lo, hi, (n, len(cols)), self.device)
-        limits = self.robot.data.joint_pos_limits[env_ids][:, self.motor_ids]
+        limits = as_tensor(self.robot.data.joint_pos_limits)[env_ids][:, self.motor_ids]
         joint_pos[:, self.motor_ids] = torch.clamp(motor_pos, limits[..., 0], limits[..., 1])
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
         write_root_state(self.robot, root_pos, root_ori, root_lin_vel, root_ang_vel, env_ids=env_ids)

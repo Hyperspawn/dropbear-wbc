@@ -20,6 +20,7 @@ from isaaclab.envs.mdp.events import _randomize_prop_by_op
 from isaaclab.managers import SceneEntityCfg
 
 from dropbear_wbc.tasks.mass_events import randomize_limb_mass_scale  # noqa: F401  (re-export)
+from dropbear_wbc.isaac.compat import as_tensor
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -40,7 +41,7 @@ def randomize_joint_default_pos(
     """
     asset: Articulation = env.scene[asset_cfg.name]
     if not hasattr(asset.data, "default_joint_pos_nominal"):
-        asset.data.default_joint_pos_nominal = torch.clone(asset.data.default_joint_pos[0])
+        asset.data.default_joint_pos_nominal = torch.clone(as_tensor(asset.data.default_joint_pos)[0])
     if env_ids is None:
         env_ids = torch.arange(env.scene.num_envs, device=asset.device)
     if asset_cfg.joint_ids == slice(None):
@@ -49,20 +50,20 @@ def randomize_joint_default_pos(
         joint_ids = torch.tensor(asset_cfg.joint_ids, dtype=torch.int, device=asset.device)
 
     if pos_distribution_params is not None:
-        pos = asset.data.default_joint_pos.to(asset.device).clone()
+        pos = as_tensor(asset.data.default_joint_pos).to(asset.device).clone()
         pos = _randomize_prop_by_op(
             pos, pos_distribution_params, env_ids, joint_ids, operation=operation, distribution=distribution
         )[env_ids][:, joint_ids]
         rows = env_ids[:, None] if joint_ids != slice(None) else env_ids
-        asset.data.default_joint_pos[rows, joint_ids] = pos
+        as_tensor(asset.data.default_joint_pos)[rows, joint_ids] = pos
         # keep JointPositionAction(use_default_offset=True) consistent: offset = default[action joint ids]
         term = env.action_manager.get_term(action_name)
         term_ids = term._joint_ids
         if term_ids == slice(None):
-            term._offset[env_ids] = asset.data.default_joint_pos[env_ids]
+            term._offset[env_ids] = as_tensor(asset.data.default_joint_pos)[env_ids]
         else:
             term_ids_t = torch.as_tensor(term_ids, dtype=torch.long, device=asset.device)
-            term._offset[env_ids] = asset.data.default_joint_pos[env_ids][:, term_ids_t]
+            term._offset[env_ids] = as_tensor(asset.data.default_joint_pos)[env_ids][:, term_ids_t]
 
 
 def randomize_rigid_body_com(

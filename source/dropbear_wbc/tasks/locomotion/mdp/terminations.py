@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.managers import SceneEntityCfg
+from dropbear_wbc.isaac.compat import as_tensor
 
 from .rewards import anchor_projected_gravity, ground_z
 
@@ -18,7 +19,7 @@ def anchor_height_below(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, minim
                         ground_sensor: str | None = None) -> torch.Tensor:
     """Anchor link z above the ground (``rewards.ground_z``: env origin on flat ground) below ``minimum_height``."""
     asset = env.scene[asset_cfg.name]
-    z = asset.data.body_link_pos_w[:, asset_cfg.body_ids[0], 2] - ground_z(env, ground_sensor)
+    z = as_tensor(asset.data.body_link_pos_w)[:, asset_cfg.body_ids[0], 2] - ground_z(env, ground_sensor)
     return z < minimum_height
 
 

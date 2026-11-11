@@ -422,3 +422,91 @@ def test_amp_state_is_order_invariant(monkeypatch):
     term._robot = _Asset330(_Data330(root_quat_w=_xyzw(rq), **kw))
     got = term._state()
     assert torch.allclose(ref, got, atol=1e-6), float((ref - got).abs().max())
+
+
+# ---------------------------------------------------------------- item 331: package-wide ProxyArray wraps, gravity
+NON_ISAAC_PKG = {"teleop/gravity.py", "kinematics/serial_model.py"}  # JSON dict ``self.data`` / MuJoCo MjData
+
+
+def _isaac_pkg_files():
+    return [p for p in _pkg_files() if p.relative_to(PKG).as_posix() not in NON_ISAAC_PKG]
+
+
+def test_package_wraps_isaac_data_in_as_tensor():
+    hits = _scan(_isaac_pkg_files(), quat=False)
+    assert not hits, "wrap Isaac .data reads in compat.as_tensor(...) (Lab 3.0 ProxyArray):\n" + "\n".join(hits)
+
+
+def test_no_raw_gravity_vec_outside_compat():
+    """Newton (Lab 3.0) binds GRAVITY_VEC_W to model.gravity in m/s^2; only compat.gravity_dir_w may read it."""
+    hits = _hits(_pkg_files() + _outside_files(), re.compile(r"\bGRAVITY_VEC_W\b"))
+    assert not hits, "use compat.gravity_dir_w(asset) (unit) instead of raw GRAVITY_VEC_W:\n" + "\n".join(hits)
+
+
+def test_camera_output_wrapped():
+    """Lab 3.0 CameraData.output is dict[str, ProxyArray]; index the key, then as_tensor."""
+    rx = re.compile(r"\.data\.output\[")
+    bad = [h for h in _hits(_pkg_files() + _outside_files(), rx) if not re.search(r"as_tensor\([^)]*\.data\.output\[", h)]
+    assert not bad, "wrap camera .data.output[key] in as_tensor(...):\n" + "\n".join(bad)
+
+
+def _cached_data_views(src):
+    """``self.x = <...>.data.y`` / ``self.x = as_tensor(<...>.data.y)`` (optionally indexed) stored without a copy.
+    On Newton the ProxyArray (and its .torch view) is replaced on full reset; a stored view goes stale."""
+    tree = ast.parse(src)
+    out = []
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.Assign) and any(isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name)
+                                                  and t.value.id == "self" for t in n.targets)):
+            continue
+        v = n.value
+        while isinstance(v, ast.Subscript):
+            v = v.value
+        if isinstance(v, ast.Call) and getattr(v.func, "id", None) == "as_tensor" and v.args:
+            v = v.args[0]
+            while isinstance(v, ast.Subscript):
+                v = v.value
+        if isinstance(v, ast.Attribute) and isinstance(v.value, ast.Attribute) and v.value.attr == "data":
+            out.append(n.lineno)
+    return out
+
+
+def test_no_data_view_cached_on_self():
+    hits = []
+    for p in _isaac_pkg_files() + _outside_files():
+        src = p.read_text(encoding="utf-8")
+        hits += [f"{p.relative_to(ROOT)}:{ln}" for ln in _cached_data_views(src)]
+    assert not hits, "copy (.clone()) Isaac .data views before storing them on self (Newton reset):\n" + "\n".join(hits)
+
+
+def test_cache_gate_catches_planted():
+    assert _cached_data_views("class A:\n    def f(s):\n        self.q = self.robot.data.joint_pos\n") == [3]
+    assert _cached_data_views("self.q = as_tensor(r.data.joint_pos)[:, ids]\n") == [1]
+    assert _cached_data_views("self.q = as_tensor(r.data.joint_pos)[:, ids].clone()\n") == []
+    assert _cached_data_views("q = r.data.joint_pos\n") == []
+
+
+class _GravData:
+    def __init__(self, g):
+        self.GRAVITY_VEC_W = _Proxy330(g)
+
+
+class _GravAsset:
+    def __init__(self, g):
+        self.data = _GravData(g)
+
+
+@needs_torch
+def test_gravity_dir_w_normalizes_newton_magnitude():
+    g = torch.tensor([[0.0, 0.0, -9.81], [0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [1.0, 0.0, -9.81]])
+    d = compat.gravity_dir_w(_GravAsset(g))
+    assert torch.allclose(d[:2], torch.tensor([[0.0, 0.0, -1.0]] * 2))
+    assert torch.equal(d[2], torch.zeros(3))  # gravity disabled stays zero
+    assert torch.allclose(d.norm(dim=-1)[[0, 1, 3]], torch.ones(3))
+
+
+def test_gravity_dir_w_numpy():
+    class _A:
+        class data:  # noqa: N801
+            GRAVITY_VEC_W = np.array([[0.0, 0.0, -9.81]])
+    assert np.allclose(compat.gravity_dir_w(_A), [[0.0, 0.0, -1.0]])

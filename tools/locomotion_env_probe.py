@@ -24,7 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, gravity_dir_w  # noqa: E402
 
 prepare_kit_python()
 
@@ -109,7 +109,7 @@ def main(report: dict) -> int:  # noqa: C901
     passive[motor_ids] = False
     jd = (kin["joint_pos"] - q_npz0).abs()
     off = torch.tensor(N.ANCHOR_FRAME_OFFSET_WXYZ, device=uw.device).expand(uw.num_envs, 4)
-    g_anchor = quat_apply_inverse(quat_mul(kin["body_quat"][:, anchor], off), as_tensor(robot.data.GRAVITY_VEC_W))
+    g_anchor = quat_apply_inverse(quat_mul(kin["body_quat"][:, anchor], off), gravity_dir_w(robot))
     g_root = kin["g_root"]
     # lowest point proxy: link-origin heights of non-foot bodies (not collision geometry)
     body_z = kin["body_pos"][:, :, 2] - uw.scene.env_origins[:, 2:3]

@@ -124,7 +124,7 @@ def main() -> int:  # noqa: C901
         bpos = (as_tensor(uw.scene["block"].data.root_pos_w) - uw.scene.env_origins - root_w).cpu().numpy()
         bq = root_quat_wxyz(uw.scene["block"]).cpu().numpy()
         for k in sensors:
-            im = uw.scene[k].data.output["rgb"].cpu().numpy()[..., :3]
+            im = as_tensor(uw.scene[k].data.output["rgb"]).cpu().numpy()[..., :3]
             for e in range(im.shape[0]):
                 s = float(im[e].std())
                 stats[k].append({"step": step, "env": e, "mean": round(float(im[e].mean()), 2), "std": round(s, 2)})

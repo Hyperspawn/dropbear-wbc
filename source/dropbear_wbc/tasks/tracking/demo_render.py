@@ -34,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dropbear_wbc.isaac.compat import cfg_quat
+from dropbear_wbc.isaac.compat import as_tensor, cfg_quat
 
 FFMPEG_DEFAULT = "C:/ProgramData/chocoportable/bin/ffmpeg.exe"
 FONT_DIR = "C:/Windows/Fonts"
@@ -231,7 +231,7 @@ class DemoRecorder:
     def _root_xy_local(self) -> np.ndarray:
         if self.root_xy_fn is not None:
             return np.asarray(self.root_xy_fn(), dtype=float)
-        p = self._robot.data.root_link_pos_w[0, :2].detach().cpu().numpy().astype(float)
+        p = as_tensor(self._robot.data.root_link_pos_w)[0, :2].detach().cpu().numpy().astype(float)
         return p - self._origin[:2]
 
     def _place_cameras(self, initial: bool = False) -> None:

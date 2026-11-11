@@ -28,7 +28,7 @@ from dataclasses import MISSING, fields
 from typing import TYPE_CHECKING
 
 import torch
-from dropbear_wbc.isaac.compat import write_root_state
+from dropbear_wbc.isaac.compat import as_tensor, write_root_state
 
 from isaaclab.managers import CommandTerm
 from isaaclab.utils import configclass
@@ -98,7 +98,7 @@ class MotionLibraryCommand(MotionCommand):
 
         # static clips built for a default pose (tools/make_static_npz.py): same staleness warning as single-clip
         self.npz_default_pose_max_abs_diff: float | None = None
-        live = self.robot.data.default_joint_pos[0, self.motor_ids].cpu()
+        live = as_tensor(self.robot.data.default_joint_pos)[0, self.motor_ids].cpu()
         for c in data.clips:
             dmp = c.default_motor_pos
             if isinstance(dmp, dict) and all(n in dmp for n in cfg.joint_names):
@@ -291,7 +291,7 @@ class MotionLibraryCommand(MotionCommand):
         ):
             if len(cols) and (lo != 0.0 or hi != 0.0):
                 motor_pos[:, cols] += sample_uniform(lo, hi, (n, len(cols)), self.device)
-        limits = self.robot.data.joint_pos_limits[env_ids][:, self.motor_ids]
+        limits = as_tensor(self.robot.data.joint_pos_limits)[env_ids][:, self.motor_ids]
         joint_pos[:, self.motor_ids] = torch.clamp(motor_pos, limits[..., 0], limits[..., 1])
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
         write_root_state(self.robot, root_pos, root_ori, root_lin_vel, root_ang_vel, env_ids=env_ids)

@@ -33,6 +33,7 @@ from dropbear_wbc.tasks.policy_export import (
 from dropbear_wbc.isaac.launch import sha256_file
 from dropbear_wbc.robots import dropbear_names as N
 from dropbear_wbc.tasks.tracking.export import _attach_onnx_metadata, _obs_layout
+from dropbear_wbc.isaac.compat import as_tensor
 
 SIDECAR_SCHEMA = "dropbear-velocity-policy-v1"
 DEPLOY_SIDECAR_SCHEMA = "dropbear-policy-sidecar-v1"
@@ -69,14 +70,14 @@ def export_velocity_policy(env, runner, out_dir: str | Path, *, task: str, check
     motor_ids = robot.find_joints(motor_names, preserve_order=True)[0]
     scale = term._scale
     scale_list = scale[0].tolist() if isinstance(scale, torch.Tensor) else [float(scale)] * len(motor_names)
-    kp = robot.data.joint_stiffness[0, motor_ids].tolist()
-    kd = robot.data.joint_damping[0, motor_ids].tolist()
-    effort = robot.data.joint_effort_limits[0, motor_ids].tolist()
+    kp = as_tensor(robot.data.joint_stiffness)[0, motor_ids].tolist()
+    kd = as_tensor(robot.data.joint_damping)[0, motor_ids].tolist()
+    effort = as_tensor(robot.data.joint_effort_limits)[0, motor_ids].tolist()
     # explicit (hw_*) motor models run the PD themselves: read their own gains and peak torque
     from dropbear_wbc.robots.hw_introspect import overlay_explicit_gains, target_interp_steps
 
     overlay_explicit_gains(robot, motor_names, kp, kd, effort)
-    default = [float(robot.data.default_joint_pos[0, i]) for i in motor_ids]
+    default = [float(as_tensor(robot.data.default_joint_pos)[0, i]) for i in motor_ids]
     obs_dim = actor_obs_dim(policy)
     norm_state = {}
     stats = effective_normalizer(policy, normalizer)

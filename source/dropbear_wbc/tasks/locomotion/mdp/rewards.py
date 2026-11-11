@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
-from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, gravity_dir_w, root_quat_wxyz
 
 from dropbear_wbc.isaac import qmath as math_utils
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
@@ -55,14 +55,14 @@ def anchor_up_quat_w(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, up_offse
 def anchor_projected_gravity(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, up_offset_wxyz) -> torch.Tensor:
     """Unit gravity in the world-aligned anchor frame (num_envs, 3); (0, 0, -1) when upright."""
     asset = env.scene[asset_cfg.name]
-    return math_utils.quat_apply_inverse(anchor_up_quat_w(env, asset_cfg, up_offset_wxyz), asset.data.GRAVITY_VEC_W)
+    return math_utils.quat_apply_inverse(anchor_up_quat_w(env, asset_cfg, up_offset_wxyz), gravity_dir_w(asset))
 
 
 def _feet_contact_state(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, bodies_per_foot: int):
     sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     groups = foot_groups(sensor_cfg, bodies_per_foot).to(env.device)
-    contact_time = sensor.data.current_contact_time[:, groups]  # (N, feet, bodies)
-    air_time = sensor.data.current_air_time[:, groups]
+    contact_time = as_tensor(sensor.data.current_contact_time)[:, groups]  # (N, feet, bodies)
+    air_time = as_tensor(sensor.data.current_air_time)[:, groups]
     in_contact = (contact_time > 0.0).any(dim=-1)  # (N, feet)
     foot_contact_time = contact_time.max(dim=-1).values
     foot_air_time = air_time.min(dim=-1).values
@@ -75,7 +75,7 @@ def track_lin_vel_xy_yaw_frame_exp(
 ) -> torch.Tensor:
     """Isaac Lab (H1): xy velocity command tracking in the gravity-aligned (yaw) frame, exp kernel."""
     asset = env.scene[asset_cfg.name]
-    vel_yaw = math_utils.quat_apply_inverse(math_utils.yaw_quat(root_quat_wxyz(asset)), asset.data.root_lin_vel_w[:, :3])
+    vel_yaw = math_utils.quat_apply_inverse(math_utils.yaw_quat(root_quat_wxyz(asset)), as_tensor(asset.data.root_lin_vel_w)[:, :3])
     err = torch.sum(torch.square(env.command_manager.get_command(command_name)[:, :2] - vel_yaw[:, :2]), dim=1)
     return torch.exp(-err / std**2)
 
@@ -85,7 +85,7 @@ def track_ang_vel_z_world_exp(
 ) -> torch.Tensor:
     """Isaac Lab (H1): yaw-rate command tracking in the world frame, exp kernel."""
     asset = env.scene[asset_cfg.name]
-    err = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_w[:, 2])
+    err = torch.square(env.command_manager.get_command(command_name)[:, 2] - as_tensor(asset.data.root_ang_vel_w)[:, 2])
     return torch.exp(-err / std**2)
 
 
@@ -119,10 +119,10 @@ def feet_slide(
     """
     sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     groups = foot_groups(sensor_cfg, bodies_per_foot).to(env.device)
-    forces = sensor.data.net_forces_w_history[:, :, groups.flatten(), :].norm(dim=-1).max(dim=1)[0]
+    forces = as_tensor(sensor.data.net_forces_w_history)[:, :, groups.flatten(), :].norm(dim=-1).max(dim=1)[0]
     contacts = (forces.view(env.num_envs, groups.shape[0], bodies_per_foot) > 1.0).any(dim=-1)
     asset = env.scene[asset_cfg.name]
-    vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
+    vel = as_tensor(asset.data.body_lin_vel_w)[:, asset_cfg.body_ids, :2]
     if vel.shape[1] != contacts.shape[1]:
         raise ValueError(f"asset_cfg selects {vel.shape[1]} bodies for {contacts.shape[1]} feet")
     return torch.sum(vel.norm(dim=-1) * contacts, dim=1)
@@ -143,7 +143,7 @@ def ground_z(env: ManagerBasedRLEnv, ground_sensor: str | None = None) -> torch.
     never observed, so the policy stays blind) or the env origin z (flat ground, every earlier run)."""
     if ground_sensor is None:
         return env.scene.env_origins[:, 2]
-    hits = env.scene.sensors[ground_sensor].data.ray_hits_w[..., 2]
+    hits = as_tensor(env.scene.sensors[ground_sensor].data.ray_hits_w)[..., 2]
     ok = torch.isfinite(hits)
     n = ok.sum(dim=1).clamp(min=1)
     z = torch.where(ok, hits, torch.zeros_like(hits)).sum(dim=1) / n
@@ -156,7 +156,7 @@ def anchor_height_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_h
     reset NPZ (reset-calibrated and physically loaded, never the unloaded CAD height; dropbear-research AGENTS.md
     rules 15/25). Ground = :func:`ground_z`."""
     asset = env.scene[asset_cfg.name]
-    z = asset.data.body_link_pos_w[:, asset_cfg.body_ids[0], 2] - ground_z(env, ground_sensor)
+    z = as_tensor(asset.data.body_link_pos_w)[:, asset_cfg.body_ids[0], 2] - ground_z(env, ground_sensor)
     return torch.square(z - target_height)
 
 
@@ -168,7 +168,7 @@ def motor_torque_over_rated_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg
     ``applied_torque`` of an explicit ``DatasheetMotor`` is the motor torque after the torque-speed envelope.
     """
     asset = env.scene[asset_cfg.name]
-    tau = asset.data.applied_torque[:, asset_cfg.joint_ids].abs()
+    tau = as_tensor(asset.data.applied_torque)[:, asset_cfg.joint_ids].abs()
     over = torch.clamp(tau - torch.as_tensor(rated, device=tau.device, dtype=tau.dtype), min=0.0)
     return torch.sum(over * over, dim=1)
 
@@ -191,7 +191,7 @@ def knee_flexion_in_swing(
     flexion is positive (0 = straight stop, ~0.52 rad = ~48 deg knee)."""
     in_contact, _, _ = _feet_contact_state(env, sensor_cfg, bodies_per_foot)
     asset = env.scene[asset_cfg.name]
-    flex = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    flex = as_tensor(asset.data.joint_pos)[:, asset_cfg.joint_ids] - as_tensor(asset.data.default_joint_pos)[:, asset_cfg.joint_ids]
     r = torch.sum(torch.clamp(flex / target_flex, 0.0, 1.0) * (~in_contact).float(), dim=1)
     return r * _moving_command(env, command_name)
 
@@ -205,7 +205,7 @@ def feet_swing_height_l2(
     command is ~0."""
     in_contact, _, _ = _feet_contact_state(env, sensor_cfg, bodies_per_foot)
     asset = env.scene[asset_cfg.name]
-    z = asset.data.body_link_pos_w[:, asset_cfg.body_ids, 2] - ground_z(env, ground_sensor)[:, None]
+    z = as_tensor(asset.data.body_link_pos_w)[:, asset_cfg.body_ids, 2] - ground_z(env, ground_sensor)[:, None]
     err = torch.square(z - (stand_z + clearance)) * (~in_contact).float()
     return torch.sum(err, dim=1) * _moving_command(env, command_name)
 
@@ -230,15 +230,15 @@ class motor_torque_rate_l2(ManagerTermBase):
                     lim = float(actuator_effort_limit(act)[0, k])
                     peak[ids.index(j)] = lim if 0.0 < lim < 1.0e6 else 100.0
         self.peak = peak
-        self.prev = self.asset.data.applied_torque[:, self.ids].clone()
+        self.prev = as_tensor(self.asset.data.applied_torque)[:, self.ids].clone()
 
     def reset(self, env_ids=None):
         if env_ids is None:
             env_ids = slice(None)
-        self.prev[env_ids] = self.asset.data.applied_torque[env_ids][:, self.ids]
+        self.prev[env_ids] = as_tensor(self.asset.data.applied_torque)[env_ids][:, self.ids]
 
     def __call__(self, env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-        tau = self.asset.data.applied_torque[:, self.ids]
+        tau = as_tensor(self.asset.data.applied_torque)[:, self.ids]
         d = (tau - self.prev) / self.peak
         self.prev = tau.clone()
         return torch.sum(d * d, dim=1)
@@ -274,7 +274,7 @@ def knee_flexion_in_stance(
     crouched on the max-flexion stops (gait_scratch_600: both knees at 45-48 deg all the time)."""
     in_contact, _, _ = _feet_contact_state(env, sensor_cfg, bodies_per_foot)
     asset = env.scene[asset_cfg.name]
-    flex = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    flex = as_tensor(asset.data.joint_pos)[:, asset_cfg.joint_ids] - as_tensor(asset.data.default_joint_pos)[:, asset_cfg.joint_ids]
     return torch.sum(torch.clamp(flex - margin, min=0.0) * in_contact.float(), dim=1)
 
 
@@ -285,7 +285,7 @@ def feet_lateral_distance_below(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCf
     other; gait_scratch_600 parked both hip rolls on their adduction stops and walked cross-legged (stance width at
     rest is only 0.138 m). ``asset_cfg`` = the two sole bodies, left then right."""
     asset = env.scene[asset_cfg.name]
-    p = asset.data.body_link_pos_w[:, asset_cfg.body_ids, :]
+    p = as_tensor(asset.data.body_link_pos_w)[:, asset_cfg.body_ids, :]
     d = math_utils.quat_apply_inverse(math_utils.yaw_quat(root_quat_wxyz(asset)), p[:, 0] - p[:, 1])
     return torch.clamp(min_dist - d[:, 1], min=0.0)
 
@@ -294,8 +294,8 @@ def joint_near_limit_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, margi
     """Sum over joints of how deep [rad] each sits inside the last ``margin`` before a hard limit: hard stops are for
     over-travel, not for carrying load continuously (policies parked the knee and hip-roll motors on their stops)."""
     asset = env.scene[asset_cfg.name]
-    q = asset.data.joint_pos[:, asset_cfg.joint_ids]
-    lim = asset.data.joint_pos_limits[:, asset_cfg.joint_ids]
+    q = as_tensor(asset.data.joint_pos)[:, asset_cfg.joint_ids]
+    lim = as_tensor(asset.data.joint_pos_limits)[:, asset_cfg.joint_ids]
     return torch.sum(torch.clamp(lim[..., 0] + margin - q, min=0.0) + torch.clamp(q - (lim[..., 1] - margin), min=0.0), dim=1)
 
 
@@ -332,7 +332,7 @@ def arm_swing_counter_phase(env: ManagerBasedRLEnv, command_name: str, asset_cfg
     :data:`ARM_SWING_JOINTS` in that order (``preserve_order=True``)."""
     asset = env.scene[asset_cfg.name]
     ids = asset_cfg.joint_ids
-    dq = asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]
+    dq = as_tensor(asset.data.joint_pos)[:, ids] - as_tensor(asset.data.default_joint_pos)[:, ids]
     hip_l, hip_r, sh_l_motor, sh_r_motor = (dq[:, i] for i in range(4))
     err = torch.square(sh_r_motor - k * HIP_PITCH_SCALE * hip_l) + torch.square(-sh_l_motor - k * HIP_PITCH_SCALE * hip_r)
     return torch.exp(-err / std**2) * _moving_command(env, command_name).float()
@@ -349,7 +349,7 @@ def calm_gate(env: ManagerBasedRLEnv, tilt_rate_threshold: float = 0.8, hold_s: 
         timer = torch.zeros(env.num_envs, device=env.device)
         env._calm_gate_timer, env._calm_gate_step = timer, -1
     if env._calm_gate_step != step:
-        rate = torch.norm(env.scene["robot"].data.root_ang_vel_b[:, :2], dim=1)
+        rate = torch.norm(as_tensor(env.scene["robot"].data.root_ang_vel_b)[:, :2], dim=1)
         timer = torch.where(rate > tilt_rate_threshold, torch.full_like(timer, hold_s),
                             torch.clamp(timer - env.step_dt, min=0.0))
         timer[env.episode_length_buf <= 1] = 0.0
@@ -368,7 +368,7 @@ def joint_deviation_l1_gated(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, 
     """L1 distance of the selected joints from their standing angles x :func:`calm_gate`."""
     asset = env.scene[asset_cfg.name]
     ids = asset_cfg.joint_ids
-    dev = torch.sum(torch.abs(asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]), dim=1)
+    dev = torch.sum(torch.abs(as_tensor(asset.data.joint_pos)[:, ids] - as_tensor(asset.data.default_joint_pos)[:, ids]), dim=1)
     return dev * calm_gate(env, tilt_rate_threshold, hold_s)
 
 

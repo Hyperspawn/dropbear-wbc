@@ -208,16 +208,16 @@ def main() -> int:  # noqa: C901
         intermittent uniform frames on TiledCamera sensors); frames still blank are counted per env. Wrist views are
         downscaled to WRIST_CAM_STORE_RES."""
         sensor = uw.scene[cam_attr[c]]
-        im = sensor.data.output["rgb"][..., :3]
+        im = as_tensor(sensor.data.output["rgb"])[..., :3]
         for _ in range(3):
             blank = im.float().flatten(1).std(dim=1) < BLANK_STD
             if not bool(blank.any()):
                 break
             blank_stats["rerenders"] += 1
             uw.sim.render()
-            sensor._is_outdated[:] = True  # noqa: SLF001 -- re-fetch the annotator output after the extra render
+            sensor._is_outdated.fill_(True)  # noqa: SLF001 -- torch bool (2.x) / wp.array (3.0); re-fetch the annotator output after the extra render
             sensor._update_outdated_buffers()  # noqa: SLF001
-            im = sensor.data.output["rgb"][..., :3]
+            im = as_tensor(sensor.data.output["rgb"])[..., :3]
         out = im.cpu().numpy()
         blank = out.reshape(out.shape[0], -1).std(axis=1) < BLANK_STD
         for i in np.nonzero(blank)[0].tolist():

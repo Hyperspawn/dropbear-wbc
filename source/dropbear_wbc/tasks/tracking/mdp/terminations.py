@@ -14,6 +14,7 @@ import torch
 from dropbear_wbc.isaac import qmath as math_utils
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
+from dropbear_wbc.isaac.compat import gravity_dir_w
 
 from .commands import MotionCommand
 from .rewards import _get_body_indexes
@@ -45,8 +46,8 @@ def bad_anchor_ori(
     off = torch.tensor(up_offset_wxyz, dtype=torch.float32, device=env.device).expand(env.num_envs, 4)
     motion_q = math_utils.quat_mul(command.anchor_quat_w, off)
     robot_q = math_utils.quat_mul(command.robot_anchor_quat_w, off)
-    motion_g = math_utils.quat_apply_inverse(motion_q, asset.data.GRAVITY_VEC_W)
-    robot_g = math_utils.quat_apply_inverse(robot_q, asset.data.GRAVITY_VEC_W)
+    motion_g = math_utils.quat_apply_inverse(motion_q, gravity_dir_w(asset))
+    robot_g = math_utils.quat_apply_inverse(robot_q, gravity_dir_w(asset))
     return (motion_g[:, 2] - robot_g[:, 2]).abs() > threshold
 
 

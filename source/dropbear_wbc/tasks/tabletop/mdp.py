@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import root_quat_wxyz, write_root_pose
+from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz, write_root_pose
 
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import ManagerBasedRLEnv
@@ -94,7 +94,7 @@ class reset_tabletop(ManagerTermBase):
                             expected_authored_ankle=len(spherical) == 0, validation=verdict)
         self.joint_pos = torch.as_tensor(arrays.joint_pos[0], dtype=torch.float32, device=env.device)
         motor_ids, _ = robot.find_joints(list(MOTOR_NAMES), preserve_order=True)
-        default_motor = robot.data.default_joint_pos[0, motor_ids]
+        default_motor = as_tensor(robot.data.default_joint_pos)[0, motor_ids]
         env.tabletop_reset_info = {
             "npz": str(path), "frame": 0, "closure_residual_max_m": float(arrays.closure_residual_m.max()),
             "validation": (verdict or {}).get("verdict"), "validation_stale": (verdict or {}).get("stale"),
@@ -199,8 +199,8 @@ def place_objects(env: ManagerBasedRLEnv, ids: torch.Tensor, layout: TabletopLay
 def _block_state_root(env: ManagerBasedRLEnv, layout: TabletopLayout):
     block: RigidObject = env.scene["block"]
     root = torch.tensor(layout.root_pos_w, device=env.device)
-    pos = block.data.root_pos_w - env.scene.env_origins - root
-    return pos, root_quat_wxyz(block), block.data.root_lin_vel_w, block.data.root_ang_vel_w
+    pos = as_tensor(block.data.root_pos_w) - env.scene.env_origins - root
+    return pos, root_quat_wxyz(block), as_tensor(block.data.root_lin_vel_w), as_tensor(block.data.root_ang_vel_w)
 
 
 def success_now(env: ManagerBasedRLEnv, layout: TabletopLayout = LAYOUT) -> torch.Tensor:

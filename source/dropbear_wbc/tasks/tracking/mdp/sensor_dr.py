@@ -25,6 +25,7 @@ import torch
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.managers import ObservationTermCfg
 from dropbear_wbc.isaac.qmath import matrix_from_quat, quat_from_euler_xyz, quat_mul, subtract_frame_transforms
+from dropbear_wbc.isaac.compat import as_tensor
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -142,7 +143,7 @@ class measured_base_ang_vel(ManagerTermBase):
     def __call__(self, env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
                  max_age_steps: float = MAX_AGE_STEPS) -> torch.Tensor:
         e = _err(env)
-        w = env.scene[asset_cfg.name].data.root_ang_vel_b
+        w = as_tensor(env.scene[asset_cfg.name].data.root_ang_vel_b)
         w = torch.bmm(e.r_mis.transpose(1, 2), w.unsqueeze(-1)).squeeze(-1) + e.gyro_b
         return self._d(w, e.imu_lag)
 

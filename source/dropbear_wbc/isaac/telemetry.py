@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import root_quat_wxyz
+from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz
 
 from dropbear_wbc.robots.dropbear_names import FOOT_BODIES, MOTOR_NAMES
 from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
@@ -94,9 +94,9 @@ class MotorTelemetry:
                 spring[i] = float(act.spring_effort[e, k])
         self.rows["tau_stop"].append(stop)
         self.rows["tau_spring"].append(spring)
-        self.rows["q"].append(r.data.joint_pos[e, self.ids].cpu().numpy())
-        self.rows["qd"].append(r.data.joint_vel[e, self.ids].cpu().numpy())
-        self.rows["q_target"].append(r.data.joint_pos_target[e, self.ids].cpu().numpy())
+        self.rows["q"].append(as_tensor(r.data.joint_pos)[e, self.ids].cpu().numpy())
+        self.rows["qd"].append(as_tensor(r.data.joint_vel)[e, self.ids].cpu().numpy())
+        self.rows["q_target"].append(as_tensor(r.data.joint_pos_target)[e, self.ids].cpu().numpy())
         self.rows["tau"].append(tau)
         self.rows["tau_pd"].append(pd)
         sub = np.array(self._sub[-8:]) if self._sub else tau[None]
@@ -104,24 +104,24 @@ class MotorTelemetry:
         self._sub.clear()
         from dropbear_wbc.isaac.qmath import quat_apply_inverse, yaw_quat
 
-        v = quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), r.data.root_lin_vel_w[e:e + 1])[0]
+        v = quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), as_tensor(r.data.root_lin_vel_w)[e:e + 1])[0]
         self.rows["base_vel_b"].append(v.cpu().numpy())
-        self.rows["yaw_rate"].append(float(r.data.root_ang_vel_w[e, 2]))
-        self.rows["anchor_z"].append(float(r.data.body_link_pos_w[e, self.anchor, 2]) if self.anchor is not None else 0.0)
+        self.rows["yaw_rate"].append(float(as_tensor(r.data.root_ang_vel_w)[e, 2]))
+        self.rows["anchor_z"].append(float(as_tensor(r.data.body_link_pos_w)[e, self.anchor, 2]) if self.anchor is not None else 0.0)
         self.rows["cmd"].append(np.asarray(cmd.detach().cpu() if isinstance(cmd, torch.Tensor) else (cmd or [0, 0, 0]),
                                            dtype=float))
         self.rows["contact"].append(np.asarray(contact.detach().cpu() if isinstance(contact, torch.Tensor)
                                                else (contact or [0, 0]), dtype=bool))
-        self.rows["feet_z"].append(r.data.body_link_pos_w[e, self.foot_ids, 2].cpu().numpy())
+        self.rows["feet_z"].append(as_tensor(r.data.body_link_pos_w)[e, self.foot_ids, 2].cpu().numpy())
         # sole separation along the root yaw-frame y axis (left - right; < 0 = crossed legs)
         from dropbear_wbc.robots.dropbear_names import FOOT_EE_BODIES
 
         s = [r.body_names.index(b) for b in FOOT_EE_BODIES]
-        dp = (r.data.body_link_pos_w[e, s[0]] - r.data.body_link_pos_w[e, s[1]])[None]
+        dp = (as_tensor(r.data.body_link_pos_w)[e, s[0]] - as_tensor(r.data.body_link_pos_w)[e, s[1]])[None]
         self.rows["feet_lateral"].append(float(quat_apply_inverse(yaw_quat(root_quat_wxyz(r)[e:e + 1]), dp)[0, 1]))
-        self.rows["sole_pos_w"].append(r.data.body_link_pos_w[e, s].cpu().numpy())  # (left, right) soles
-        self.rows["root_pos_w"].append(r.data.root_link_pos_w[e].cpu().numpy())
-        self.rows["proj_grav"].append(r.data.projected_gravity_b[e].cpu().numpy())
+        self.rows["sole_pos_w"].append(as_tensor(r.data.body_link_pos_w)[e, s].cpu().numpy())  # (left, right) soles
+        self.rows["root_pos_w"].append(as_tensor(r.data.root_link_pos_w)[e].cpu().numpy())
+        self.rows["proj_grav"].append(as_tensor(r.data.projected_gravity_b)[e].cpu().numpy())
         self._record_loads()
 
     def _record_loads(self) -> None:
@@ -163,7 +163,7 @@ class MotorTelemetry:
                     ("rated_torque", "no_load_speed", "saturation_effort")}
             spec["model"] = np.array([p[m]["model"] for m in self.names])
         arrays = {k: np.array(v) for k, v in self.rows.items() if k != "tau_sub"}
-        spec["joint_limits"] = self.robot.data.joint_pos_limits[self.e, self.ids].cpu().numpy()
+        spec["joint_limits"] = as_tensor(self.robot.data.joint_pos_limits)[self.e, self.ids].cpu().numpy()
         spec["link_names"] = np.array(list(self.robot.body_names))
         np.savez_compressed(path, dt=dt, motor_names=np.array(self.names),
                             can_ids=np.array([MOTOR_CAN_IDS[m] for m in self.names]), peak_torque=self.peak,

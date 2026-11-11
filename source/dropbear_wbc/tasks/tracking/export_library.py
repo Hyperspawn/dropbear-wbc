@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from dropbear_wbc.isaac.compat import body_quat_wxyz
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz
 
 from dropbear_wbc.tasks.policy_export import (
     actor_obs_dim,
@@ -81,12 +81,12 @@ def export_library_policy(
     if tuple(motor_names) != N.MOTOR_NAMES:
         raise RuntimeError(f"action joints {motor_names} != motor contract")
     motor_ids = robot.find_joints(motor_names, preserve_order=True)[0]
-    nominal = getattr(robot.data, "default_joint_pos_nominal", robot.data.default_joint_pos[0])
+    nominal = getattr(robot.data, "default_joint_pos_nominal", as_tensor(robot.data.default_joint_pos)[0])
     scale = term._scale
     scale_list = scale[0].tolist() if isinstance(scale, torch.Tensor) else [float(scale)] * len(motor_names)
-    kp = robot.data.joint_stiffness[0, motor_ids].tolist()
-    kd = robot.data.joint_damping[0, motor_ids].tolist()
-    effort = robot.data.joint_effort_limits[0, motor_ids].tolist()
+    kp = as_tensor(robot.data.joint_stiffness)[0, motor_ids].tolist()
+    kd = as_tensor(robot.data.joint_damping)[0, motor_ids].tolist()
+    effort = as_tensor(robot.data.joint_effort_limits)[0, motor_ids].tolist()
     default = [float(nominal[i]) for i in motor_ids]
     obs_dim = actor_obs_dim(policy)
 
@@ -107,7 +107,7 @@ def export_library_policy(
 
     a_idx = robot.body_names.index(command.cfg.anchor_body_name)
     root_q = body_quat_wxyz(robot, link=True)[0:1, 0]
-    rel_p = quat_apply_inverse(root_q, robot.data.body_link_pos_w[0:1, a_idx] - robot.data.body_link_pos_w[0:1, 0])[0]
+    rel_p = quat_apply_inverse(root_q, as_tensor(robot.data.body_link_pos_w)[0:1, a_idx] - as_tensor(robot.data.body_link_pos_w)[0:1, 0])[0]
     rel_q = quat_mul(quat_inv(root_q), body_quat_wxyz(robot, link=True)[0:1, a_idx])[0]
     spawn = cfg.scene.robot.spawn
     authored_ankle = len(tuple(getattr(spawn, "spherical_joint_overrides", ()) or ())) == 0

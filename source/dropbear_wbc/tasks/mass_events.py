@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import torch
 
 from dropbear_wbc.robots.mass_dr import LIMB_MASS_SCALE, limb_body_index_plan, limb_mass_groups
+from dropbear_wbc.isaac.compat import as_tensor
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -52,14 +53,14 @@ def randomize_limb_mass_scale(
     per_body = scales[:, limb_index]  # (n_env, n_bodies): one draw shared by all bodies of a limb
 
     rows = env_ids[:, None]
-    default_mass = asset.data.default_mass.to("cpu")
+    default_mass = as_tensor(asset.data.default_mass).to("cpu")
     masses = asset.root_physx_view.get_masses()
     masses[rows, body_ids] = default_mass[rows, body_ids] * per_body
     asset.root_physx_view.set_masses(masses, env_ids)
 
     if recompute_inertia:
         inertias = asset.root_physx_view.get_inertias()
-        default_inertia = asset.data.default_inertia.to("cpu")
+        default_inertia = as_tensor(asset.data.default_inertia).to("cpu")
         inertias[rows, body_ids] = default_inertia[rows, body_ids] * per_body[..., None]
         asset.root_physx_view.set_inertias(inertias, env_ids)
 
@@ -92,7 +93,7 @@ def apply_body_mass_offsets(
     all_ids = torch.arange(n, device="cpu")
     idx = [asset.body_names.index(b) for b in offsets]
     delta = torch.tensor([float(offsets[b]) for b in offsets], dtype=torch.float32)
-    default_mass = asset.data.default_mass
+    default_mass = as_tensor(asset.data.default_mass)
     old = default_mass[:, idx].to("cpu").clone()
     new = old + delta
     if (new <= 0).any():
@@ -106,6 +107,6 @@ def apply_body_mass_offsets(
         inertias = asset.root_physx_view.get_inertias()
         inertias[:, idx] = inertias[:, idx] * ratio
         asset.root_physx_view.set_inertias(inertias, all_ids)
-        di = asset.data.default_inertia
+        di = as_tensor(asset.data.default_inertia)
         di[:, idx] = (di[:, idx].to("cpu") * ratio).to(di.device)
     asset.data.body_mass_offsets = dict(offsets)

@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
+from dropbear_wbc.isaac.compat import as_tensor
 
 AMP_CLIPS: tuple[str, ...] = (
     # walking at several speeds, turning, stopping, backwards (generated, AMASS, LAFAN1; retargeted and settled)
@@ -208,7 +209,7 @@ class AmpStyleReward(ManagerTermBase):
         self._motor_ids = self._robot.find_joints(list(AMP_MOTORS), preserve_order=True)[0]
         self._feet = self._robot.find_bodies(list(FEET), preserve_order=True)[0]
         self._hands = self._robot.find_bodies(list(HANDS), preserve_order=True)[0]
-        self._default = self._robot.data.default_joint_pos[0, self._motor_ids].clone()
+        self._default = as_tensor(self._robot.data.default_joint_pos)[0, self._motor_ids].clone()
         lib = Path(p.get("library", DEFAULT_LIBRARY))
         lib = lib if lib.is_absolute() else Path(__file__).resolve().parents[4] / lib
         self._ref, report = load_reference_transitions(list(AMP_MOTORS), self._default.cpu().numpy(), lib, device=env.device)

@@ -38,7 +38,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import body_quat_wxyz, cfg_quat
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, cfg_quat
 
 from dropbear_wbc.robots.dropbear_names import (
     JOINT_AXIS_FIXES,
@@ -208,7 +208,7 @@ class QuasiStaticDropbear:
         self.motor_ids = torch.tensor(ids, dtype=torch.long, device=self.device)
         self.motor_ids_list = list(ids)
         self.env_origins = self.scene.env_origins.clone()
-        lim = self.robot.data.joint_pos_limits[0].cpu().numpy()
+        lim = as_tensor(self.robot.data.joint_pos_limits)[0].cpu().numpy()
         self.joint_limits = lim  # (J, 2) rad or m
         self.motor_limits = lim[self.motor_ids_list]
         self.revolute_mask = torch.tensor([not n.startswith("head_LeadScrew") for n in self.joint_names],
@@ -218,8 +218,8 @@ class QuasiStaticDropbear:
         self._cl_i1 = torch.tensor([c.body1 for c in self.closures], device=self.device)
         self._cl_l0 = torch.tensor([c.local_pos0 for c in self.closures], dtype=torch.float32, device=self.device)
         self._cl_l1 = torch.tensor([c.local_pos1 for c in self.closures], dtype=torch.float32, device=self.device)
-        self.com_pos_b = self.robot.data.body_com_pos_b[0].cpu().numpy().astype(np.float64)
-        self.body_masses = self.robot.data.default_mass[0].cpu().numpy().astype(np.float64)
+        self.com_pos_b = as_tensor(self.robot.data.body_com_pos_b)[0].cpu().numpy().astype(np.float64)
+        self.body_masses = as_tensor(self.robot.data.default_mass)[0].cpu().numpy().astype(np.float64)
         self.stage_fixes = self._check_stage_fixes()
         self.physics_steps = 0
 
@@ -331,7 +331,7 @@ class QuasiStaticDropbear:
         """Closure anchor gaps [m], shape (N, C)."""
         from dropbear_wbc.isaac.qmath import quat_apply
 
-        bp, bq = self.robot.data.body_link_pos_w, body_quat_wxyz(self.robot, link=True)
+        bp, bq = as_tensor(self.robot.data.body_link_pos_w), body_quat_wxyz(self.robot, link=True)
         n, c = bp.shape[0], self._cl_i0.numel()
         a0 = bp[:, self._cl_i0] + quat_apply(bq[:, self._cl_i0].reshape(-1, 4),
                                              self._cl_l0.expand(n, c, 3).reshape(-1, 3)).reshape(n, c, 3)
@@ -345,7 +345,7 @@ class QuasiStaticDropbear:
 
     def joint_delta(self, q_ref: torch.Tensor) -> torch.Tensor:
         """max |q - q_ref| per env (revolute differences wrapped to [-pi, pi)), shape (N,)."""
-        d = self.robot.data.joint_pos - q_ref
+        d = as_tensor(self.robot.data.joint_pos) - q_ref
         d = torch.where(self.revolute_mask, _wrap(d), d)
         return d.abs().max(dim=-1).values
 
@@ -359,21 +359,21 @@ class QuasiStaticDropbear:
         """
         total = ramp_steps + hold_steps
         snap_at = max(0, total - window)
-        q_ref = self.robot.data.joint_pos.clone() if snap_at == 0 else None
+        q_ref = as_tensor(self.robot.data.joint_pos).clone() if snap_at == 0 else None
         k = 0
         for i in range(1, ramp_steps + 1):
             self.set_motor_targets(start + (end - start) * (i / ramp_steps))
             self.step(1)
             k += 1
             if k == snap_at:
-                q_ref = self.robot.data.joint_pos.clone()
+                q_ref = as_tensor(self.robot.data.joint_pos).clone()
         self.set_motor_targets(end)
         for _ in range(hold_steps):
             self.step(1)
             k += 1
             if k == snap_at:
-                q_ref = self.robot.data.joint_pos.clone()
-        motor_err = (self.robot.data.joint_pos[:, self.motor_ids] - end).abs().max(dim=-1).values
+                q_ref = as_tensor(self.robot.data.joint_pos).clone()
+        motor_err = (as_tensor(self.robot.data.joint_pos)[:, self.motor_ids] - end).abs().max(dim=-1).values
         return {"dq_window": self.joint_delta(q_ref), "gap": self.worst_gap(), "motor_err": motor_err,
                 "steps": total}
 

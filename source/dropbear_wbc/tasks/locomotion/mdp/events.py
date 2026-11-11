@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
-from dropbear_wbc.isaac.compat import write_root_state
+from dropbear_wbc.isaac.compat import as_tensor, write_root_state
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
@@ -96,7 +96,7 @@ class reset_from_standing_npz(ManagerTermBase):
         self.npz_default_pose_max_abs_diff: float | None = None
         built_for = self.meta.get("default_motor_pos")
         if isinstance(built_for, dict) and all(n in built_for for n in MOTOR_NAMES):
-            live = self.robot.data.default_joint_pos[0, motor_ids].cpu()
+            live = as_tensor(self.robot.data.default_joint_pos)[0, motor_ids].cpu()
             ref = torch.tensor([float(built_for[n]) for n in MOTOR_NAMES])
             self.npz_default_pose_max_abs_diff = float((live - ref).abs().max())
             if self.npz_default_pose_max_abs_diff > 0.02:
@@ -149,7 +149,7 @@ class reset_from_standing_npz(ManagerTermBase):
         # -- joints: full settled row; noise on serial motors only, clipped to the hard limits
         joint_pos = self.joint_pos[f].clone()
         joint_vel = self.joint_vel[f].clone()
-        limits = self.robot.data.joint_pos_limits[env_ids]
+        limits = as_tensor(self.robot.data.joint_pos_limits)[env_ids]
         for ids, (lo, hi) in ((self.leg_serial_ids, leg_serial_noise), (self.arm_serial_ids, arm_serial_noise)):
             if lo != 0.0 or hi != 0.0:
                 q = joint_pos[:, ids] + sample_uniform(lo, hi, (n, len(ids)), dev)
