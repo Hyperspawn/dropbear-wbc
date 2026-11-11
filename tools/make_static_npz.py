@@ -31,7 +31,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -133,9 +133,9 @@ def main(report: dict) -> int:  # noqa: C901
     mon = ClosureMonitor(find_closures("/World/envs/env_0/Robot", list(robot.body_names)), sim.device)
 
     # 1. authored rest pose (all zeros) -> consistent closures
-    zeros = torch.zeros_like(robot.data.default_joint_pos)
+    zeros = torch.zeros_like(as_tensor(robot.data.default_joint_pos))
     robot.write_joint_state_to_sim(zeros, zeros)
-    default = robot.data.default_joint_pos.clone()
+    default = as_tensor(robot.data.default_joint_pos).clone()
 
     def step(n: int) -> None:
         for _ in range(n):
@@ -158,21 +158,21 @@ def main(report: dict) -> int:  # noqa: C901
     while t_hold < args.max_settle_s:
         step(20)
         t_hold += 20 * physics_dt
-        history.append(robot.data.body_link_pos_w[0].clone())
+        history.append(as_tensor(robot.data.body_link_pos_w)[0].clone())
         drift = float((history[-1] - history[-1 - window]).norm(dim=-1).max()) if len(history) > window else float("inf")
-        vmax = float(robot.data.joint_vel.abs().max())
-        vmot = float(robot.data.joint_vel[:, mids].abs().max())
-        vbody = float(robot.data.body_link_lin_vel_w.norm(dim=-1).max())
-        gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[0])
+        vmax = float(as_tensor(robot.data.joint_vel).abs().max())
+        vmot = float(as_tensor(robot.data.joint_vel)[:, mids].abs().max())
+        vbody = float(as_tensor(robot.data.body_link_lin_vel_w).norm(dim=-1).max())
+        gap = float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))[0])
         trace.append({"t_s": round(args.ramp_s + t_hold, 2), "drift_1s_m": round(drift, 7), "max_joint_vel": round(vmax, 5),
                       "max_motor_vel": round(vmot, 5), "max_body_speed_m_s": round(vbody, 5), "closure_gap_m": round(gap, 6)})
         if drift < args.drift_tol and vmot < args.motor_vel_tol * 5 and t_hold >= 2.0:
             settled = True
             break
-    qd = robot.data.joint_vel[0].abs()
+    qd = as_tensor(robot.data.joint_vel)[0].abs()
     top = torch.topk(qd, 5)
     report["top_joint_speeds_rad_s"] = {robot.joint_names[int(i)]: round(float(v), 5) for v, i in zip(top.values, top.indices)}
-    vb = robot.data.body_link_lin_vel_w[0].norm(dim=-1)
+    vb = as_tensor(robot.data.body_link_lin_vel_w)[0].norm(dim=-1)
     topb = torch.topk(vb, 3)
     report["top_body_speeds_m_s"] = {robot.body_names[int(i)]: round(float(v), 6) for v, i in zip(topb.values, topb.indices)}
     report["settle_trace"] = trace[:: max(1, len(trace) // 20)] + trace[-1:]
@@ -181,10 +181,10 @@ def main(report: dict) -> int:  # noqa: C901
         print(json.dumps({"phase": "settle", "warning": "did not reach tolerances", "last": trace[-1]}), flush=True)
 
     body_names = list(robot.body_names)
-    pos = robot.data.body_link_pos_w[0].clone() - scene.env_origins[0]
+    pos = as_tensor(robot.data.body_link_pos_w)[0].clone() - scene.env_origins[0]
     quat = body_quat_wxyz(robot, link=True)[0].clone()
-    joint_pos = robot.data.joint_pos[0].clone()
-    closure = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[0])
+    joint_pos = as_tensor(robot.data.joint_pos)[0].clone()
+    closure = float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))[0])
 
     # 3. lowest collision vertex -> ground
     pts = collision_points_body_frame("/World/envs/env_0/Robot", body_names)

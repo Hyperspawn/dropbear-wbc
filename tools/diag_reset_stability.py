@@ -20,7 +20,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 from isaaclab.app import AppLauncher  # noqa: E402
@@ -73,8 +73,8 @@ def main() -> dict:
                  "steps": []}
     # state right after reset vs the reference frame
     q_ref0 = cmd.motion.full_joint_pos[cmd.time_steps]
-    rep["reset_joint_pos_err_max"] = float((robot.data.joint_pos - q_ref0).abs().max())
-    rep["reset_gap_max_m"] = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).max())
+    rep["reset_joint_pos_err_max"] = float((as_tensor(robot.data.joint_pos) - q_ref0).abs().max())
+    rep["reset_gap_max_m"] = float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True)).max())
     first_term: dict = {}
     scale = act._scale if torch.is_tensor(act._scale) else torch.tensor(act._scale, device=uw.device)
     offset = act._offset
@@ -84,13 +84,13 @@ def main() -> dict:
         else:
             a = (cmd.joint_pos - offset) / scale
         obs, rew, term, trunc, info = env.step(a)
-        jv = robot.data.joint_vel.abs()
+        jv = as_tensor(robot.data.joint_vel).abs()
         vmax, imax = jv.max(dim=1)
         top = torch.topk(jv[0], 4)
-        gaps = mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))
-        row = {"k": k, "anchor_z": float(robot.data.body_link_pos_w[0, ia, 2]),
+        gaps = mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))
+        row = {"k": k, "anchor_z": float(as_tensor(robot.data.body_link_pos_w)[0, ia, 2]),
                "ref_anchor_z": float(cmd.anchor_pos_w[0, 2]),
-               "feet_z_min": float(robot.data.body_link_pos_w[0, feet, 2].min()),
+               "feet_z_min": float(as_tensor(robot.data.body_link_pos_w)[0, feet, 2].min()),
                "joint_vel_max_env0": float(vmax[0]), "top_joints_env0": {jn[int(i)]: round(float(v), 2) for v, i in zip(top.values, top.indices)},
                "gap_max_mm": 1e3 * float(gaps.max()), "done_envs": int((term | trunc).sum()),
                "err_joint_pos": float(cmd.metrics["error_joint_pos"].mean()), "err_body_pos": float(cmd.metrics["error_body_pos"].mean())}

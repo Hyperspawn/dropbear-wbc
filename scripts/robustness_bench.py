@@ -30,7 +30,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -255,7 +255,7 @@ def main() -> int:  # noqa: C901
     alive = torch.ones(num_envs, dtype=torch.bool, device=dev)
     fall_step = torch.full((num_envs,), -1, dtype=torch.long, device=dev)
     fall_term: list[str | None] = [None] * num_envs
-    start_xy = robot.data.root_pos_w[:, :2].clone()
+    start_xy = as_tensor(robot.data.root_pos_w)[:, :2].clone()
     progress = torch.zeros(num_envs, device=dev)
     tilt_max = torch.zeros(num_envs, device=dev)
     if args.mode == "push":
@@ -293,7 +293,7 @@ def main() -> int:  # noqa: C901
         tilt = torch.rad2deg(torch.acos(torch.clamp(-g[:, 2], -1.0, 1.0)))
         tilt_max = torch.where(alive, torch.maximum(tilt_max, tilt), tilt_max)
         if args.mode == "terrain":
-            d = robot.data.root_pos_w[:, :2] - start_xy
+            d = as_tensor(robot.data.root_pos_w)[:, :2] - start_xy
             progress = torch.where(alive, d[:, 0], progress)  # tiles start at yaw 0: the command is along +x
 
     if recorder is not None:

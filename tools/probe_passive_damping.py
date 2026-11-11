@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
@@ -164,7 +165,7 @@ def child(variant: str) -> int:
             arr = getter().cpu().numpy()
             rb[key] = {f"env{e}": sorted(set(np.round(arr[e, passive], 6).tolist())) for e in range(n)}
         rb["isaaclab_joint_damping"] = {f"env{e}": sorted(set(np.round(
-            robot.data.joint_damping[e, passive].cpu().numpy(), 6).tolist())) for e in range(n)}
+            as_tensor(robot.data.joint_damping)[e, passive].cpu().numpy(), 6).tolist())) for e in range(n)}
         report["readback_passive"] = rb
         print("[pd] readback", json.dumps(rb), flush=True)
 
@@ -174,20 +175,20 @@ def child(variant: str) -> int:
                 sim.step(render=False)
                 scene.update(dt)
 
-        zeros = torch.zeros_like(robot.data.joint_pos)
+        zeros = torch.zeros_like(as_tensor(robot.data.joint_pos))
         robot.write_joint_state_to_sim(zeros, zeros)
         robot.set_joint_position_target(torch.zeros(n, len(mids), device=dev), joint_ids=mids)
         step(40)  # 0.2 s settle at the rest pose (gravity off: nothing should move)
-        rest_vel = float(robot.data.joint_vel.abs().max())
+        rest_vel = float(as_tensor(robot.data.joint_vel).abs().max())
         report["rest_max_joint_speed"] = rest_vel
 
         # test free4bar: free the elbow/knee motors in envs 0-3
         env_a = torch.arange(0, 4, device=dev)
         robot.write_joint_stiffness_to_sim(torch.zeros(4, 4, device=dev), joint_ids=free_ids, env_ids=env_a)
         robot.write_joint_damping_to_sim(torch.zeros(4, 4, device=dev), joint_ids=free_ids, env_ids=env_a)
-        lim = robot.data.joint_pos_limits[0].cpu().numpy()
-        pos = robot.data.joint_pos.clone()
-        vel = robot.data.joint_vel.clone()
+        lim = as_tensor(robot.data.joint_pos_limits)[0].cpu().numpy()
+        pos = as_tensor(robot.data.joint_pos).clone()
+        vel = as_tensor(robot.data.joint_vel).clone()
         vel[:] = 0.0
         signs = {}
         for j in free_ids:
@@ -199,14 +200,14 @@ def child(variant: str) -> int:
             vel[4:8, j] = 3.0
         report["initial_velocity_signs"] = signs
         robot.write_joint_state_to_sim(pos, vel)
-        p0 = robot.data.joint_pos.clone()
+        p0 = as_tensor(robot.data.joint_pos).clone()
         hist = {}
         t = 0.0
         for cs in CHECK_S:
             while t < cs - 1e-9:
                 step(1)
                 t += dt
-            hist[cs] = (robot.data.joint_pos.clone(), robot.data.joint_vel.clone())
+            hist[cs] = (as_tensor(robot.data.joint_pos).clone(), as_tensor(robot.data.joint_vel).clone())
         cases = []
         for e in range(n):
             d = float(ARGS.dampings[e % 4])

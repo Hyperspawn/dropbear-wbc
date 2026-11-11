@@ -35,7 +35,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -194,7 +194,7 @@ def main() -> int:  # noqa: C901
             kb[i].tele_step = 0
             kb[i].tracking = False
 
-    q22_all = robot.data.joint_pos[:, motor_ids].cpu().numpy().astype(np.float64)
+    q22_all = as_tensor(robot.data.joint_pos)[:, motor_ids].cpu().numpy().astype(np.float64)
     act_prev = np.tile(motor_rest10, (n_env, 1))
     for i in range(n_env):
         if active[i]:
@@ -235,13 +235,13 @@ def main() -> int:  # noqa: C901
     try:
         while any(active) and time.perf_counter() - t_start < args.max_wall_s:
             ts = time.perf_counter()
-            q22_all = robot.data.joint_pos[:, motor_ids].cpu().numpy().astype(np.float64)
-            dq22_all = robot.data.joint_vel[:, motor_ids].cpu().numpy().astype(np.float64)
+            q22_all = as_tensor(robot.data.joint_pos)[:, motor_ids].cpu().numpy().astype(np.float64)
+            dq22_all = as_tensor(robot.data.joint_vel)[:, motor_ids].cpu().numpy().astype(np.float64)
             org = uw.scene.env_origins
-            bpos = (uw.scene["block"].data.root_pos_w - org - root_w).cpu().numpy()
+            bpos = (as_tensor(uw.scene["block"].data.root_pos_w) - org - root_w).cpu().numpy()
             bquat = root_quat_wxyz(uw.scene["block"]).cpu().numpy()
             zpos = zone_pos_root(uw).cpu().numpy()
-            hpos = (robot.data.body_pos_w[:, hand_ids] - org[:, None] - root_w).cpu().numpy()
+            hpos = (as_tensor(robot.data.body_pos_w)[:, hand_ids] - org[:, None] - root_w).cpu().numpy()
             hquat = body_quat_wxyz(robot, hand_ids).cpu().numpy()
             succ_now = success_now(uw).cpu().numpy()
             images = {}
@@ -329,7 +329,7 @@ def main() -> int:  # noqa: C901
                 t_succ = tm.get_term("success").cpu().numpy()
                 t_drop = tm.get_term("block_dropped").cpu().numpy()
                 t_out = tm.get_term("time_out").cpu().numpy()
-                q22_new = robot.data.joint_pos[:, motor_ids].cpu().numpy().astype(np.float64)
+                q22_new = as_tensor(robot.data.joint_pos)[:, motor_ids].cpu().numpy().astype(np.float64)
                 for i in np.nonzero(done)[0].tolist():
                     if not active[i]:
                         continue

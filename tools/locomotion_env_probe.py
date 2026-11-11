@@ -24,7 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -93,11 +93,11 @@ def main(report: dict) -> int:  # noqa: C901
     foot_ids = [names.index(n) for n in N.FOOT_BODIES]
     # contact forces need a physics step: measure after ONE zero-action policy step (0.02 s after the reset);
     # the kinematic checks below (closure gaps, joint row, anchor) are taken before it, right after env.reset()
-    kin = {"body_pos": robot.data.body_link_pos_w.clone(), "body_quat": body_quat_wxyz(robot, link=True).clone(),
-           "joint_pos": robot.data.joint_pos.clone(), "g_root": robot.data.projected_gravity_b.clone()}
+    kin = {"body_pos": as_tensor(robot.data.body_link_pos_w).clone(), "body_quat": body_quat_wxyz(robot, link=True).clone(),
+           "joint_pos": as_tensor(robot.data.joint_pos).clone(), "g_root": as_tensor(robot.data.projected_gravity_b).clone()}
     zero = torch.zeros(uw.num_envs, uw.action_manager.total_action_dim, device=uw.device)
     _, _, term0, trunc0, _ = env.step(zero)
-    forces = contact.data.net_forces_w.norm(dim=-1)  # (N, B)
+    forces = as_tensor(contact.data.net_forces_w).norm(dim=-1)  # (N, B)
     non_foot = [i for i in range(len(names)) if i not in foot_ids]
     nf_contact = forces[:, non_foot] > 1.0
     nf_bodies = sorted({names[non_foot[j]] for j in torch.nonzero(nf_contact)[:, 1].tolist()})
@@ -109,7 +109,7 @@ def main(report: dict) -> int:  # noqa: C901
     passive[motor_ids] = False
     jd = (kin["joint_pos"] - q_npz0).abs()
     off = torch.tensor(N.ANCHOR_FRAME_OFFSET_WXYZ, device=uw.device).expand(uw.num_envs, 4)
-    g_anchor = quat_apply_inverse(quat_mul(kin["body_quat"][:, anchor], off), robot.data.GRAVITY_VEC_W)
+    g_anchor = quat_apply_inverse(quat_mul(kin["body_quat"][:, anchor], off), as_tensor(robot.data.GRAVITY_VEC_W))
     g_root = kin["g_root"]
     # lowest point proxy: link-origin heights of non-foot bodies (not collision geometry)
     body_z = kin["body_pos"][:, :, 2] - uw.scene.env_origins[:, 2:3]
@@ -123,7 +123,7 @@ def main(report: dict) -> int:  # noqa: C901
         "non_foot_bodies_in_contact": nf_bodies,
         "envs_with_non_foot_contact": int(nf_contact.any(dim=1).sum()),
         "total_robot_weight_N": round(float(robot.root_physx_view.get_masses().sum(dim=1).mean()) * 9.81, 1),
-        "total_contact_force_N_mean": round(float(contact.data.net_forces_w[:, :, 2].sum(dim=1).mean()), 1),
+        "total_contact_force_N_mean": round(float(as_tensor(contact.data.net_forces_w)[:, :, 2].sum(dim=1).mean()), 1),
         "closure_gap_m": {"median": float(g0.median()), "max": float(g0.max()), "npz_residual_max_m": reset_term.closure_max_m},
         "joint_row_vs_npz_max_abs": {"passive": float(jd[:, passive].max()), "motors": float(jd[:, motor_ids].max()),
                                       "note": "motors carry the serial-motor reset noise (legs +-0.02, arms +-0.1 rad)"},
@@ -165,17 +165,17 @@ def main(report: dict) -> int:  # noqa: C901
         for n in terms:
             term_counts[n] += int((uw.termination_manager.get_term(n) & done).sum())
         if bool(uw.termination_manager.get_term("non_foot_contact").any()):
-            hist = contact.data.net_forces_w_history.norm(dim=-1).max(dim=1).values  # (N, B)
+            hist = as_tensor(contact.data.net_forces_w_history).norm(dim=-1).max(dim=1).values  # (N, B)
             for e in torch.nonzero(uw.termination_manager.get_term("non_foot_contact")).flatten().tolist():
                 for b in torch.nonzero(hist[e] > 1.0).flatten().tolist():
                     if names[b] not in N.FOOT_BODIES:
                         contact_bodies_at_termination[names[b]] = contact_bodies_at_termination.get(names[b], 0) + 1
         for i, n in enumerate(rew_names):
             rew_sums[n] += float(uw.reward_manager._step_reward[:, i].mean())
-        gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).max())
+        gap = float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True)).max())
         worst_gap = max(worst_gap, gap)
         if step % 10 == 0 or step == args.steps - 1:
-            az = robot.data.body_link_pos_w[:, anchor, 2]
+            az = as_tensor(robot.data.body_link_pos_w)[:, anchor, 2]
             trace.append({"step": step, "t_s": round((step + 1) * uw.step_dt, 2), "anchor_z_mean": round(float(az.mean()), 4),
                           "anchor_z_min": round(float(az.min()), 4), "worst_gap_m": round(gap, 6), "resets_so_far": resets})
     ft = first_term[first_term >= 0].float() * uw.step_dt

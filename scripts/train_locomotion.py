@@ -21,6 +21,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 prepare_kit_python()
 
@@ -284,9 +285,9 @@ def main() -> int:
         "terrain": args.terrain, "stair_max_m": args.stair_max_m, "slope_max": args.slope_max,
         "feet_width_weight": args.feet_width_weight,
         "action_rate_weight": args.action_rate_weight,
-        "actuator_gains_sim": {n: {"kp": float(uw.scene["robot"].data.joint_stiffness[0, j]),
-                                   "kd": float(uw.scene["robot"].data.joint_damping[0, j]),
-                                   "effort": float(uw.scene["robot"].data.joint_effort_limits[0, j])}
+        "actuator_gains_sim": {n: {"kp": float(as_tensor(uw.scene["robot"].data.joint_stiffness)[0, j]),
+                                   "kd": float(as_tensor(uw.scene["robot"].data.joint_damping)[0, j]),
+                                   "effort": float(as_tensor(uw.scene["robot"].data.joint_effort_limits)[0, j])}
                                for n, j in zip(MOTOR_NAMES, uw.scene["robot"].find_joints(list(MOTOR_NAMES), preserve_order=True)[0])},
         "action_joint_names": list(action_term._joint_names),
         "action_scale": [float(x) for x in action_term._scale[0].tolist()] if hasattr(action_term._scale, "tolist") else action_term._scale,

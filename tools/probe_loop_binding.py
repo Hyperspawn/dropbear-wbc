@@ -21,6 +21,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--hold", type=int, default=30)
@@ -60,7 +61,7 @@ def main() -> int:
                                                 passive_damping=ARGS.passive_damping))
         # ---- damping read-back -------------------------------------------------------------------------
         phys = qs.robot.root_physx_view.get_dof_dampings()[0].cpu().numpy()
-        lab = qs.robot.data.joint_damping[0].cpu().numpy()
+        lab = as_tensor(qs.robot.data.joint_damping)[0].cpu().numpy()
         names = qs.joint_names
         mot = set(MOTOR_NAMES)
         passive = [i for i, n in enumerate(names) if n not in mot and not n.startswith("head_LeadScrew")]

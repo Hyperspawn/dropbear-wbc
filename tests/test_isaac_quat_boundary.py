@@ -278,3 +278,147 @@ def test_closure_monitor_needs_wxyz_feed_on_lab3(monkeypatch):
     assert float(mon.worst(pos, compat.body_quat_wxyz(lab3, link=True)).max()) < 1e-6
     raw = lab3.data.body_link_quat_w.torch  # what the unported tools passed
     assert float(mon.worst(pos, raw).max()) > 0.02  # spurious gap of the order of the 5-7 cm anchors
+
+
+# --------------------------------------------------------------------------- item 330: aliases + ProxyArray
+# ``d = robot.data; d.root_quat_w`` evaded the regex gate above (amp.py, quasistatic.py, play.py at 0b98f9a).
+# Isaac Lab 3.0 ``.data`` returns ProxyArray; raw use works only via its deprecation bridge (warns, to be removed).
+
+import ast  # noqa: E402
+
+QUAT_ATTR = re.compile(r"quat|_state_w$|_pose_w$|^default_root_state$")
+NON_ISAAC_DATA = {"output", "xpos"}  # camera output dict / MuJoCo MjData
+
+
+def _own_nodes(scope):
+    """Nodes of ``scope`` excluding nested function bodies."""
+    stack = list(ast.iter_child_nodes(scope))
+    while stack:
+        n = stack.pop()
+        yield n
+        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            stack.extend(ast.iter_child_nodes(n))
+
+
+def _data_aliases(scope):
+    out = set()
+    for n in _own_nodes(scope):
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Attribute) and n.value.attr == "data":
+            out |= {t.id for t in n.targets if isinstance(t, ast.Name)}
+    return out
+
+
+def _alias_scopes(tree):
+    """id(node) -> aliases bound in its own function (``d = robot.data`` is function-local)."""
+    m = {}
+    for f in [tree] + [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        al = _data_aliases(f)
+        for n in _own_nodes(f):
+            m[id(n)] = al
+    return m
+
+
+def _raw_data_loads(src, *, quat):
+    """(line, attr) of `.data.X` / `<alias>.X` loads; quat=True -> quaternion fields, False -> others not
+    wrapped in as_tensor(...)."""
+    tree = ast.parse(src)
+    scopes = _alias_scopes(tree)
+    wrapped = {id(c.args[0]) for c in ast.walk(tree) if isinstance(c, ast.Call) and c.args
+               and getattr(c.func, "id", getattr(c.func, "attr", None)) == "as_tensor"}
+    hits = []
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load)):
+            continue
+        v = n.value
+        via = (isinstance(v, ast.Attribute) and v.attr == "data") or (isinstance(v, ast.Name) and v.id in scopes.get(id(n), ()))
+        if not via or n.attr in NON_ISAAC_DATA or n.attr.startswith("_"):
+            continue
+        if bool(QUAT_ATTR.search(n.attr)) != quat:
+            continue
+        if not quat and id(n) in wrapped:
+            continue
+        hits.append((n.lineno, n.attr))
+    return hits
+
+
+def _scan(paths, *, quat, alias_only=False):
+    out = []
+    for p in paths:
+        src = p.read_text(encoding="utf-8")
+        for ln, a in _raw_data_loads(src, quat=quat):
+            line = src.splitlines()[ln - 1]
+            if alias_only and re.search(rf"\.data\.{a}\b", line):
+                continue
+            out.append(f"{p.relative_to(ROOT)}:{ln}: {line.strip()}")
+    return out
+
+
+def test_no_alias_quat_read_anywhere():
+    hits = _scan(_pkg_files() + _outside_files(), quat=True, alias_only=True)
+    assert not hits, "`d = x.data; d.*quat*` bypasses compat; use root_quat_wxyz/body_quat_wxyz:\n" + "\n".join(hits)
+
+
+def test_tools_scripts_wrap_isaac_data_in_as_tensor():
+    hits = _scan(_outside_files(), quat=False)
+    assert not hits, "wrap Isaac .data reads in compat.as_tensor(...) (Lab 3.0 ProxyArray):\n" + "\n".join(hits)
+
+
+def test_ast_gate_catches_planted_reads():
+    planted = ("def f(robot):\n    d = robot.data\n    return d.root_quat_w\n")
+    assert _raw_data_loads(planted, quat=True) == [(3, "root_quat_w")]
+    assert _raw_data_loads("x = robot.data.joint_pos[:, 0]\n", quat=False) == [(1, "joint_pos")]
+    assert _raw_data_loads("x = as_tensor(robot.data.joint_pos)[:, 0]\n", quat=False) == []
+    assert _raw_data_loads("robot.data.joint_pos = y\n", quat=False) == []
+    assert _raw_data_loads("im = cam.data.output['rgb']\n", quat=False) == []
+
+
+class _Proxy330:
+    """Isaac Lab 3.0 ProxyArray stand-in: `.torch` view + indexing bridge (values as stored, xyzw for quats)."""
+
+    def __init__(self, t):
+        self._t = t
+
+    @property
+    def torch(self):
+        return self._t
+
+    def __getitem__(self, k):
+        return self._t[k]
+
+
+class _Data330:
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, _Proxy330(v))
+
+
+class _Asset330:
+    def __init__(self, data):
+        self.data = data
+
+
+def _xyzw(q):
+    return q[..., [1, 2, 3, 0]]
+
+
+@needs_torch
+def test_amp_state_is_order_invariant(monkeypatch):
+    from dropbear_wbc.tasks.locomotion import amp
+
+    n, j, b = 5, 7, 6
+    g = torch.Generator().manual_seed(330)
+    rq = _rand_wxyz(n, seed=330).float()
+    kw = dict(joint_pos=torch.randn(n, j, generator=g), joint_vel=torch.randn(n, j, generator=g),
+              root_pos_w=torch.randn(n, 3, generator=g), root_lin_vel_w=torch.randn(n, 3, generator=g),
+              root_ang_vel_w=torch.randn(n, 3, generator=g), body_link_pos_w=torch.randn(n, b, 3, generator=g))
+    term = object.__new__(amp.AmpStyleReward)
+    term._motor_ids, term._feet, term._hands = [0, 2, 4], [1, 3], [2, 5]
+    term._default = torch.zeros(3)
+
+    monkeypatch.setenv("DROPBEAR_ISAAC_QUAT_ORDER", "wxyz")
+    term._robot = _Asset330(_Data330(root_quat_w=rq, **kw))
+    ref = term._state()
+    monkeypatch.setenv("DROPBEAR_ISAAC_QUAT_ORDER", "xyzw")
+    term._robot = _Asset330(_Data330(root_quat_w=_xyzw(rq), **kw))
+    got = term._state()
+    assert torch.allclose(ref, got, atol=1e-6), float((ref - got).abs().max())

@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
@@ -88,7 +88,7 @@ def child(tag: str) -> int:
         robot = scene["robot"]
         mids, mnames = robot.find_joints(list(D.MOTOR_NAMES), preserve_order=True)
         mon = ClosureMonitor(find_closures("/World/envs/env_0/Robot", list(robot.body_names)), sim.device)
-        lim = robot.data.joint_pos_limits[0, mids].cpu().numpy()
+        lim = as_tensor(robot.data.joint_pos_limits)[0, mids].cpu().numpy()
         default = torch.tensor([D.LEGACY_DEFAULT_MOTOR_POS[m] for m in D.MOTOR_NAMES], device=sim.device)
 
         def step(k: int) -> None:
@@ -97,13 +97,13 @@ def child(tag: str) -> int:
                 sim.step(render=False)
                 scene.update(dt)
 
-        zeros = torch.zeros_like(robot.data.joint_pos)
+        zeros = torch.zeros_like(as_tensor(robot.data.joint_pos))
         robot.write_joint_state_to_sim(zeros, zeros)
         for k in range(1, 101):  # 0.5 s ramp to the legacy default, then 1 s hold
             robot.set_joint_position_target((default * k / 100).expand(n, 22), joint_ids=mids)
             step(1)
         step(200)
-        start = robot.data.joint_pos[:, mids].clone()
+        start = as_tensor(robot.data.joint_pos)[:, mids].clone()
         tgt = start.clone()
         cases = []
         for e in range(44):  # every motor twice: single-motor step toward the inside of its range
@@ -135,8 +135,8 @@ def child(tag: str) -> int:
             while t < cs - 1e-9:
                 step(1)
                 t += dt
-                gap_max = torch.maximum(gap_max, mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)))
-            hist[cs] = robot.data.joint_pos[:, mids].clone()
+                gap_max = torch.maximum(gap_max, mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True)))
+            hist[cs] = as_tensor(robot.data.joint_pos)[:, mids].clone()
         rows = []
         for c in cases:
             j = c["j"]

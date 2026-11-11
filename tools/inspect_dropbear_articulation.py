@@ -32,7 +32,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -130,13 +130,13 @@ def main(report: dict) -> int:  # noqa: C901
         and len(set(covered)) == len(covered)
         and bn[0] == D.ROOT_BODY
     )
-    stiff = fixed.data.joint_stiffness[0].cpu()
-    damp = fixed.data.joint_damping[0].cpu()
-    eff = fixed.data.joint_effort_limits[0].cpu() if hasattr(fixed.data, "joint_effort_limits") else None
-    arm = fixed.data.joint_armature[0].cpu()
-    lim = fixed.data.joint_pos_limits[0].cpu()
-    fric = fixed.data.joint_friction_coeff[0].cpu() if hasattr(fixed.data, "joint_friction_coeff") else None
-    vmax = fixed.data.joint_vel_limits[0].cpu() if hasattr(fixed.data, "joint_vel_limits") else None
+    stiff = as_tensor(fixed.data.joint_stiffness)[0].cpu()
+    damp = as_tensor(fixed.data.joint_damping)[0].cpu()
+    eff = as_tensor(fixed.data.joint_effort_limits)[0].cpu() if hasattr(fixed.data, "joint_effort_limits") else None
+    arm = as_tensor(fixed.data.joint_armature)[0].cpu()
+    lim = as_tensor(fixed.data.joint_pos_limits)[0].cpu()
+    fric = as_tensor(fixed.data.joint_friction_coeff)[0].cpu() if hasattr(fixed.data, "joint_friction_coeff") else None
+    vmax = as_tensor(fixed.data.joint_vel_limits)[0].cpu() if hasattr(fixed.data, "joint_vel_limits") else None
     group_gains = {}
     for gname, names in groups.items():
         ids = [jn.index(n) for n in names]
@@ -183,7 +183,7 @@ def main(report: dict) -> int:  # noqa: C901
         "physx_nonzero_friction_props(static,dynamic,viscous)": physx_friction,
         "motor_mass_matrix_diag": mass_matrix_diag,
         "bicep_inertia_physx": bicep,
-        "default_motor_pos": {n: float(fixed.data.default_joint_pos[0, i]) for n, i in zip(motor_names, motor_ids)},
+        "default_motor_pos": {n: float(as_tensor(fixed.data.default_joint_pos)[0, i]) for n, i in zip(motor_names, motor_ids)},
     }
     print(json.dumps({"phase": "names", **{k: v for k, v in report["names"].items() if k not in ("joint_names", "body_names", "passive_joints")}}, indent=1), flush=True)
 
@@ -201,9 +201,9 @@ def main(report: dict) -> int:  # noqa: C901
 
     def rel_pose(robot: Articulation, ids: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
         """Body poses in the root link frame: pos (len(ids),3), quat (len(ids),4)."""
-        rp = robot.data.root_link_pos_w[0:1]
+        rp = as_tensor(robot.data.root_link_pos_w)[0:1]
         rq = root_quat_wxyz(robot, link=True)[0:1]
-        bp = robot.data.body_link_pos_w[0, ids]
+        bp = as_tensor(robot.data.body_link_pos_w)[0, ids]
         bq = body_quat_wxyz(robot, ids, link=True)[0]
         p = quat_apply_inverse(rq.expand(len(ids), 4), bp - rp)
         q = quat_mul(quat_inv(rq).expand(len(ids), 4), bq)
@@ -213,7 +213,7 @@ def main(report: dict) -> int:  # noqa: C901
     closures = find_closures(fixed.cfg.prim_path.replace("{ENV_REGEX_NS}", "/World/envs/env_0").replace(".*", "0"), bn)
     mon = ClosureMonitor(closures, sim.device)
     scene.update(dt)
-    gap0 = mon.gaps(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]
+    gap0 = mon.gaps(as_tensor(fixed.data.body_link_pos_w), body_quat_wxyz(fixed, link=True))[0]
     report["closures"] = {
         "count": len(closures),
         "names": mon.names,
@@ -241,7 +241,7 @@ def main(report: dict) -> int:  # noqa: C901
 
     # ------------------------------------------------------------------ targets: hold default pose
     for robot in (fixed, free, legacy):
-        robot.set_joint_position_target(robot.data.default_joint_pos.clone())
+        robot.set_joint_position_target(as_tensor(robot.data.default_joint_pos).clone())
         robot.write_data_to_sim()
 
     # ------------------------------------------------------------------ 3/4. spin + fall (free & legacy)
@@ -262,9 +262,9 @@ def main(report: dict) -> int:  # noqa: C901
         max_dp_mm = max(max_dp_mm, 1000.0 * float(torch.linalg.vector_norm(p_a - p_a0)))
         max_dq_deg = max(max_dq_deg, math.degrees(float(quat_error_magnitude(q_a, q_a0)[0])))
         if step % 20 == 0 or step == 199:
-            w_free.append(round(float(torch.linalg.vector_norm(free.data.body_link_ang_vel_w[0, 0])), 4))
-            w_legacy.append(round(float(torch.linalg.vector_norm(legacy.data.body_link_ang_vel_w[0, 0])), 4))
-        finite &= bool(torch.isfinite(free.data.body_link_pos_w).all() and torch.isfinite(legacy.data.body_link_pos_w).all())
+            w_free.append(round(float(torch.linalg.vector_norm(as_tensor(free.data.body_link_ang_vel_w)[0, 0])), 4))
+            w_legacy.append(round(float(torch.linalg.vector_norm(as_tensor(legacy.data.body_link_ang_vel_w)[0, 0])), 4))
+        finite &= bool(torch.isfinite(as_tensor(free.data.body_link_pos_w)).all() and torch.isfinite(as_tensor(legacy.data.body_link_pos_w)).all())
     anchor_ok = finite and max_dp_mm < 0.5 and max_dq_deg < 0.05
     report["anchor_rigidity"] = {
         "ok": anchor_ok,
@@ -289,15 +289,15 @@ def main(report: dict) -> int:  # noqa: C901
             sim.step(render=False)
             scene.update(dt)
 
-    default = fixed.data.default_joint_pos.clone()
+    default = as_tensor(fixed.data.default_joint_pos).clone()
     fixed.set_joint_position_target(default)
     settle_trace = {}
     for k in range(6):  # 3 s settle from the all-zero spawn state, sampled every 0.5 s
         run(100)
         settle_trace[f"{0.5 * (k + 1):.1f}s"] = {
-            n: round(float(fixed.data.joint_pos[0, i]), 4) for n, i in zip(motor_names, motor_ids)
+            n: round(float(as_tensor(fixed.data.joint_pos)[0, i]), 4) for n, i in zip(motor_names, motor_ids)
         }
-    gap_settled = mon.gaps(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]
+    gap_settled = mon.gaps(as_tensor(fixed.data.body_link_pos_w), body_quat_wxyz(fixed, link=True))[0]
     report["closures"]["settled_gap_max_m"] = float(gap_settled.max())
     report["closures"]["settled_gap_by_joint_m"] = {n: round(float(g), 6) for n, g in zip(mon.names, gap_settled)}
     report["settle_from_zero_nominal_gains"] = settle_trace
@@ -318,7 +318,7 @@ def main(report: dict) -> int:  # noqa: C901
     step_resp = {}
     sample_steps = {"0.1s": 20, "0.25s": 50, "0.5s": 100, "1.0s": 200, "2.0s": 400}
     for m_name, m_id in zip(motor_names, motor_ids):
-        start_q = float(fixed.data.joint_pos[0, m_id])
+        start_q = float(as_tensor(fixed.data.joint_pos)[0, m_id])
         target = sweep_targets(m_id)
         fixed.set_joint_position_target(target)
         tgt = float(target[0, m_id])
@@ -326,7 +326,7 @@ def main(report: dict) -> int:  # noqa: C901
         for label, n_steps in sample_steps.items():
             run(n_steps - done)
             done = n_steps
-            q = float(fixed.data.joint_pos[0, m_id])
+            q = float(as_tensor(fixed.data.joint_pos)[0, m_id])
             rec[label] = round((q - start_q) / (tgt - start_q), 3) if abs(tgt - start_q) > 1e-6 else None
         step_resp[m_name] = {"start": round(start_q, 4), "target": round(tgt, 4), "fraction_reached": rec}
         fixed.set_joint_position_target(default)
@@ -335,8 +335,8 @@ def main(report: dict) -> int:  # noqa: C901
     report["step_response_nominal_gains"] = step_resp
 
     # 5b. kinematic sweep with scaled motor gains (removes compliance / reaction-torque motion)
-    stiff = fixed.data.joint_stiffness.clone()
-    dampg = fixed.data.joint_damping.clone()
+    stiff = as_tensor(fixed.data.joint_stiffness).clone()
+    dampg = as_tensor(fixed.data.joint_damping).clone()
     mids = torch.as_tensor(motor_ids, dtype=torch.long, device=stiff.device)
     stiff[:, mids] *= args.stiff_factor
     dampg[:, mids] *= args.stiff_factor
@@ -355,8 +355,8 @@ def main(report: dict) -> int:  # noqa: C901
         dq = torch.rad2deg(quat_error_magnitude(q, base_q))
         motor_track[m_name] = {
             "target": round(float(target[0, m_id]), 4),
-            "reached": round(float(fixed.data.joint_pos[0, m_id]), 4),
-            "closure_gap_max_m": round(float(mon.worst(fixed.data.body_link_pos_w, body_quat_wxyz(fixed, link=True))[0]), 6),
+            "reached": round(float(as_tensor(fixed.data.joint_pos)[0, m_id]), 4),
+            "closure_gap_max_m": round(float(mon.worst(as_tensor(fixed.data.body_link_pos_w), body_quat_wxyz(fixed, link=True))[0]), 6),
         }
         matrix_pos[m_name] = {b: round(float(v), 2) for b, v in zip(D.TRACKED_BODIES, dp)}
         matrix_rot[m_name] = {b: round(float(v), 2) for b, v in zip(D.TRACKED_BODIES, dq)}

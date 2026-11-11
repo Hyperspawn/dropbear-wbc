@@ -33,6 +33,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 prepare_kit_python()
 
@@ -105,9 +106,9 @@ def main(report: dict) -> int:  # noqa: C901
     gid = torch.arange(n, device=dev) % G
 
     # per-env gain tables (PhysX + implicit actuator model), all joints
-    kp = robot.data.joint_stiffness.clone()
-    kd = robot.data.joint_damping.clone()
-    eff = robot.data.joint_effort_limits.clone() if hasattr(robot.data, "joint_effort_limits") else None
+    kp = as_tensor(robot.data.joint_stiffness).clone()
+    kd = as_tensor(robot.data.joint_damping).clone()
+    eff = as_tensor(robot.data.joint_effort_limits).clone() if hasattr(robot.data, "joint_effort_limits") else None
     legacy = {"knee_kp": float(kp[0, knee_ids[0]]), "knee_kd": float(kd[0, knee_ids[0]]),
               "hip_pitch_kp": float(kp[0, hp_ids[0]]), "hip_pitch_kd": float(kd[0, hp_ids[0]]),
               "knee_effort": float(eff[0, knee_ids[0]]) if eff is not None else None}
@@ -147,7 +148,7 @@ def main(report: dict) -> int:  # noqa: C901
     for side in ("left", "right"):
         d = calib["dofs"][f"{side}_knee"]
         luts.append((np.array(d["motor_grid"]), np.array(d["semantic_values"])))
-    q_def = robot.data.default_joint_pos.clone()
+    q_def = as_tensor(robot.data.default_joint_pos).clone()
     alive = torch.ones(n, dtype=torch.bool, device=dev)
     first_term = torch.full((n,), -1, dtype=torch.long, device=dev)
     tail = max(1, int(round(1.0 / uw.step_dt)))
@@ -164,9 +165,9 @@ def main(report: dict) -> int:  # noqa: C901
         newly = done & alive
         first_term[newly] = step
         alive &= ~done
-        q = robot.data.joint_pos
-        dq = robot.data.joint_vel
-        tgt = robot.data.joint_pos_target
+        q = as_tensor(robot.data.joint_pos)
+        dq = as_tensor(robot.data.joint_vel)
+        tgt = as_tensor(robot.data.joint_pos_target)
         tau = kp * (tgt - q) - kd * dq  # implicit PD (PhysX drive law), before the effort clip
         if eff is not None:
             tau = torch.maximum(torch.minimum(tau, eff), -eff)
@@ -184,7 +185,7 @@ def main(report: dict) -> int:  # noqa: C901
             acc["hp_tau"] += m * tau[:, hp_ids].mean(dim=1)
             acc_cnt += m
         if step % 10 == 0 or step == args.steps - 1:
-            az = robot.data.body_link_pos_w[:, anchor, 2]
+            az = as_tensor(robot.data.body_link_pos_w)[:, anchor, 2]
             row = {"step": step, "t_s": round((step + 1) * uw.step_dt, 2)}
             for i, g in enumerate(groups):
                 sel = (gid == i)
@@ -222,7 +223,7 @@ def main(report: dict) -> int:  # noqa: C901
                 equivalent_knee_tau_Nm=round(float((acc["knee_tau"][held] / cnt).mean()) / float(np.mean(slope)), 1),
                 reflected_knee_kp_Nm_per_rad=round(g["knee_kp"] / float(np.mean(slope)) ** 2, 1),
                 last_1s_mean_hip_pitch_tau_Nm=round(float((acc["hp_tau"][held] / cnt).mean()), 1),
-                anchor_z_end_mean=round(float(robot.data.body_link_pos_w[held, anchor, 2].mean()), 4),
+                anchor_z_end_mean=round(float(as_tensor(robot.data.body_link_pos_w)[held, anchor, 2].mean()), 4),
             )
         res[g["name"]] = r
         print(json.dumps({"group": g, **r}), flush=True)

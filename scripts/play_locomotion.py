@@ -29,7 +29,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -277,7 +277,7 @@ def main() -> int:  # noqa: C901
     acc = {k: torch.zeros(num_envs, device=dev) for k in ("n", "vx", "vy", "wz", "evx", "evy", "ewz", "single", "double",
                                                           "flight", "anchor_z", "td_l", "td_r")}
     anchor_min = torch.full((num_envs,), 9.0, device=dev)
-    start_xy = robot.data.root_pos_w[:, :2].clone()
+    start_xy = as_tensor(robot.data.root_pos_w)[:, :2].clone()
     end_xy = start_xy.clone()
     worst_gap = 0.0
     prev_contact = torch.ones(num_envs, 2, dtype=torch.bool, device=dev)
@@ -314,9 +314,9 @@ def main() -> int:  # noqa: C901
                                  if bool(uw.termination_manager.get_term(n)[e])), "?")
         # stats for envs still alive (before this step's fall)
         live = alive & ~terminated
-        vel_yaw = quat_apply_inverse(yaw_quat(root_quat_wxyz(robot)), robot.data.root_lin_vel_w)
-        wz = robot.data.root_ang_vel_w[:, 2]
-        ct = sensor.data.current_contact_time[:, groups]
+        vel_yaw = quat_apply_inverse(yaw_quat(root_quat_wxyz(robot)), as_tensor(robot.data.root_lin_vel_w))
+        wz = as_tensor(robot.data.root_ang_vel_w)[:, 2]
+        ct = as_tensor(sensor.data.current_contact_time)[:, groups]
         in_contact = (ct > 0.0).any(dim=-1)
         n_c = in_contact.sum(dim=1)
         touchdown = in_contact & ~prev_contact
@@ -335,20 +335,20 @@ def main() -> int:  # noqa: C901
             acc["single"] += m * (n_c == 1).float()
             acc["double"] += m * (n_c == 2).float()
             acc["flight"] += m * (n_c == 0).float()
-            acc["anchor_z"] += m * robot.data.body_link_pos_w[:, anchor, 2]
+            acc["anchor_z"] += m * as_tensor(robot.data.body_link_pos_w)[:, anchor, 2]
             acc["td_l"] += m * touchdown[:, 0].float()
             acc["td_r"] += m * touchdown[:, 1].float()
-            anchor_min = torch.where(live, torch.minimum(anchor_min, robot.data.body_link_pos_w[:, anchor, 2]), anchor_min)
-            worst_gap = max(worst_gap, float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[live].max())
+            anchor_min = torch.where(live, torch.minimum(anchor_min, as_tensor(robot.data.body_link_pos_w)[:, anchor, 2]), anchor_min)
+            worst_gap = max(worst_gap, float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))[live].max())
                             if bool(live.any()) else 0.0)
-            torque.add(robot.data.joint_vel[:, motor_ids], live)
-        end_xy = torch.where(live.unsqueeze(-1), robot.data.root_pos_w[:, :2], end_xy)
+            torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], live)
+        end_xy = torch.where(live.unsqueeze(-1), as_tensor(robot.data.root_pos_w)[:, :2], end_xy)
         alive &= ~terminated
         if step % 50 == 0 or step == args.steps - 1:
             trace.append({"t_s": round((step + 1) * uw.step_dt, 2), "alive": int(alive.sum()),
                           "cmd0": [round(float(x), 2) for x in c[0]],
                           "vel_yaw0": [round(float(x), 3) for x in vel_yaw[0, :2]] + [round(float(wz[0]), 3)],
-                          "anchor_z0": round(float(robot.data.body_link_pos_w[0, anchor, 2]), 3)})
+                          "anchor_z0": round(float(as_tensor(robot.data.body_link_pos_w)[0, anchor, 2]), 3)})
 
     dt = uw.step_dt
     per_env = []

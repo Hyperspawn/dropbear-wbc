@@ -24,7 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -97,7 +97,7 @@ def main(report: dict) -> int:  # noqa: C901
     # default (action-offset) motor pose actually used by the articulation vs the config's resolved pose
     motor_ids, _ = robot.find_joints(list(N.MOTOR_NAMES), preserve_order=True)
     cfg_pose = torch.tensor([cfg.scene.robot.init_state.joint_pos[n] for n in N.MOTOR_NAMES], device=uw.device)
-    live_default = robot.data.default_joint_pos[:, motor_ids]
+    live_default = as_tensor(robot.data.default_joint_pos)[:, motor_ids]
     offset = uw.action_manager.get_term("joint_pos")._offset
     report["default_pose"] = {
         "source": cfg.default_pose_source,
@@ -112,11 +112,11 @@ def main(report: dict) -> int:  # noqa: C901
 
     if args.mode == "smoke":
         mon = ClosureMonitor(find_closures("/World/envs/env_0/Robot", list(robot.body_names)), uw.device)
-        g0 = mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))
+        g0 = mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))
         report["gap_after_reset_m"] = {"median": float(g0.median()), "max": float(g0.max()),
                                        "npz_closure_residual_max_m": float(uw.command_manager.get_term("motion").motion.arrays_closure_max)}
         feet_ids = [contact.body_names.index(n) for n in N.FOOT_BODIES]
-        f0 = contact.data.net_forces_w[:, feet_ids].norm(dim=-1)
+        f0 = as_tensor(contact.data.net_forces_w)[:, feet_ids].norm(dim=-1)
         report["reset_feet_contact_force_N_mean"] = float(f0.mean())
         terms = uw.termination_manager.active_terms
         term_counts = {n: 0 for n in terms}
@@ -127,7 +127,7 @@ def main(report: dict) -> int:  # noqa: C901
         for step in range(args.steps):
             obs, rew, terminated, truncated, info = env.step(actions)
             ok = all(bool(torch.isfinite(v).all()) for v in obs.values()) and bool(torch.isfinite(rew).all())
-            ok &= bool(torch.isfinite(robot.data.root_state_w).all()) and bool(torch.isfinite(robot.data.body_link_pos_w).all())
+            ok &= bool(torch.isfinite(robot.data.root_state_w).all()) and bool(torch.isfinite(as_tensor(robot.data.body_link_pos_w)).all())
             if not ok and first_bad is None:
                 first_bad = step
             finite_all &= ok
@@ -137,11 +137,11 @@ def main(report: dict) -> int:  # noqa: C901
                 term_counts[n] += int((uw.termination_manager.get_term(n) & done).sum())
             for i, n in enumerate(rew_names):
                 rew_sums[n] += float(uw.reward_manager._step_reward[:, i].mean())
-            gap = float(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).max())
+            gap = float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True)).max())
             worst_gap = max(worst_gap, gap)
             if step % 25 == 0 or step == args.steps - 1:
                 gap_trace.append({"step": step, "worst_closure_gap_m": round(gap, 6),
-                                  "anchor_z_mean": round(float(robot.data.body_link_pos_w[:, robot.body_names.index(N.ANCHOR_BODY), 2].mean()), 4),
+                                  "anchor_z_mean": round(float(as_tensor(robot.data.body_link_pos_w)[:, robot.body_names.index(N.ANCHOR_BODY), 2].mean()), 4),
                                   "resets_so_far": resets})
         report.update(
             steps=args.steps,
@@ -216,17 +216,17 @@ def standing_hold(env, robot, actions, steps: int) -> dict:
     a_idx = robot.body_names.index(N.ANCHOR_BODY)
     n = uw.num_envs
     alive = torch.ones(n, dtype=torch.bool, device=uw.device)
-    gap0 = mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))
+    gap0 = mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))
     samples, per_closure = [], torch.zeros(len(mon.names), device=uw.device)
     standing_frac = []
     for _ in range(steps):
         _, _, terminated, truncated, _ = env.step(actions)
         alive &= ~(terminated | truncated)
-        dz = (robot.data.body_link_pos_w[:, a_idx, 2] - cmd.anchor_pos_w[:, 2]).abs()
+        dz = (as_tensor(robot.data.body_link_pos_w)[:, a_idx, 2] - cmd.anchor_pos_w[:, 2]).abs()
         standing = alive & (dz < 0.05)
         standing_frac.append(float(standing.float().mean()))
         if bool(standing.any()):
-            g = mon.gaps(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True))[standing]
+            g = mon.gaps(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))[standing]
             samples.append(g.max(dim=-1).values)
             per_closure = torch.maximum(per_closure, g.max(dim=0).values)
     out = {

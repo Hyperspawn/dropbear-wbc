@@ -28,6 +28,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 prepare_kit_python()
 from isaaclab.app import AppLauncher  # noqa: E402
@@ -157,8 +158,8 @@ def main() -> dict:  # noqa: C901
     all_ids = torch.arange(uw.num_envs, device=uw.device)
     cmd._resample_command(all_ids)
     cid = cmd.clip_ids.cpu().numpy()
-    jp = robot.data.joint_pos.cpu().numpy()
-    rp = robot.data.root_link_pos_w.cpu().numpy() - uw.scene.env_origins.cpu().numpy()
+    jp = as_tensor(robot.data.joint_pos).cpu().numpy()
+    rp = as_tensor(robot.data.root_link_pos_w).cpu().numpy() - uw.scene.env_origins.cpu().numpy()
     jerr, rerr = 0.0, 0.0
     for e in range(uw.num_envs):
         n = npz[cid[e]]

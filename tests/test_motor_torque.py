@@ -269,7 +269,7 @@ def test_play_scripts_use_shared_sampler(script):
 def test_play_py_tracking_mask_and_per_clip():
     src = (ROOT / "scripts/play.py").read_text(encoding="utf-8")
     assert "tracking_sample_mask(d, ts_prev, command.time_steps, wrap_rewrites)" in src
-    assert "torque.add(robot.data.joint_vel[:, motor_ids], tq_ok, groups=env_clip if is_library else None)" in src
+    assert "torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], tq_ok, groups=env_clip if is_library else None)" in src
     assert "ts_prev = command.time_steps.clone()" in src
     assert 'per_clip[name]["motor_torque"] = clip_torque[c]' in src
     assert '"perturbed": bool(args.perturbed)' in src

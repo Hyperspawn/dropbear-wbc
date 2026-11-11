@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
@@ -104,17 +105,17 @@ def child() -> int:
         # 1. rest hold
         zero = torch.zeros(qs.num_envs, len(qs.joint_names), device=qs.device)
         qs.write_joint_state(zero)
-        root0 = qs.robot.data.root_link_pos_w.clone()
+        root0 = as_tensor(qs.robot.data.root_link_pos_w).clone()
         rest = []
         torch.cuda.synchronize()
         t = time.time()
         for k in range(6):
             qs.step(10)
             rest.append({"step": 10 * (k + 1), "worst_gap_mm": 1e3 * float(qs.worst_gap().max()),
-                         "root_drift_mm": 1e3 * float((qs.robot.data.root_link_pos_w - root0).norm(dim=-1).max()),
+                         "root_drift_mm": 1e3 * float((as_tensor(qs.robot.data.root_link_pos_w) - root0).norm(dim=-1).max()),
                          "root_offset_from_env_origin_mm": 1e3 * float(
-                             (qs.robot.data.root_link_pos_w - qs.env_origins).norm(dim=-1).max()),
-                         "max_abs_joint_vel": float(qs.robot.data.joint_vel.abs().max())})
+                             (as_tensor(qs.robot.data.root_link_pos_w) - qs.env_origins).norm(dim=-1).max()),
+                         "max_abs_joint_vel": float(as_tensor(qs.robot.data.joint_vel).abs().max())})
         torch.cuda.synchronize()
         report["rest_ms_per_step"] = 1e3 * (time.time() - t) / 60
         report["rest"] = rest
@@ -125,7 +126,7 @@ def child() -> int:
         report["sweep_ms_per_step"] = float(rec["ms_per_step"])
         report["sweep_wall_s"] = float(rec["wall_s"])
         report["sweep_physics_steps"] = int(rec["physics_steps"])
-        report["root_drift_after_sweep_mm"] = 1e3 * float((qs.robot.data.root_link_pos_w - root0).norm(dim=-1).max())
+        report["root_drift_after_sweep_mm"] = 1e3 * float((as_tensor(qs.robot.data.root_link_pos_w) - root0).norm(dim=-1).max())
         cl_names = [c.name for c in qs.closures]
         per = {}
         for pid, pr in enumerate(progs):

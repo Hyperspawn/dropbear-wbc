@@ -401,20 +401,22 @@ class QuasiStaticDropbear:
         ``motor_pos`` (N,22), ``motor_target`` (N,22), ``root_pos_w`` (N,3, minus env origin),
         ``root_quat_w`` (N,4), ``gaps`` (N,C).
         """
+        from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz
         from dropbear_wbc.isaac.qmath import quat_apply_inverse, quat_conjugate, quat_mul
 
         d = self.robot.data
-        root_p = d.root_link_pos_w
-        root_q = d.root_link_quat_w
-        bp, bq = d.body_link_pos_w, d.body_link_quat_w
+        root_p = as_tensor(d.root_link_pos_w)
+        root_q = root_quat_wxyz(self.robot, link=True)
+        bp, bq = as_tensor(d.body_link_pos_w), body_quat_wxyz(self.robot, link=True)
         n, b = bp.shape[:2]
         rq = root_q[:, None, :].expand(n, b, 4).reshape(-1, 4)
         rel_p = quat_apply_inverse(rq, (bp - root_p[:, None, :]).reshape(-1, 3)).reshape(n, b, 3)
         rel_q = quat_mul(quat_conjugate(rq), bq.reshape(-1, 4)).reshape(n, b, 4)
         rel_q = rel_q * torch.where(rel_q[..., :1] < 0, -1.0, 1.0)
         out = {
-            "joint_pos": d.joint_pos, "joint_vel": d.joint_vel, "body_pos": rel_p, "body_quat": rel_q,
-            "motor_pos": d.joint_pos[:, self.motor_ids], "motor_target": d.joint_pos_target[:, self.motor_ids],
+            "joint_pos": as_tensor(d.joint_pos), "joint_vel": as_tensor(d.joint_vel), "body_pos": rel_p, "body_quat": rel_q,
+            "motor_pos": as_tensor(d.joint_pos)[:, self.motor_ids],
+            "motor_target": as_tensor(d.joint_pos_target)[:, self.motor_ids],
             "root_pos_w": root_p - self.env_origins, "root_quat_w": root_q, "gaps": self.gaps(),
         }
         return {k: v.detach().cpu().double().numpy() for k, v in out.items()}

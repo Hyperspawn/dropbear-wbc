@@ -233,10 +233,14 @@ class AmpStyleReward(ManagerTermBase):
         print(json.dumps({"amp": report | {"ref_shape": list(self._ref.shape)}}), flush=True)
 
     def _state(self) -> torch.Tensor:
+        from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz
+
         d = self._robot.data
-        return amp_features(d.joint_pos[:, self._motor_ids] - self._default, d.joint_vel[:, self._motor_ids],
-                            d.root_pos_w, d.root_quat_w, d.root_lin_vel_w, d.root_ang_vel_w,
-                            d.body_link_pos_w[:, self._feet], d.body_link_pos_w[:, self._hands])
+        bp = as_tensor(d.body_link_pos_w)
+        return amp_features(as_tensor(d.joint_pos)[:, self._motor_ids] - self._default,
+                            as_tensor(d.joint_vel)[:, self._motor_ids], as_tensor(d.root_pos_w),
+                            root_quat_wxyz(self._robot), as_tensor(d.root_lin_vel_w), as_tensor(d.root_ang_vel_w),
+                            bp[:, self._feet], bp[:, self._hands])
 
     def _store(self, x: torch.Tensor) -> None:
         n, cap = x.shape[0], self._buf.shape[0]

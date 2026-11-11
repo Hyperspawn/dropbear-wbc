@@ -19,6 +19,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
 
 prepare_kit_python()
 
@@ -94,11 +95,11 @@ def main() -> int:
     if ramp_steps:  # action that puts the target on the reset pose; scaled down to 0 (= the held pose) over the ramp
         term = uw.action_manager.get_term("joint_pos")
         ids = robot.find_joints(list(term._joint_names), preserve_order=True)[0]  # noqa: SLF001
-        a0 = (robot.data.joint_pos[:, ids] - robot.data.default_joint_pos[:, ids]) / term._scale  # noqa: SLF001
+        a0 = (as_tensor(robot.data.joint_pos)[:, ids] - as_tensor(robot.data.default_joint_pos)[:, ids]) / term._scale  # noqa: SLF001
     alive = torch.ones(uw.num_envs, dtype=torch.bool, device=dev)
     fall_t = [None] * uw.num_envs
     fall_why = [None] * uw.num_envs
-    z0 = robot.data.body_link_pos_w[:, anchor, 2].clone()
+    z0 = as_tensor(robot.data.body_link_pos_w)[:, anchor, 2].clone()
     tq, cl, trace = [], [], []
     for s in range(steps):
         env.step(a0 * (1.0 - (s + 1) / ramp_steps) if s < ramp_steps else zero)
@@ -117,15 +118,15 @@ def main() -> int:
             cl.append(c[alive])
         if s % 25 == 0:
             trace.append({"t_s": round((s + 1) * uw.step_dt, 2), "alive": int(alive.sum()),
-                          "anchor_z0": round(float(robot.data.body_link_pos_w[0, anchor, 2]), 4)})
+                          "anchor_z0": round(float(as_tensor(robot.data.body_link_pos_w)[0, anchor, 2]), 4)})
     out = {"tool": "tools/hw_stand_test.py", "actuator_profile": args.actuator_profile, "unlimited": args.unlimited,
            "solver_iterations": list(args.solver_iters), "seconds": args.seconds, "num_envs": uw.num_envs,
            "motor_pose_json": None if hold_pose is None else str(args.motor_pose_json), "hold_pose": hold_pose,
            "ramp_s": args.ramp_s,
-           "final_motor_pos_env0": {n: round(float(robot.data.joint_pos[0, j]), 4) for n, j in
+           "final_motor_pos_env0": {n: round(float(as_tensor(robot.data.joint_pos)[0, j]), 4) for n, j in
                                     zip(N.MOTOR_NAMES, robot.find_joints(list(N.MOTOR_NAMES), preserve_order=True)[0])},
            "falls": sum(f is not None for f in fall_t), "fall_t_s": fall_t, "fall_terms": fall_why,
-           "anchor_drop_m": [round(float(z0[e] - robot.data.body_link_pos_w[e, anchor, 2]), 4) for e in range(uw.num_envs)],
+           "anchor_drop_m": [round(float(z0[e] - as_tensor(robot.data.body_link_pos_w)[e, anchor, 2]), 4) for e in range(uw.num_envs)],
            "trace_env0": trace}
     if tq:
         T, C = torch.cat(tq), torch.cat(cl).float()

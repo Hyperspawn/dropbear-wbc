@@ -26,7 +26,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import body_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -393,7 +393,7 @@ def main() -> int:  # noqa: C901
             """(left, right) foot in contact (> 1 N on the sole plate or ankle cross) for env 0, or None."""
             if _fid is None:
                 return None
-            f = _cs.data.net_forces_w[0, _fid].norm(dim=-1) > 1.0
+            f = as_tensor(_cs.data.net_forces_w)[0, _fid].norm(dim=-1) > 1.0
             return torch.stack([f[0] | f[1], f[2] | f[3]])
     rollout_obs, rollout_act = [], []
     roll: dict[str, list] | None = None
@@ -404,13 +404,14 @@ def main() -> int:  # noqa: C901
 
         def _record_state() -> None:
             d = robot.data
-            roll["joint_pos"].append(d.joint_pos[0].detach().cpu().clone())
-            roll["joint_vel"].append(d.joint_vel[0].detach().cpu().clone())
-            roll["body_pos_w"].append(d.body_link_pos_w[0].detach().cpu() - origin0)
-            roll["body_quat_w"].append(d.body_link_quat_w[0].detach().cpu().clone())
-            roll["body_lin_vel_w"].append(d.body_com_lin_vel_w[0].detach().cpu().clone())
-            roll["body_ang_vel_w"].append(d.body_com_ang_vel_w[0].detach().cpu().clone())
-            roll["closure_residual_m"].append(float(mon.worst(d.body_link_pos_w, d.body_link_quat_w)[0]))
+            bp, bq = as_tensor(d.body_link_pos_w), body_quat_wxyz(robot, link=True)
+            roll["joint_pos"].append(as_tensor(d.joint_pos)[0].detach().cpu().clone())
+            roll["joint_vel"].append(as_tensor(d.joint_vel)[0].detach().cpu().clone())
+            roll["body_pos_w"].append(bp[0].detach().cpu() - origin0)
+            roll["body_quat_w"].append(bq[0].detach().cpu().clone())
+            roll["body_lin_vel_w"].append(as_tensor(d.body_com_lin_vel_w)[0].detach().cpu().clone())
+            roll["body_ang_vel_w"].append(as_tensor(d.body_com_ang_vel_w)[0].detach().cpu().clone())
+            roll["closure_residual_m"].append(float(mon.worst(bp, bq)[0]))
 
         _record_state()
     # wall-clock accounting: PhysX (sim.step) vs the rest of env.step (actuator models, managers) vs policy vs script
@@ -440,9 +441,10 @@ def main() -> int:  # noqa: C901
 
         def _publish(step_n: int) -> None:
             d = robot.data
-            share.write(step_n * unwrapped.step_dt, (d.root_pos_w[0] - _origin0).cpu().numpy(),
-                        d.root_quat_w[0].cpu().numpy(), d.joint_pos[0].cpu().numpy(),
-                        (d.body_link_pos_w[0] - _origin0).cpu().numpy(), d.body_link_quat_w[0].cpu().numpy())
+            share.write(step_n * unwrapped.step_dt, (as_tensor(d.root_pos_w)[0] - _origin0).cpu().numpy(),
+                        root_quat_wxyz(robot)[0].cpu().numpy(), as_tensor(d.joint_pos)[0].cpu().numpy(),
+                        (as_tensor(d.body_link_pos_w)[0] - _origin0).cpu().numpy(),
+                        body_quat_wxyz(robot, link=True)[0].cpu().numpy())
 
         _publish(0)
     prof = None
@@ -480,13 +482,13 @@ def main() -> int:  # noqa: C901
         if roll is not None:
             _record_state()
         finite &= bool(torch.isfinite(obs).all()) and bool(torch.isfinite(actions).all())
-        gap_hist.append(mon.worst(robot.data.body_link_pos_w, body_quat_wxyz(robot, link=True)).cpu())
+        gap_hist.append(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True)).cpu())
         alive_steps += 1
         d = dones.bool()
         # torque/speed sample: every env except the ones reset this step (fall or time-out: Isaac Lab wrote the reset
         # state before returning) or rewritten at a reference wrap (the reference clock did not advance by one frame)
         tq_ok = tracking_sample_mask(d, ts_prev, command.time_steps, wrap_rewrites)
-        torque.add(robot.data.joint_vel[:, motor_ids], tq_ok, groups=env_clip if is_library else None)
+        torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], tq_ok, groups=env_clip if is_library else None)
         if live is not None and bool(d[0]):
             live.restart("fall" if bool(unwrapped.termination_manager.terminated[0]) else "time-out")
         if bool(d.any()):

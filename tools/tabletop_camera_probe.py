@@ -25,7 +25,7 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
-from dropbear_wbc.isaac.compat import cfg_quat, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, cfg_quat, root_quat_wxyz  # noqa: E402
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
 
 prepare_kit_python()
@@ -113,15 +113,15 @@ def main() -> int:  # noqa: C901
     q_rest = base.rest_q()
     root_w = torch.tensor(LAYOUT.root_pos_w, device=uw.device)
     env.reset()
-    q22 = robot.data.joint_pos[:, motor_ids].cpu().numpy().astype(np.float64)
+    q22 = as_tensor(robot.data.joint_pos)[:, motor_ids].cpu().numpy().astype(np.float64)
     for i in range(2):
         p = uw.tabletop_feed.current[i]
         pols[i].reset(p.side, p.zone_xy, base.motor_to_semantic_arms_fast(q22[i]))
     stats = {k: [] for k in sensors}
     t0 = time.perf_counter()
     for step in range(args.steps):
-        q22 = robot.data.joint_pos[:, motor_ids].cpu().numpy().astype(np.float64)
-        bpos = (uw.scene["block"].data.root_pos_w - uw.scene.env_origins - root_w).cpu().numpy()
+        q22 = as_tensor(robot.data.joint_pos)[:, motor_ids].cpu().numpy().astype(np.float64)
+        bpos = (as_tensor(uw.scene["block"].data.root_pos_w) - uw.scene.env_origins - root_w).cpu().numpy()
         bq = root_quat_wxyz(uw.scene["block"]).cpu().numpy()
         for k in sensors:
             im = uw.scene[k].data.output["rgb"].cpu().numpy()[..., :3]
