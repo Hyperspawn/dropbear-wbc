@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import torch
 
 from dropbear_wbc.robots.mass_dr import LIMB_MASS_SCALE, limb_body_index_plan, limb_mass_groups
-from dropbear_wbc.isaac.compat import as_tensor
+from dropbear_wbc.isaac.compat import as_tensor, get_body_inertias, get_body_masses, set_body_inertias, set_body_masses
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -32,7 +32,7 @@ def randomize_limb_mass_scale(
     articulation's ``body_names``; ``asset_cfg.body_ids`` is ignored (the groups select the bodies).
 
     Same write path as Isaac Lab 2.2 ``randomize_rigid_body_mass``: start from ``data.default_mass`` (so repeated
-    calls do not compound), ``root_physx_view.set_masses`` on CPU tensors, then (``recompute_inertia``) inertia =
+    calls do not compound), ``compat.set_body_masses`` (2.x ``root_physx_view.set_masses`` on CPU tensors, 3.x ``set_masses_index``), then (``recompute_inertia``) inertia =
     ``data.default_inertia`` x mass ratio (uniform-density assumption, per body) via ``set_inertias``. Bodies outside
     the groups (``world``, ``head_*``, ``torso_*``) are not touched, so this composes with ``add_base_mass`` on
     ``world`` in either order. The sampled scales are kept in ``asset.data.limb_mass_scale`` (num_envs, n_limbs, CPU)
@@ -53,16 +53,18 @@ def randomize_limb_mass_scale(
     per_body = scales[:, limb_index]  # (n_env, n_bodies): one draw shared by all bodies of a limb
 
     rows = env_ids[:, None]
+    # read both defaults before any write: on Isaac Lab 3.0 they are snapshots of the live buffers taken on
+    # first access, so a read after set_* would capture the already-scaled plant
     default_mass = as_tensor(asset.data.default_mass).to("cpu")
-    masses = asset.root_physx_view.get_masses()
+    default_inertia = as_tensor(asset.data.default_inertia).to("cpu") if recompute_inertia else None
+    masses = get_body_masses(asset)
     masses[rows, body_ids] = default_mass[rows, body_ids] * per_body
-    asset.root_physx_view.set_masses(masses, env_ids)
+    set_body_masses(asset, masses, env_ids, body_ids)
 
     if recompute_inertia:
-        inertias = asset.root_physx_view.get_inertias()
-        default_inertia = as_tensor(asset.data.default_inertia).to("cpu")
+        inertias = get_body_inertias(asset)
         inertias[rows, body_ids] = default_inertia[rows, body_ids] * per_body[..., None]
-        asset.root_physx_view.set_inertias(inertias, env_ids)
+        set_body_inertias(asset, inertias, env_ids, body_ids)
 
     store = getattr(asset.data, "limb_mass_scale", None)
     if store is None or tuple(store.shape) != (env.scene.num_envs, len(limbs)):
@@ -94,19 +96,21 @@ def apply_body_mass_offsets(
     idx = [asset.body_names.index(b) for b in offsets]
     delta = torch.tensor([float(offsets[b]) for b in offsets], dtype=torch.float32)
     default_mass = as_tensor(asset.data.default_mass)
+    # first access before any write (Isaac Lab 3.0 snapshots defaults lazily from the live buffers)
+    di = as_tensor(asset.data.default_inertia) if recompute_inertia else None
     old = default_mass[:, idx].to("cpu").clone()
     new = old + delta
     if (new <= 0).any():
         raise ValueError(f"mass offsets {dict(offsets)} make a body mass non-positive")
     default_mass[:, idx] = new.to(default_mass.device)
-    masses = asset.root_physx_view.get_masses()
+    idx_t = torch.tensor(idx, dtype=torch.long)
+    masses = get_body_masses(asset)
     masses[:, idx] = masses[:, idx] + delta
-    asset.root_physx_view.set_masses(masses, all_ids)
+    set_body_masses(asset, masses, all_ids, idx_t)
     if recompute_inertia:
         ratio = (new / old)[..., None]
-        inertias = asset.root_physx_view.get_inertias()
+        inertias = get_body_inertias(asset)
         inertias[:, idx] = inertias[:, idx] * ratio
-        asset.root_physx_view.set_inertias(inertias, all_ids)
-        di = as_tensor(asset.data.default_inertia)
+        set_body_inertias(asset, inertias, all_ids, idx_t)
         di[:, idx] = (di[:, idx].to("cpu") * ratio).to(di.device)
     asset.data.body_mass_offsets = dict(offsets)

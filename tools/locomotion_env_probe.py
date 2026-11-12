@@ -24,7 +24,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, gravity_dir_w  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, get_body_masses, gravity_dir_w  # noqa: E402
 
 prepare_kit_python()
 
@@ -122,7 +122,7 @@ def main(report: dict) -> int:  # noqa: C901
                                            & (forces[:, foot_ids[2:4]].max(dim=1).values > 1.0)).sum()),
         "non_foot_bodies_in_contact": nf_bodies,
         "envs_with_non_foot_contact": int(nf_contact.any(dim=1).sum()),
-        "total_robot_weight_N": round(float(robot.root_physx_view.get_masses().sum(dim=1).mean()) * 9.81, 1),
+        "total_robot_weight_N": round(float(get_body_masses(robot).sum(dim=1).mean()) * 9.81, 1),
         "total_contact_force_N_mean": round(float(as_tensor(contact.data.net_forces_w)[:, :, 2].sum(dim=1).mean()), 1),
         "closure_gap_m": {"median": float(g0.median()), "max": float(g0.max()), "npz_residual_max_m": reset_term.closure_max_m},
         "joint_row_vs_npz_max_abs": {"passive": float(jd[:, passive].max()), "motors": float(jd[:, motor_ids].max()),

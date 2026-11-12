@@ -82,6 +82,98 @@ def gravity_dir_w(asset: Any) -> Any:
     return g / np.maximum(np.linalg.norm(g, axis=-1, keepdims=True), 1e-9)
 
 
+# --- body mass / inertia / CoM writes (2.x root_physx_view <-> 3.x set_*_index) -------------------------------
+# Isaac Lab 3.0 removed the PhysX view from the Newton backend (``Articulation.root_view`` is a Newton
+# ArticulationView with no get_masses/set_masses/get_coms; ``root_physx_view`` exists only on the PhysX backend,
+# deprecated). Both 3.0 backends expose ``set_masses_index`` / ``set_inertias_index`` / ``set_coms_index`` (partial
+# data: rows env_ids, columns body_ids) and keep ``data.body_mass`` / ``body_inertia`` / ``body_com_pos_b`` coherent.
+# Callers here pass FULL (num_envs, num_bodies[, k]) CPU tensors, as the 2.x view API does.
+
+
+def _index_setters(asset: Any) -> bool:
+    return callable(getattr(asset, "set_masses_index", None))
+
+
+def _newton_backend(asset: Any) -> bool:
+    return type(asset).__module__.split(".")[0] == "isaaclab_newton"
+
+
+def _rows_cols(env_ids: Any, body_ids: Any, device: Any) -> tuple[Any, Any]:
+    import torch
+
+    e = torch.as_tensor(env_ids, dtype=torch.long)
+    b = None if body_ids is None else torch.as_tensor(body_ids, dtype=torch.long)
+    return e, b
+
+
+def _sub(full: Any, e: Any, b: Any) -> Any:
+    x = full[e.cpu()] if full.device.type == "cpu" else full[e.to(full.device)]
+    return x if b is None else x[:, b.to(x.device)]
+
+
+def get_body_masses(asset: Any) -> Any:
+    """Live body masses [kg], (num_envs, num_bodies) float32 CPU tensor (a copy)."""
+    if _index_setters(asset):
+        return as_tensor(asset.data.body_mass).detach().to("cpu", copy=True)
+    return asset.root_physx_view.get_masses()
+
+
+def set_body_masses(asset: Any, masses: Any, env_ids: Any, body_ids: Any = None) -> None:
+    """Write rows ``env_ids`` (and columns ``body_ids``, all if None) of the full (N, B) ``masses``."""
+    if not _index_setters(asset):
+        asset.root_physx_view.set_masses(masses, env_ids)
+        return
+    e, b = _rows_cols(env_ids, body_ids, asset.device)
+    asset.set_masses_index(masses=_sub(masses, e, b).to(asset.device).float().contiguous(),
+                           body_ids=None if b is None else b.to(asset.device), env_ids=e.to(asset.device))
+
+
+def get_body_inertias(asset: Any) -> Any:
+    """Live flattened body inertias [kg*m^2], (num_envs, num_bodies, 9) float32 CPU tensor (a copy)."""
+    if _index_setters(asset):
+        return as_tensor(asset.data.body_inertia).detach().to("cpu", copy=True)
+    return asset.root_physx_view.get_inertias()
+
+
+def set_body_inertias(asset: Any, inertias: Any, env_ids: Any, body_ids: Any = None) -> None:
+    """Write rows ``env_ids`` (and columns ``body_ids``) of the full (N, B, 9) ``inertias``."""
+    if not _index_setters(asset):
+        asset.root_physx_view.set_inertias(inertias, env_ids)
+        return
+    e, b = _rows_cols(env_ids, body_ids, asset.device)
+    asset.set_inertias_index(inertias=_sub(inertias, e, b).to(asset.device).float().contiguous(),
+                             body_ids=None if b is None else b.to(asset.device), env_ids=e.to(asset.device))
+
+
+def get_body_com_pos(asset: Any) -> Any:
+    """CoM position in each body's link frame [m], (num_envs, num_bodies, 3) float32 CPU tensor (a copy)."""
+    if _index_setters(asset):
+        return as_tensor(asset.data.body_com_pos_b).detach().to("cpu", copy=True)
+    return asset.root_physx_view.get_coms()[..., :3].clone()
+
+
+def set_body_com_pos(asset: Any, pos: Any, env_ids: Any, body_ids: Any = None) -> None:
+    """Write CoM positions (rows ``env_ids``, columns ``body_ids``) of the full (N, B, 3) ``pos``.
+
+    The CoM orientation is kept: 2.x and 3.0 PhysX re-send the live principal-axes quaternion (backend order,
+    untouched); 3.0 Newton has no CoM orientation (always body-aligned) and takes positions only.
+    """
+    if not _index_setters(asset):
+        coms = asset.root_physx_view.get_coms().clone()
+        coms[..., :3] = pos
+        asset.root_physx_view.set_coms(coms, env_ids)
+        return
+    e, b = _rows_cols(env_ids, body_ids, asset.device)
+    if _newton_backend(asset):
+        sub = _sub(pos, e, b)
+    else:
+        pose = as_tensor(asset.data.body_com_pose_b).detach().to("cpu", copy=True)
+        pose[..., :3] = pos
+        sub = _sub(pose, e, b)
+    asset.set_coms_index(coms=sub.to(asset.device).float().contiguous(),
+                         body_ids=None if b is None else b.to(asset.device), env_ids=e.to(asset.device))
+
+
 def _roll(q: Any, shift: int) -> Any:
     try:
         import torch

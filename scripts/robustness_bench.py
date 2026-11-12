@@ -30,7 +30,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, get_body_masses, root_quat_wxyz  # noqa: E402
 
 prepare_kit_python()
 
@@ -250,7 +250,7 @@ def main() -> int:  # noqa: C901
                                 resolution=parse_resolution(args.video_res),
                                 caption=args.caption.replace("\\n", "\n"))
     base = robot.body_names.index("world")  # the articulation root (pelvis chassis, 19.5 kg)
-    mass = float(robot.root_physx_view.get_masses()[0].sum())
+    mass = float(get_body_masses(robot)[0].sum())
     push_steps = max(1, int(round(args.push_s / step_dt)))
     alive = torch.ones(num_envs, dtype=torch.bool, device=dev)
     fall_step = torch.full((num_envs,), -1, dtype=torch.long, device=dev)

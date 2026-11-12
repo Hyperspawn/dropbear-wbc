@@ -20,7 +20,7 @@ from isaaclab.envs.mdp.events import _randomize_prop_by_op
 from isaaclab.managers import SceneEntityCfg
 
 from dropbear_wbc.tasks.mass_events import randomize_limb_mass_scale  # noqa: F401  (re-export)
-from dropbear_wbc.isaac.compat import as_tensor
+from dropbear_wbc.isaac.compat import as_tensor, get_body_com_pos, set_body_com_pos
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -81,9 +81,9 @@ def randomize_rigid_body_com(
         body_ids = torch.tensor(asset_cfg.body_ids, dtype=torch.long, device="cpu")
     ranges = torch.tensor([com_range.get(k, (0.0, 0.0)) for k in ("x", "y", "z")], device="cpu")
     rand = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 3), device="cpu").unsqueeze(1)
-    coms = asset.root_physx_view.get_coms().clone()
-    coms[env_ids[:, None], body_ids, :3] += rand
-    asset.root_physx_view.set_coms(coms, env_ids)
+    pos = get_body_com_pos(asset)
+    pos[env_ids[:, None], body_ids] += rand
+    set_body_com_pos(asset, pos, env_ids, body_ids)
 
 
 def randomize_joint_armature(
