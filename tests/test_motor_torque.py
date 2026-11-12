@@ -13,7 +13,8 @@ import sdk_test_paths  # noqa: F401  (adds source/ and third_party/pydeps)
 
 torch = pytest.importorskip("torch")
 
-from dropbear_wbc.isaac.motor_torque import KEYS, MotorTorqueSampler, motor_columns, tracking_sample_mask  # noqa: E402
+from dropbear_wbc.isaac.motor_torque import (  # noqa: E402
+    KEYS, MotorTorqueSampler, motor_columns, scenario_groups, tracking_sample_mask)
 from dropbear_wbc.motion.names import MOTOR_NAMES  # noqa: E402
 from tools import scoreboard as sb  # noqa: E402
 
@@ -273,3 +274,48 @@ def test_play_py_tracking_mask_and_per_clip():
     assert "ts_prev = command.time_steps.clone()" in src
     assert 'per_clip[name]["motor_torque"] = clip_torque[c]' in src
     assert '"perturbed": bool(args.perturbed)' in src
+
+
+def test_scenario_groups_merge_duplicate_names():
+    labels, gid = scenario_groups(["fwd", "back", "fwd", "push", "back"])
+    assert labels == ["fwd", "back", "push"] and gid.tolist() == [0, 1, 0, 2, 1] and gid.dtype == torch.long
+
+
+def test_locomotion_hot_scenario_end_to_end(specs):
+    """Item 174: sampler -> by_scenario blocks -> scoreboard. One of 4 scenarios clips a knee every 5th step
+    (20 % clip there, 5 % pooled): both FAIL, but only the per-scenario path names the scenario; with clipping at
+    every 25th step the pooled block is 1 % (PASS at the 1 % gate) while the hot scenario is 4 % (FAIL)."""
+    peak, rated, nl = specs
+    hot = "LL_knee_actuator_joint"
+    labels, gid = scenario_groups(["fwd", "back", "side", "push"] * 2)
+    acts = _robot(8, peak)
+    s = MotorTorqueSampler(acts, MOTOR_NAMES, 8, "cpu")
+    g = torch.Generator().manual_seed(3)
+    i = MOTOR_NAMES.index(hot)
+    pk = torch.tensor([peak[n] for n in MOTOR_NAMES])
+    rt = torch.tensor([rated[n] for n in MOTOR_NAMES])
+    for st in range(100):
+        tau = rt * 0.5 * torch.rand(8, len(MOTOR_NAMES), generator=g)
+        comp = tau.clone()
+        if st % 25 == 0:
+            comp[gid == 3, i] += 0.5 * pk[i]
+        _write(acts, tau, comp)
+        s.add(torch.zeros(8, len(MOTOR_NAMES)), torch.ones(8, dtype=torch.bool), groups=gid)
+    pooled = s.block("n")
+    assert pooled["per_motor"][hot]["clip_frac"] == 0.01
+    by_scn = {n: {"envs": 2} for n in labels}
+    for k, blk in s.group_blocks().items():
+        by_scn[labels[k]]["motor_torque"] = blk
+    assert by_scn["push"]["motor_torque"]["per_motor"][hot]["clip_frac"] == 0.04
+    summ = {"finite": True, "falls_total": 0, "actuator_profile": PROFILE, "eval_design": {"perturbed": True},
+            "motor_torque": pooled, "by_scenario": by_scn}
+    r = sb.evaluate("locomotion", summ)
+    assert not r["pass"] and any("clip 4.0%" in w and "[scenario push]" in w for w in r["why"]), r["why"]
+    assert sb._per_motor_torque_check(pooled["per_motor"], sb.motor_specs(PROFILE))[1] == []  # pooled-only PASSes
+
+
+def test_play_locomotion_per_scenario_blocks():
+    src = (ROOT / "scripts/play_locomotion.py").read_text(encoding="utf-8")
+    assert "torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], live, groups=scn_gid)" in src
+    assert 'by_scn[scn_labels[gid]]["motor_torque"] = blk' in src
+    assert src.index('by_scn[scn_labels[gid]]["motor_torque"] = blk') > src.index("by_scn: dict = {}")

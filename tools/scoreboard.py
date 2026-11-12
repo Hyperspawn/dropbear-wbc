@@ -13,6 +13,9 @@ the summary was simulated with (``robots.hw_motor_specs.HW_PROFILE_MAPS[actuator
 * tracking libraries with ``per_clip``: gate on the *worst* clip's ``motor_torque`` (pooled block alone can hide a
   hot clip); a clip missing its block is UNKNOWN = FAIL for that clip. Summaries without ``per_clip`` keep the
   pooled-only check
+* locomotion: gate on the *worst* ``by_scenario[*].motor_torque`` block (play_locomotion 0079+); a scenario missing
+  its block is UNKNOWN = FAIL. A pooled-only summary over more than one scenario is UNKNOWN = FAIL (rerun play):
+  the pooled rms can hide one hot scenario. A single-scenario pooled block is exact and still gates
 * per motor: rms <= rated (thermal proxy until a thermal model exists), max <= peak, clip_frac <= 1 %,
   max |joint speed| <= no-load speed, and the summary's sim peak limit equals the map's peak (catches a wrong map)
 
@@ -90,6 +93,29 @@ def _per_motor_torque_check(per: dict, specs: dict[str, dict], *, clip: str | No
     return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
 
 
+def _worst_group_check(groups: dict, specs: dict[str, dict], label: str) -> tuple[dict, list[str]]:
+    """Worst ratios over the ``motor_torque`` blocks of ``groups`` (name -> entry); a group without a block is
+    UNKNOWN = FAIL, tagged ``[<label> NAME]``."""
+    why: list[str] = []
+    worst = {k: (0.0, None) for k in GATE}
+    any_block = False
+    for name in groups:
+        per = ((groups.get(name) or {}).get("motor_torque") or {}).get("per_motor")
+        tw, tw_why = _per_motor_torque_check(per, specs, clip=str(name))
+        if label != "clip":
+            tw_why = [w.replace(f" [clip {name}]", f" [{label} {name}]") for w in tw_why]
+        why += tw_why
+        if tw:
+            any_block = True
+            for k, info in tw.items():
+                v, n = info["value"], info["motor"]
+                if v > worst[k][0]:
+                    worst[k] = (v, n)
+    if not any_block:
+        return {}, why
+    return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
+
+
 def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]]:
     """Worst per-motor ratios + failure reasons. Missing torque block / motor -> failure, never a skip.
 
@@ -100,22 +126,16 @@ def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]
     """
     clips = summary.get("per_clip")
     if isinstance(clips, dict):
-        why: list[str] = []
-        worst = {k: (0.0, None) for k in GATE}
-        any_block = False
-        for name in clips:
-            per = ((clips.get(name) or {}).get("motor_torque") or {}).get("per_motor")
-            tw, tw_why = _per_motor_torque_check(per, specs, clip=str(name))
-            why += tw_why
-            if tw:
-                any_block = True
-                for k, info in tw.items():
-                    v, n = info["value"], info["motor"]
-                    if v > worst[k][0]:
-                        worst[k] = (v, n)
-        if not any_block:
-            return {}, why
-        return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
+        return _worst_group_check(clips, specs, "clip")
+    scen = summary.get("by_scenario")
+    if isinstance(scen, dict) and scen:
+        if any(isinstance(g, dict) and "motor_torque" in g for g in scen.values()):
+            return _worst_group_check(scen, specs, "scenario")
+        pooled = _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs)
+        if len(scen) > 1 and pooled[0]:
+            return pooled[0], pooled[1] + [f"torque per-scenario UNKNOWN (pooled over {len(scen)} scenarios can hide "
+                                           f"a hot one; rerun play_locomotion with per-scenario blocks)"]
+        return pooled
     return _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs)
 
 
@@ -231,7 +251,7 @@ def render(rows: list[dict]) -> str:
     ok = sum(r["pass"] for r in rows)
     out.append(f"\n{ok}/{len(rows)} skills pass the hardware gate (hw_* profile, perturbed, 0 falls, per motor: "
                f"rms <= rated, max <= peak, clip <= {GATE['clip_frac']:.0%}, speed <= no-load; "
-               f"tracking libraries: worst per_clip motor_torque)")
+               f"worst per_clip / by_scenario motor_torque)")
     return "\n".join(out)
 
 

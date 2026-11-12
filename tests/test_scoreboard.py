@@ -17,12 +17,22 @@ def _per_motor(profile=PROFILE, rms=0.5, mx=0.8, clip=0.0, speed=0.5, override=N
     return per
 
 
-def _loco(falls=0, profile=PROFILE, perturbed=True, per=None, created="2026-10-14T10:00:00+05:30"):
+def _loco(falls=0, profile=PROFILE, perturbed=True, per=None, created="2026-10-14T10:00:00+05:30", per_scn=True):
+    """``per`` goes into the pooled block and (``per_scn=True``, play_locomotion 0079+) every by_scenario block;
+    ``per_scn`` may also be a dict name -> per_motor (False = that scenario has no block)."""
     s = {"finite": True, "falls_total": falls, "actuator_profile": profile, "created": created,
          "eval_design": {"perturbed": perturbed},
          "by_scenario": {"fwd": {"envs": 2}, "back": {"envs": 2}}}
     if per is not False:
-        s["motor_torque"] = {"per_motor": per if per is not None else _per_motor()}
+        pm = per if per is not None else _per_motor()
+        s["motor_torque"] = {"per_motor": pm}
+        if per_scn is True:
+            per_scn = {n: pm for n in s["by_scenario"]}
+    if isinstance(per_scn, dict):
+        for n, blk in per_scn.items():
+            g = s["by_scenario"].setdefault(n, {"envs": 2})
+            if blk is not False:
+                g["motor_torque"] = {"per_motor": blk}
     return s
 
 
@@ -181,3 +191,41 @@ def test_tracking_per_clip_missing_motor_torque_is_unknown():
     assert "per_clip" not in s
     r_old = sb.evaluate("tracking", s)
     assert r_old["pass"], r_old["why"]
+
+
+def test_locomotion_worst_scenario_torque_gates_hot_scenario():
+    """Item 174 (notes/53): a hot scenario (knee 1.30x rated rms) pools to <1.0x over 4 scenarios and used to PASS.
+    The gate must use the worst by_scenario block and name it; a pooled-only mutant still PASSes."""
+    hot = "LL_knee_actuator_joint"
+    assert hot in MOTOR_NAMES
+    rated = sb.motor_specs(PROFILE)[hot]["rated"]
+    clean = _per_motor(rms=0.60, mx=0.80, speed=0.60)
+    stairs = _per_motor(rms=0.60, mx=0.80, speed=0.60, override={hot: {"rms_Nm": 1.30 * rated}})
+    # rms pools as sqrt(mean of squares): sqrt((3*0.60**2 + 1.30**2)/4) = 0.837
+    pooled = _per_motor(rms=0.837, mx=0.80, speed=0.60)
+    scn = {"fwd": clean, "back": clean, "side": clean, "push": stairs}
+    r = sb.evaluate("locomotion", _loco(per=pooled, per_scn=scn))
+    assert not r["pass"], r["why"]
+    assert any("rms 1.30x rated" in w and "[scenario push]" in w for w in r["why"]), r["why"]
+    assert abs(r["torque"]["rms_over_rated"]["value"] - 1.30) < 1e-6 and r["torque"]["rms_over_rated"]["motor"] == hot
+    pooled_only = sb._per_motor_torque_check(pooled, sb.motor_specs(PROFILE))
+    assert not pooled_only[1], pooled_only[1]
+    r_ok = sb.evaluate("locomotion", _loco(per=clean, per_scn={n: clean for n in scn}))
+    assert r_ok["pass"], r_ok["why"]
+    assert r_ok["scenarios"] == 4
+
+
+def test_locomotion_missing_scenario_block_and_pooled_only_are_unknown():
+    clean = _per_motor()
+    r = sb.evaluate("locomotion", _loco(per=clean, per_scn={"fwd": clean, "back": False}))
+    assert not r["pass"]
+    assert any("torque UNKNOWN (no motor_torque block) [scenario back]" in w for w in r["why"]), r["why"]
+    # pre-0079 summary: pooled over 2 scenarios -> UNKNOWN FAIL, columns still filled from the pooled block
+    r_old = sb.evaluate("locomotion", _loco(per=clean, per_scn=False))
+    assert not r_old["pass"] and any("per-scenario UNKNOWN" in w for w in r_old["why"]), r_old["why"]
+    assert abs(r_old["torque"]["max_over_peak"]["value"] - 0.8) < 1e-6
+    # single scenario: pooled == per-scenario, still gates on it
+    s1 = _loco(per=clean, per_scn=False)
+    s1["by_scenario"] = {"fwd": {"envs": 4}}
+    r1 = sb.evaluate("locomotion", s1)
+    assert r1["pass"], r1["why"]

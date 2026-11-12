@@ -54,6 +54,20 @@ def tracking_sample_mask(dones: torch.Tensor, ts_prev: torch.Tensor, ts_now: tor
     return ok
 
 
+def scenario_groups(labels: Sequence[str], device=None) -> tuple[list[str], torch.Tensor]:
+    """Per-env group ids for :meth:`MotorTorqueSampler.add` from per-env labels (play_locomotion scenario names).
+
+    Envs with the same label share one id (duplicate scenario names merge, matching ``by_scenario``, which is keyed
+    by name). Returns (unique labels in first-seen order, [num_envs] long ids into that list)."""
+    uniq: list[str] = []
+    ids = []
+    for lab in labels:
+        if lab not in uniq:
+            uniq.append(lab)
+        ids.append(uniq.index(lab))
+    return uniq, torch.tensor(ids, dtype=torch.long, device=device)
+
+
 class MotorTorqueSampler:
     """Collect masked per-step samples on the device; :meth:`block` reduces them to the summary dict."""
 

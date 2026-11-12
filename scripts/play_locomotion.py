@@ -256,6 +256,11 @@ def main() -> int:  # noqa: C901
     else:
         env_scn = [0] * num_envs
         fixed = None
+    # scenario label per env (as in per_env / by_scenario) -> group id for per-scenario motor_torque blocks
+    from dropbear_wbc.isaac.motor_torque import scenario_groups
+
+    scn_labels, scn_gid = scenario_groups(
+        [scenarios[s][0] if script is None else "video_script" for s in env_scn], dev)
 
     def command_at(step: int) -> torch.Tensor:
         if fixed is not None:
@@ -341,7 +346,7 @@ def main() -> int:  # noqa: C901
             anchor_min = torch.where(live, torch.minimum(anchor_min, as_tensor(robot.data.body_link_pos_w)[:, anchor, 2]), anchor_min)
             worst_gap = max(worst_gap, float(mon.worst(as_tensor(robot.data.body_link_pos_w), body_quat_wxyz(robot, link=True))[live].max())
                             if bool(live.any()) else 0.0)
-            torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], live)
+            torque.add(as_tensor(robot.data.joint_vel)[:, motor_ids], live, groups=scn_gid)
         end_xy = torch.where(live.unsqueeze(-1), as_tensor(robot.data.root_pos_w)[:, :2], end_xy)
         alive &= ~terminated
         if step % 50 == 0 or step == args.steps - 1:
@@ -389,10 +394,15 @@ def main() -> int:  # noqa: C901
         "by_scenario": by_scn, "per_env": per_env, "trace_env0": trace,
     })
     mt = torque.block("|applied motor torque| and |joint speed| at the last physics substep of each policy step, "
-                      "live envs after warm-up, all scenarios pooled; clip_frac = share of samples where the actuator "
+                      "live envs after warm-up, all scenarios pooled (per-scenario blocks: by_scenario[*].motor_torque, "
+                      "which tools/scoreboard.py gates on); clip_frac = share of samples where the actuator "
                       "model cut the PD torque (peak limit, or the torque-speed line for hw_* profiles)")
     if mt is not None:
         summary["motor_torque"] = mt
+    # one hot scenario must not hide in the pooled rms (notes/53, item 174); a scenario with no live sample after
+    # warm-up gets no block (the scoreboard reports it as torque UNKNOWN)
+    for gid, blk in torque.group_blocks().items():
+        by_scn[scn_labels[gid]]["motor_torque"] = blk
     if args.video:
         summary["video_dir"] = str(video_dir)
         summary["video_script"] = args.video_script
