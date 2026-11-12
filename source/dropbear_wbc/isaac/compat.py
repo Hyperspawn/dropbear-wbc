@@ -174,6 +174,71 @@ def set_body_com_pos(asset: Any, pos: Any, env_ids: Any, body_ids: Any = None) -
                          body_ids=None if b is None else b.to(asset.device), env_ids=e.to(asset.device))
 
 
+# --- body mass / inertia defaults (Isaac Lab 3.0 deprecates data.default_mass / default_inertia, 4.0 removes) -----
+# 2.x: ``data.default_mass`` / ``default_inertia`` are spawn-time copies; Isaac's ``randomize_rigid_body_mass``
+# re-reads them on every call. 3.0: they are lazy snapshots of the LIVE buffers on first access (deprecated,
+# base_articulation_data.py:1506-1530) and Isaac's ``randomize_rigid_body_mass`` keeps its own snapshot of
+# ``body_mass`` taken at its first call. Our mass events share ONE per-asset snapshot taken at the first call of
+# any of them (before that event writes), so the motor-mass offset can move it for the limb scale.
+_BODY_DEFAULTS = "_dropbear_body_defaults"
+
+
+def body_prop_defaults(asset: Any) -> dict:
+    """Per-asset default body masses (N, B) and flattened inertias (N, B, 9), float32 CPU, snapshotted once.
+
+    2.x: copies of ``data.default_mass`` / ``default_inertia`` (spawn values). 3.x: copies of the live
+    ``data.body_mass`` / ``body_inertia`` at the first call (no deprecated property read). Callers must take it
+    before their first write. :func:`shift_body_mass_defaults` is the only writer.
+    """
+    d = getattr(asset, _BODY_DEFAULTS, None)
+    if d is None:
+        if _index_setters(asset):
+            d = {"mass": get_body_masses(asset), "inertia": get_body_inertias(asset)}
+        else:
+            d = {"mass": as_tensor(asset.data.default_mass).detach().to("cpu", copy=True),
+                 "inertia": as_tensor(asset.data.default_inertia).detach().to("cpu", copy=True)}
+        setattr(asset, _BODY_DEFAULTS, d)
+    return d
+
+
+def shift_body_mass_defaults(asset: Any, body_ids: Any, new_mass: Any, inertia_ratio: Any) -> None:
+    """Move the default plant of ``body_ids`` (all envs) to ``new_mass`` (N, k), inertia x ``inertia_ratio``
+    (N, k, 1). 2.x also moves ``data.default_mass`` / ``default_inertia`` in place (Isaac 2.x
+    ``randomize_rigid_body_mass`` restarts from them); 3.x Isaac keeps its own snapshot, so they are not touched."""
+    import torch
+
+    d = body_prop_defaults(asset)
+    b = torch.as_tensor(body_ids, dtype=torch.long)
+    d["mass"][:, b] = new_mass.to("cpu", d["mass"].dtype)
+    d["inertia"][:, b] = d["inertia"][:, b] * inertia_ratio.to("cpu", d["inertia"].dtype)
+    if not _index_setters(asset):
+        dm, di = as_tensor(asset.data.default_mass), as_tensor(asset.data.default_inertia)
+        dm[:, b.to(dm.device)] = d["mass"][:, b].to(dm.device)
+        di[:, b.to(di.device)] = d["inertia"][:, b].to(di.device)
+
+
+# --- PhysX-only diagnostics -----------------------------------------------------------------------------------
+class PhysXOnlyError(RuntimeError):
+    """A diagnostic needs the PhysX tensor view (DOF drive / friction read-back) and the backend has none."""
+
+
+def physx_view(asset: Any, purpose: str) -> Any:
+    """The PhysX articulation view: 2.x ``root_physx_view``; 3.x PhysX ``root_view`` (``root_physx_view`` is a
+    deprecated alias). Raises :class:`PhysXOnlyError` on the 3.x Newton backend (``root_view`` is a Newton
+    ArticulationView without the PhysX getters) and when a 3.x joint ordering is active (view DOF columns are in
+    backend order, not ``joint_names`` order)."""
+    if _newton_backend(asset):
+        raise PhysXOnlyError(f"{purpose} is PhysX-only: it reads the PhysX tensor view (DOF drive / friction / mass "
+                             f"read-back) and the Isaac Lab Newton backend ({type(asset).__module__}) has none. "
+                             "Run it with the PhysX physics backend.")
+    if getattr(getattr(asset, "data", None), "has_joint_ordering", False) is True:
+        raise PhysXOnlyError(f"{purpose}: ArticulationCfg.joint_ordering is active, so PhysX view DOF columns are in "
+                             "backend order, not joint_names order; unset joint_ordering for this diagnostic.")
+    if _index_setters(asset):
+        return asset.root_view
+    return asset.root_physx_view
+
+
 def _roll(q: Any, shift: int) -> Any:
     try:
         import torch

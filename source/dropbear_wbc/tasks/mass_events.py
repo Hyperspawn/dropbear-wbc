@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import torch
 
 from dropbear_wbc.robots.mass_dr import LIMB_MASS_SCALE, limb_body_index_plan, limb_mass_groups
-from dropbear_wbc.isaac.compat import as_tensor, get_body_inertias, get_body_masses, set_body_inertias, set_body_masses
+from dropbear_wbc.isaac.compat import (body_prop_defaults, get_body_inertias, get_body_masses, set_body_inertias,
+                                       set_body_masses, shift_body_mass_defaults)
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -31,9 +32,11 @@ def randomize_limb_mass_scale(
     ``limb_groups`` (limb -> body names) defaults to :func:`dropbear_wbc.robots.mass_dr.limb_mass_groups` of the
     articulation's ``body_names``; ``asset_cfg.body_ids`` is ignored (the groups select the bodies).
 
-    Same write path as Isaac Lab 2.2 ``randomize_rigid_body_mass``: start from ``data.default_mass`` (so repeated
-    calls do not compound), ``compat.set_body_masses`` (2.x ``root_physx_view.set_masses`` on CPU tensors, 3.x ``set_masses_index``), then (``recompute_inertia``) inertia =
-    ``data.default_inertia`` x mass ratio (uniform-density assumption, per body) via ``set_inertias``. Bodies outside
+    Same write path as Isaac Lab ``randomize_rigid_body_mass``: start from the default plant
+    (``compat.body_prop_defaults``: 2.x ``data.default_mass``, 3.x our own snapshot of ``data.body_mass`` at the first
+    mass event; so repeated calls do not compound), ``compat.set_body_masses`` (2.x ``root_physx_view.set_masses``,
+    3.x ``set_masses_index``), then (``recompute_inertia``) inertia = default inertia x mass ratio (uniform-density
+    assumption, per body) via ``set_body_inertias``. Bodies outside
     the groups (``world``, ``head_*``, ``torso_*``) are not touched, so this composes with ``add_base_mass`` on
     ``world`` in either order. The sampled scales are kept in ``asset.data.limb_mass_scale`` (num_envs, n_limbs, CPU)
     with ``asset.data.limb_mass_scale_names`` for logging / privileged observations.
@@ -53,10 +56,9 @@ def randomize_limb_mass_scale(
     per_body = scales[:, limb_index]  # (n_env, n_bodies): one draw shared by all bodies of a limb
 
     rows = env_ids[:, None]
-    # read both defaults before any write: on Isaac Lab 3.0 they are snapshots of the live buffers taken on
-    # first access, so a read after set_* would capture the already-scaled plant
-    default_mass = as_tensor(asset.data.default_mass).to("cpu")
-    default_inertia = as_tensor(asset.data.default_inertia).to("cpu") if recompute_inertia else None
+    # snapshot (first mass event only) before any write: on 3.x it copies the live buffers
+    defaults = body_prop_defaults(asset)
+    default_mass, default_inertia = defaults["mass"], defaults["inertia"]
     masses = get_body_masses(asset)
     masses[rows, body_ids] = default_mass[rows, body_ids] * per_body
     set_body_masses(asset, masses, env_ids, body_ids)
@@ -84,9 +86,11 @@ def apply_body_mass_offsets(
     """Add a fixed mass [kg] to named bodies, in every env, once (startup): the plant change of a motor swap
     (:func:`dropbear_wbc.robots.hw_motor_specs.motor_mass_offsets`). Not a randomization, so it stays on in play.
 
-    Both the live masses and ``data.default_mass`` move by the offset, so the mass-DR terms (which restart from the
-    defaults) randomize around the new plant whichever order the startup terms run in. Inertia follows the mass ratio
-    of each body (uniform-density assumption, as in the limb scale). A second call is a no-op.
+    The live masses and the default plant (``compat.shift_body_mass_defaults``; on 2.x also ``data.default_mass``)
+    move by the offset. The mass-DR terms randomize around the new plant only if this term runs FIRST: the EventCfg
+    classes declare ``motor_mass`` before ``add_base_mass`` / ``scale_limb_mass`` (notes/334; appended last, a limb
+    scale ``s`` drawn before it gives ``s*m0 + d`` instead of ``s*(m0 + d)``). Inertia follows the mass ratio of each
+    body (uniform-density assumption, as in the limb scale). A second call is a no-op.
     """
     asset = env.scene[asset_cfg.name]
     if getattr(asset.data, "body_mass_offsets", None):
@@ -95,22 +99,19 @@ def apply_body_mass_offsets(
     all_ids = torch.arange(n, device="cpu")
     idx = [asset.body_names.index(b) for b in offsets]
     delta = torch.tensor([float(offsets[b]) for b in offsets], dtype=torch.float32)
-    default_mass = as_tensor(asset.data.default_mass)
-    # first access before any write (Isaac Lab 3.0 snapshots defaults lazily from the live buffers)
-    di = as_tensor(asset.data.default_inertia) if recompute_inertia else None
-    old = default_mass[:, idx].to("cpu").clone()
+    defaults = body_prop_defaults(asset)  # before any write (3.x: copy of the live buffers)
+    old = defaults["mass"][:, idx].clone()
     new = old + delta
     if (new <= 0).any():
         raise ValueError(f"mass offsets {dict(offsets)} make a body mass non-positive")
-    default_mass[:, idx] = new.to(default_mass.device)
     idx_t = torch.tensor(idx, dtype=torch.long)
+    ratio = (new / old)[..., None]
+    shift_body_mass_defaults(asset, idx_t, new, ratio if recompute_inertia else torch.ones_like(ratio))
     masses = get_body_masses(asset)
     masses[:, idx] = masses[:, idx] + delta
     set_body_masses(asset, masses, all_ids, idx_t)
     if recompute_inertia:
-        ratio = (new / old)[..., None]
         inertias = get_body_inertias(asset)
         inertias[:, idx] = inertias[:, idx] * ratio
         set_body_inertias(asset, inertias, all_ids, idx_t)
-        di[:, idx] = (di[:, idx].to("cpu") * ratio).to(di.device)
     asset.data.body_mass_offsets = dict(offsets)

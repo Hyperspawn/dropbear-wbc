@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import as_tensor, root_quat_wxyz
+from dropbear_wbc.isaac.compat import as_tensor, physx_view, root_quat_wxyz
 
 from dropbear_wbc.robots.dropbear_names import FOOT_BODIES, MOTOR_NAMES
 from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
@@ -130,7 +130,7 @@ class MotorTelemetry:
         n_links = len(r.body_names)
         if self._loads_ok:
             try:
-                view = r.root_physx_view
+                view = physx_view(r, "telemetry joint loads")  # Newton: PhysXOnlyError -> NaN rows
                 proj = view.get_dof_projected_joint_forces()[e, self.ids]
                 act = view.get_dof_actuation_forces()[e, self.ids]
                 wrench = view.get_link_incoming_joint_force()[e]

@@ -38,7 +38,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 import torch
-from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, cfg_quat
+from dropbear_wbc.isaac.compat import as_tensor, body_prop_defaults, body_quat_wxyz, cfg_quat
 
 from dropbear_wbc.robots.dropbear_names import (
     JOINT_AXIS_FIXES,
@@ -219,7 +219,7 @@ class QuasiStaticDropbear:
         self._cl_l0 = torch.tensor([c.local_pos0 for c in self.closures], dtype=torch.float32, device=self.device)
         self._cl_l1 = torch.tensor([c.local_pos1 for c in self.closures], dtype=torch.float32, device=self.device)
         self.com_pos_b = as_tensor(self.robot.data.body_com_pos_b)[0].cpu().numpy().astype(np.float64)
-        self.body_masses = as_tensor(self.robot.data.default_mass)[0].cpu().numpy().astype(np.float64)
+        self.body_masses = body_prop_defaults(self.robot)["mass"][0].numpy().astype(np.float64)
         self.stage_fixes = self._check_stage_fixes()
         self.physics_steps = 0
 

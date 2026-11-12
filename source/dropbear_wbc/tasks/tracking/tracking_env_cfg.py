@@ -192,6 +192,10 @@ class ObservationsCfg:
 
 @configclass
 class EventCfg:
+    # startup, FIRST: the motor-swap / measured-mass plant offset (set by the Dropbear cfg's set_actuator_profile /
+    # set_robot_mass). Declared here so it keeps this slot; assigned later it would run after add_base_mass /
+    # scale_limb_mass and the limb scale would miss the offset (s*m0 + d, not s*(m0 + d); notes/334).
+    motor_mass: EventTerm | None = None
     # startup
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,

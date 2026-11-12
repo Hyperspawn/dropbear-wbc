@@ -32,7 +32,8 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.compat import (PhysXOnlyError, as_tensor, body_quat_wxyz, get_body_inertias,  # noqa: E402
+                                       get_body_masses, physx_view, root_quat_wxyz)
 
 prepare_kit_python()
 
@@ -149,15 +150,25 @@ def main(report: dict) -> int:  # noqa: C901
             "friction": sorted({round(float(fric[i]), 4) for i in ids}) if fric is not None else None,
             "max_joint_vel": sorted({round(float(vmax[i]), 3) for i in ids}) if vmax is not None else None,
         }
-    masses = fixed.root_physx_view.get_masses()[0].cpu()
-    inertias = fixed.root_physx_view.get_inertias()[0].cpu().reshape(len(bn), -1)
+    masses = get_body_masses(fixed)[0]
+    inertias = get_body_inertias(fixed)[0].reshape(len(bn), -1)
+    try:  # PhysX-only extras (friction triplets, max_shapes); Newton reports them as unavailable
+        pv = physx_view(fixed, "inspect_dropbear_articulation PhysX extras")
+    except PhysXOnlyError as exc:
+        pv, pv_err = None, str(exc)
     try:
-        fprops = fixed.root_physx_view.get_dof_friction_properties()[0].cpu()
+        if pv is None:
+            raise PhysXOnlyError(pv_err)
+        fprops = pv.get_dof_friction_properties()[0].cpu()
         physx_friction = {jn[i]: [round(float(v), 4) for v in fprops[i]] for i in range(len(jn)) if float(fprops[i].abs().max()) > 0}
     except Exception as exc:  # noqa: BLE001
         physx_friction = f"unavailable: {exc}"
     try:
-        mm = fixed.root_physx_view.get_generalized_mass_matrices()[0].cpu()
+        if pv is not None:
+            mm = pv.get_generalized_mass_matrices()[0].cpu()
+        else:  # 3.x data.mass_matrix: (J + base DOFs)^2, base DOFs first
+            mm = as_tensor(fixed.data.mass_matrix)[0].cpu()
+            mm = mm[mm.shape[-1] - len(jn):, mm.shape[-1] - len(jn):]
         mass_matrix_diag = {n: round(float(mm[i, i]), 5) for n, i in zip(D.MOTOR_NAMES, fixed.find_joints(list(D.MOTOR_NAMES), preserve_order=True)[0])}
     except Exception as exc:  # noqa: BLE001
         mass_matrix_diag = f"unavailable: {exc}"
@@ -179,7 +190,7 @@ def main(report: dict) -> int:  # noqa: C901
         },
         "total_mass_kg": round(float(masses.sum()), 3),
         "root_mass_kg": round(float(masses[0]), 3),
-        "max_shapes": int(getattr(fixed.root_physx_view, "max_shapes", -1)),
+        "max_shapes": int(getattr(pv, "max_shapes", -1)),
         "physx_nonzero_friction_props(static,dynamic,viscous)": physx_friction,
         "motor_mass_matrix_diag": mass_matrix_diag,
         "bicep_inertia_physx": bicep,

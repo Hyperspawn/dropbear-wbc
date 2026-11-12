@@ -21,7 +21,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
-from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, physx_view  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--hold", type=int, default=30)
@@ -59,8 +59,9 @@ def main() -> int:
             raise RuntimeError("GPU lock not held")
         qs = QuasiStaticDropbear(QuasiStaticCfg(num_envs=16, motor_kp=ARGS.kp, motor_kd=ARGS.kd,
                                                 passive_damping=ARGS.passive_damping))
+        view = physx_view(qs.robot, "tools/probe_loop_binding.py")  # PhysX-only: solver-side DOF damping read-back
         # ---- damping read-back -------------------------------------------------------------------------
-        phys = qs.robot.root_physx_view.get_dof_dampings()[0].cpu().numpy()
+        phys = view.get_dof_dampings()[0].cpu().numpy()
         lab = as_tensor(qs.robot.data.joint_damping)[0].cpu().numpy()
         names = qs.joint_names
         mot = set(MOTOR_NAMES)

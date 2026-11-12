@@ -12,16 +12,9 @@ import pytest
 import sdk_test_paths  # noqa: F401
 
 ROOT = Path(__file__).resolve().parents[1]
-# PhysX-only diagnostics (DOF drive/friction/mass-matrix reads with no 3.0 index API equivalent); telemetry
-# reads joint loads inside a try and records NaN when the view is missing.
-VIEW_ALLOW = {
-    "source/dropbear_wbc/isaac/compat.py",
-    "source/dropbear_wbc/isaac/telemetry.py",
-    "tools/inspect_dropbear_articulation.py",
-    "tools/probe_knee_authority.py",
-    "tools/probe_loop_binding.py",
-    "tools/probe_passive_damping.py",
-}
+# PhysX-only diagnostics (probes, inspect extras, telemetry joint loads) take the view from compat.physx_view,
+# which raises PhysXOnlyError on Newton (notes/334).
+VIEW_ALLOW = {"source/dropbear_wbc/isaac/compat.py"}
 _VIEW = re.compile(r"\.root_physx_view\b")
 
 
@@ -195,16 +188,19 @@ def test_mass_events_on_lab3_asset_scale_from_original_defaults():
     cfg = SimpleNamespace(name="robot")
     off = motor_mass_offsets("hw_cem6")
     apply_body_mass_offsets(env, None, cfg, off)
+    from dropbear_wbc.isaac.compat import body_prop_defaults
+
+    defaults = body_prop_defaults(a)  # our snapshot (3.0 data.default_* deprecated, notes/334)
     idx = {n: i for i, n in enumerate(names)}
     for b_, d in off.items():
         j = idx[b_]
         r = (m0[:, j] + d) / m0[:, j]
         assert torch.allclose(a.m[:, j], m0[:, j] + d, atol=1e-5)
         assert torch.allclose(a.I[:, j], I0[:, j] * r[:, None], rtol=1e-5)
-        assert torch.allclose(a._I0[:, j], I0[:, j] * r[:, None], rtol=1e-5)  # not r**2
+        assert torch.allclose(defaults["inertia"][:, j], I0[:, j] * r[:, None], rtol=1e-5)  # not r**2
     torch.manual_seed(0)
     randomize_limb_mass_scale(env, None, cfg)
-    ratio = a.m / a._m0
+    ratio = a.m / defaults["mass"]
     assert ((ratio > 0.9 - 1e-6) & (ratio < 1.1 + 1e-6)).all()
-    assert torch.allclose(a.I, a._I0 * ratio[..., None], rtol=1e-5)
+    assert torch.allclose(a.I, defaults["inertia"] * ratio[..., None], rtol=1e-5)
     assert all(c[0] in ("m", "I") for c in a.calls)

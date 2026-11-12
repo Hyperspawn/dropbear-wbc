@@ -36,7 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, physx_view  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
@@ -142,6 +142,7 @@ def child(variant: str) -> int:
             }["env_0"]
         sim.reset()
         robot = scene["robot"]
+        view = physx_view(robot, "tools/probe_passive_damping.py")  # PhysX-only: DOF drive read-back
         jn = list(robot.joint_names)
         mids, _ = robot.find_joints(list(D.MOTOR_NAMES), preserve_order=True)
         motor_set = set(D.MOTOR_NAMES) | set(D.NECK_NAMES)
@@ -158,7 +159,6 @@ def child(variant: str) -> int:
             robot.write_joint_damping_to_sim(torch.full((1, len(passive)), d, device=dev), joint_ids=passive,
                                              env_ids=torch.tensor([e], device=dev))
 
-        view = robot.root_physx_view
         rb = {}
         for key, getter in (("damping", view.get_dof_dampings), ("stiffness", view.get_dof_stiffnesses),
                             ("max_force", view.get_dof_max_forces), ("armature", view.get_dof_armatures)):

@@ -33,7 +33,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
-from dropbear_wbc.isaac.compat import as_tensor  # noqa: E402
+from dropbear_wbc.isaac.compat import as_tensor, physx_view  # noqa: E402
 
 prepare_kit_python()
 
@@ -95,6 +95,7 @@ def main(report: dict) -> int:  # noqa: C901
     env = gym.make(args.task, cfg=cfg)
     uw = env.unwrapped
     robot = uw.scene["robot"]
+    view = physx_view(robot, "tools/probe_knee_authority.py")  # PhysX-only: solver-side Kp read-back
     dev = uw.device
     n = uw.num_envs
 
@@ -134,7 +135,7 @@ def main(report: dict) -> int:  # noqa: C901
         if eff is not None:
             actuator_effort_limit(act)[:] = eff[:, jid]  # Lab 2.2 effort_limit / 3.0 actuator_effort_limit
     # read back
-    got_kp = robot.root_physx_view.get_dof_stiffnesses().to(dev)
+    got_kp = view.get_dof_stiffnesses().to(dev)
     report["sim_gains_readback_knee_kp_per_group"] = [float(got_kp[int(torch.nonzero(gid == i)[0])][knee_ids[0]])
                                                        for i in range(G)]
 
