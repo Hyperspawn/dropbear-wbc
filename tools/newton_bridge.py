@@ -132,6 +132,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     if args.no_gpu_lock and not (args.device == "cpu" and args.mujoco_cpu
                                  and os.environ.get("CUDA_VISIBLE_DEVICES") == "-1"):
         ap.error("--no-gpu-lock requires --device cpu --mujoco-cpu and CUDA_VISIBLE_DEVICES=-1")
+    if args.sensor_profile is not None:
+        from dropbear_wbc.newton_sim.sensor_gate import bridge_sensor_tick_error
+        err = bridge_sensor_tick_error(args.sim_dt, args.substeps, args.sensor_policy_hz)
+        if err:
+            ap.error(err)
     return args
 
 

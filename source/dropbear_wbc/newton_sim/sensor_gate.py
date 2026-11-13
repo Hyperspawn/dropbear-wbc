@@ -7,6 +7,8 @@ those steps so sim2sim ages stay in the designed 7-34 ms band.
 """
 from __future__ import annotations
 
+import math
+
 from dropbear_wbc.newton_sim.sensor_model import PROFILES, SensorErrorModel
 
 
@@ -26,6 +28,32 @@ def policy_steps_per_bridge(bridge_dt: float, policy_hz: float) -> int:
     if bridge_dt <= 0 or policy_hz <= 0:
         raise ValueError(f"bridge_dt and policy_hz must be > 0, got {bridge_dt}, {policy_hz}")
     return max(1, round((1.0 / policy_hz) / bridge_dt))
+
+
+def bridge_sensor_tick_error(sim_dt: float, substeps: int, policy_hz: float, rtol: float = 0.01) -> str | None:
+    """CLI-time twin of the ``LowStateAssembler`` tick check (patch 0081), or ``None`` if consistent.
+
+    The bridge tick is ``sim_dt * substeps``; the gated model advances every
+    ``policy_steps_per_bridge(tick, policy_hz)`` ticks, so the held-sample age step is
+    ``(1 / policy_hz) / steps_per_policy`` and must equal the tick within ``rtol``. Lets
+    ``tools/newton_bridge.py`` reject e.g. ``--sim-dt 0.003`` (7 ticks = 21 ms != 20 ms) before
+    the GPU lock and plant build instead of after them.
+    """
+    if not (sim_dt > 0 and math.isfinite(sim_dt)):
+        return f"--sim-dt must be a finite value > 0, got {sim_dt}"
+    if int(substeps) < 1:
+        return f"--substeps must be >= 1, got {substeps}"
+    if not policy_hz > 0:  # NaN fails the comparison; +inf gives a 0 ms age step and fails below
+        return f"--sensor-policy-hz must be a finite value > 0, got {policy_hz}"
+    tick = float(sim_dt) * int(substeps)
+    spp = policy_steps_per_bridge(tick, policy_hz)
+    eff = (1.0 / policy_hz) / spp
+    if abs(eff - tick) > rtol * tick:
+        return (f"--sim-dt {sim_dt} x --substeps {substeps} = {1e3 * tick:.3f} ms bridge tick does not divide the "
+                f"{1e3 / policy_hz:.3f} ms sensor policy period (--sensor-policy-hz {policy_hz}): {spp} ticks = "
+                f"{1e3 * spp * tick:.3f} ms, so every sensor age would be off by {100 * (eff / tick - 1):+.1f} %; "
+                f"pick a tick that divides it (e.g. 2 ms or 4 ms at 50 Hz)")
+    return None
 
 
 class PolicyGatedSensorModel:
