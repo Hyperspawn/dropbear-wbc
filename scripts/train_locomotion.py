@@ -110,6 +110,8 @@ parser.add_argument("--logger", choices=("tensorboard", "wandb", "neptune"), def
 parser.add_argument("--resume", action="store_true", help="resume from --load_run/--checkpoint")
 parser.add_argument("--load_run", default=None, help="run dir name under <log_root>/<experiment>")
 parser.add_argument("--checkpoint", default=None, help="checkpoint file name (default: latest model_*.pt)")
+parser.add_argument("--allow_settings_change", action="store_true",
+                    help="with --continue_run: allow event/DR terms that differ from the run's recorded ones")
 parser.add_argument("--continue_run", action="store_true",
                     help="with --resume: keep writing into the loaded run directory (chunked training)")
 parser.add_argument("--robot_mass_kg", type=float, default=None,
@@ -239,6 +241,16 @@ def main() -> int:
         env_cfg.enable_amp(args.amp_weight, ckpt_path=str(log_dir / "amp_disc.pt"), grad_penalty=args.amp_grad_penalty,
                            mirror=args.symmetry)  # symmetry augmentation needs a left/right symmetric style reward
 
+    # -- event / DR terms (item 190): recorded in run_info; a --continue_run chunk must train on the recorded ones
+    from dropbear_wbc.tasks.dr_record import check_dr_continuity, dr_event_record
+    from dropbear_wbc.tasks.tracking.run_settings import latest_run_info
+
+    dr_events = dr_event_record(env_cfg.events)
+    dr_notes = check_dr_continuity(latest_run_info(log_dir) if args.continue_run else None, dr_events,
+                                   continue_run=args.continue_run, allow_change=args.allow_settings_change)
+    for note in dr_notes:
+        print(f"[INFO] run setting {note}", flush=True)
+
     env = gym.make(args.task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     runner = LocomotionOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=str(log_dir), device=agent_cfg.device)
@@ -297,6 +309,8 @@ def main() -> int:
             env_cfg.scene.robot.spawn.articulation_props.solver_velocity_iteration_count,
         ],
         "pushes": env_cfg.events.push_robot is not None,
+        "dr_events": dr_events,
+        "run_settings_notes": dr_notes,
         "push_velocity": args.push_velocity, "push_interval": args.push_interval,
         "arm_action_scale": args.arm_action_scale, "arm_deviation_weight": args.arm_deviation_weight,
         "arm_swing_weight": args.arm_swing_weight, "arm_swing_k": args.arm_swing_k,

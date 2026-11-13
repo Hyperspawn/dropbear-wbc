@@ -242,6 +242,16 @@ def main() -> int:
         if args.continue_run and first_info.is_file():
             restore = bool(json.loads(first_info.read_text(encoding="utf-8")).get("train_state_persistence", False))
 
+    # -- event / DR terms (item 190): recorded in run_info; a --continue_run chunk must train on the recorded ones
+    from dropbear_wbc.tasks.dr_record import check_dr_continuity, dr_event_record
+
+    dr_events = dr_event_record(env_cfg.events)
+    dr_notes = check_dr_continuity(prev_info, dr_events, continue_run=args.continue_run,
+                                   allow_change=args.allow_settings_change)
+    for note in dr_notes:
+        print(f"[INFO] run setting {note}", flush=True)
+    rs_notes = list(rs_notes) + dr_notes
+
     env = gym.make(args.task, cfg=env_cfg, render_mode="rgb_array" if args.video else None)
     if args.video:
         env = gym.wrappers.RecordVideo(
@@ -300,6 +310,7 @@ def main() -> int:
         "action_rate_weight": rs["action_rate_weight"],
         "robot_mass_kg": rs["robot_mass_kg"],
         "run_settings_notes": rs_notes,
+        "dr_events": dr_events,
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         "num_envs": env_cfg.scene.num_envs,

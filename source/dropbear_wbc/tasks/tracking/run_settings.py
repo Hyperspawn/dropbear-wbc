@@ -17,6 +17,8 @@ import json
 import math
 from pathlib import Path
 
+from dropbear_wbc.tasks.dr_record import dr_drift
+
 RUN_SETTING_KEYS: tuple[str, ...] = (
     "actuator_profile",
     "hw_regularizers",
@@ -129,7 +131,9 @@ def resolve_run_settings(cli: dict, prev_info: dict | None, *, continue_run: boo
 
 def audit_run_dir(run_dir: Path) -> list[dict]:
     """Every chunk boundary of ``run_dir`` where a run-defining setting changed (empty = consistent run).
-    Each record: ``{"file", "key", "before", "after", "flagged"}`` (``flagged`` = the chunk noted the change)."""
+    Each record: ``{"file", "key", "before", "after", "flagged"}`` (``flagged`` = the chunk noted the change).
+    The event/DR record (``dr_events``, :mod:`dropbear_wbc.tasks.dr_record`) is compared too; a chunk that records it
+    after one that did not is reported with ``unverifiable`` (the earlier randomization is unknown)."""
     files = run_info_files(run_dir)
     infos = [json.loads(f.read_text(encoding="utf-8")) for f in files]
     drift: list[dict] = []
@@ -139,6 +143,9 @@ def audit_run_dir(run_dir: Path) -> list[dict]:
             a, b = recorded(prev, key), recorded(cur, key)
             if not _same(a, b):
                 drift.append({"file": f.name, "key": key, "before": a, "after": b, "flagged": flagged})
+        dr = dr_drift(prev, cur)  # event / DR terms (item 190); UNRECORDED -> recorded is unverifiable drift
+        if dr is not None:
+            drift.append({"file": f.name, **dr, "flagged": flagged})
     return drift
 
 
