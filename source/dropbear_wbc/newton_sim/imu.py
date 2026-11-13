@@ -9,12 +9,19 @@ IMU model (root body ``world``, located at the body's centre of mass):
     * ``rpy`` [rad]: intrinsic Z-Y-X roll/pitch/yaw.
 No noise or bias is added unless a :class:`~dropbear_wbc.newton_sim.sensor_model.SensorErrorModel` is passed
 (then quat/gyro/accel and motor q/dq are the MEASURED values; the privileged SimState block stays truth).
+Tick consistency (patch 0081): ``SensorErrorModel`` ages and bias walk are in units of ITS ``tick_dt`` and advance once
+per ``imu()`` call. A raw model whose ``tick_dt`` differs from the assembler's (e.g. a 50 Hz model built every 2 ms
+bridge tick) silently shrinks every age by ``tick_dt / model.tick_dt`` while ``age_us`` still reports the 50 Hz value,
+so the constructor refuses it; wrap it in ``sensor_gate.PolicyGatedSensorModel``. A gated model must satisfy
+``model.tick_dt / steps_per_policy == tick_dt`` (1 % tolerance). ``allow_sensor_tick_mismatch=True`` downgrades the
+refusal to a warning. Models without a ``tick_dt`` attribute are not checked.
 IMU health (patch 0004): ``valid = 1`` always (the simulated sensor cannot die); ``age_us`` = the sensor model's
 modelled sample age (``imu_age_s()``), 0 without a model.
 """
 from __future__ import annotations
 
 import time
+import warnings
 
 import numpy as np
 
@@ -32,6 +39,40 @@ def rotate_inv_wxyz(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     return v + w * t + np.cross(u, t)
 
 
+SENSOR_TICK_RTOL = 0.01
+
+
+def sensor_tick_mismatch(tick_dt: float, sensor_model, rtol: float = SENSOR_TICK_RTOL) -> str | None:
+    """Why ``sensor_model`` cannot be called once per ``tick_dt`` build, or ``None`` if consistent / not checkable.
+
+    Gated models (``steps_per_policy`` + ``model``) must advance at ``model.tick_dt / steps_per_policy == tick_dt``;
+    raw models (``tick_dt`` attribute) must have ``model.tick_dt == tick_dt``.
+    """
+    if sensor_model is None:
+        return None
+    inner = getattr(sensor_model, "model", None)
+    spp = getattr(sensor_model, "steps_per_policy", None)
+    if inner is not None and spp is not None:
+        m_dt = getattr(inner, "tick_dt", None)
+        if m_dt is None:
+            return None
+        eff = float(m_dt) / int(spp)
+        if abs(eff - tick_dt) > rtol * tick_dt:
+            return (f"gated sensor model advances every {spp} builds of {1e3 * tick_dt:.3f} ms = "
+                    f"{1e3 * spp * tick_dt:.3f} ms but its tick_dt is {1e3 * float(m_dt):.3f} ms (held-sample age "
+                    f"step {1e3 * eff:.3f} ms vs {1e3 * tick_dt:.3f} ms); pick a bridge tick that divides the policy period")
+        return None
+    m_dt = getattr(sensor_model, "tick_dt", None)
+    if m_dt is None:
+        return None
+    if abs(float(m_dt) - tick_dt) > rtol * tick_dt:
+        return (f"raw sensor model tick_dt {1e3 * float(m_dt):.3f} ms != assembler tick_dt {1e3 * tick_dt:.3f} ms: "
+                f"every age and the bias walk would run {float(m_dt) / tick_dt:.2f}x fast while age_us reports the "
+                f"{1e3 * float(m_dt):.3f} ms-tick value; wrap it in sensor_gate.PolicyGatedSensorModel(model, "
+                f"policy_steps_per_bridge(tick_dt, policy_hz))")
+    return None
+
+
 class LowStateAssembler:
     """Builds :class:`LowState` messages from plant readouts, keeping finite-difference history.
 
@@ -39,10 +80,18 @@ class LowStateAssembler:
         tick_dt: control tick period [s] used for finite differences.
         publish_sim: include the privileged :class:`SimState` block.
         body_names: names of the extra bodies in the readout (for the sim block).
+        sensor_model: optional measurement model, called once per :meth:`build`; its tick must match ``tick_dt``
+            (see :func:`sensor_tick_mismatch`), else ``ValueError``.
+        allow_sensor_tick_mismatch: warn instead of raising on a tick mismatch.
     """
 
     def __init__(self, tick_dt: float, publish_sim: bool = True, body_names: tuple[str, ...] = (),
-                 sensor_model=None):
+                 sensor_model=None, allow_sensor_tick_mismatch: bool = False):
+        why = sensor_tick_mismatch(tick_dt, sensor_model)
+        if why is not None:
+            if not allow_sensor_tick_mismatch:
+                raise ValueError(why)
+            warnings.warn(why, RuntimeWarning, stacklevel=2)
         self.tick_dt = tick_dt
         self.sensor_model = sensor_model
         self.publish_sim = publish_sim
