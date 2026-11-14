@@ -9,7 +9,7 @@ Commands run from the repository root. `<isaac-python>` is Isaac Sim's python (`
 ## 1. Without a GPU
 
 ```bash
-python -m pytest -q tests -k "not isaac"                            # CPU unit tests (~240 pass)
+python -m pytest -q tests                                           # CPU unit tests
 python tools/telemetry_issue_scan.py path/to/telemetry.npz --md scan.md   # the hardware gate on any recorded rollout
 python tools/retarget_g1.py --list-sources                          # motion sources the retargeter can see
 python tools/fetch_assets.py --groups media --list                  # the published dashboard videos

@@ -20,7 +20,7 @@ git clone https://github.com/Hyperspawn/dropbear-wbc && cd dropbear-wbc
 python -m venv .venv && source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements/tests-cpu.txt huggingface_hub
-python -m pytest -q tests -k "not isaac"                   # ~240 pass; Isaac / GPU / optional-stack tests skip
+python -m pytest -q tests                                  # Isaac / GPU / optional-stack tests skip
 python tools/fetch_assets.py                               # plant USD + trained policies (~450 MB)
 ```
 

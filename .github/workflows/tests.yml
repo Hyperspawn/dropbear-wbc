@@ -19,5 +19,5 @@ jobs:
           pip install -r requirements/tests-cpu.txt
       - name: Unitree G1 model (retarget tests)
         run: git clone --depth 1 https://github.com/unitreerobotics/unitree_mujoco ../upstream/unitree_mujoco
-      - name: Unit tests (no Isaac Sim)
-        run: python -m pytest -q tests -k "not isaac" -p no:cacheprovider
+      - name: Unit tests (no Isaac Sim; Isaac-boundary gates included)
+        run: python -m pytest -q tests -p no:cacheprovider

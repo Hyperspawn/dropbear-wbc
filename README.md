@@ -77,7 +77,7 @@ source in [RESULTS](docs/RESULTS.md).
 ```bash
 git clone https://github.com/Hyperspawn/dropbear-wbc && cd dropbear-wbc
 pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements/tests-cpu.txt huggingface_hub
-python -m pytest -q tests -k "not isaac"        # CPU unit tests (no GPU, no Isaac)
+python -m pytest -q tests                       # CPU unit tests (no GPU, no Isaac)
 python tools/fetch_assets.py                    # the robot USD + trained policies from Hugging Face (~450 MB)
 ```
 
