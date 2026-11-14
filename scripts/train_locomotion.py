@@ -7,7 +7,9 @@ Counterpart of ``scripts/train.py`` (tracking) for tasks without a motion comman
         scripts/train_locomotion.py --num_envs 2048 --max_iterations 20 --run_name smoke --headless
 
 Chunked long runs: ``tools/run_chunked_locomotion.py`` (``--resume --load_run <dir> --continue_run`` per chunk; the
-learning rate and the command-curriculum ranges are restored from the checkpoint).
+learning rate and the command-curriculum ranges are restored from the checkpoint). A ``--continue_run`` chunk must
+repeat the run's training flags: they, the event/DR terms and the reward weights are checked against the run's latest
+run_info and a mismatch is refused unless ``--allow_settings_change``.
 """
 from __future__ import annotations
 
@@ -111,7 +113,8 @@ parser.add_argument("--resume", action="store_true", help="resume from --load_ru
 parser.add_argument("--load_run", default=None, help="run dir name under <log_root>/<experiment>")
 parser.add_argument("--checkpoint", default=None, help="checkpoint file name (default: latest model_*.pt)")
 parser.add_argument("--allow_settings_change", action="store_true",
-                    help="with --continue_run: allow event/DR terms that differ from the run's recorded ones")
+                    help="with --continue_run: allow event/DR terms, training flags or reward weights that differ "
+                         "from the run's recorded ones")
 parser.add_argument("--continue_run", action="store_true",
                     help="with --resume: keep writing into the loaded run directory (chunked training)")
 parser.add_argument("--robot_mass_kg", type=float, default=None,
@@ -248,11 +251,26 @@ def main() -> int:
     dr_events = dr_event_record(env_cfg.events)
     dr_notes = check_dr_continuity(latest_run_info(log_dir) if args.continue_run else None, dr_events,
                                    continue_run=args.continue_run, allow_change=args.allow_settings_change)
+    # -- command-line training settings (item 182): same rule; a chunk resumed without the run's flags is refused
+    from dropbear_wbc.tasks.locomotion.run_continuity import (check_reward_continuity, check_settings_continuity,
+                                                              locomotion_settings)
+
+    prev_info = latest_run_info(log_dir) if args.continue_run else None
+    settings = locomotion_settings(args, actuator_profile=env_cfg.actuator_profile)
+    dr_notes += check_settings_continuity(prev_info, settings, continue_run=args.continue_run,
+                                          allow_change=args.allow_settings_change)
     for note in dr_notes:
         print(f"[INFO] run setting {note}", flush=True)
 
     env = gym.make(args.task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+    reward_weights = {n: float(env.unwrapped.reward_manager.get_term_cfg(n).weight)
+                      for n in env.unwrapped.reward_manager.active_terms}
+    reward_notes = check_reward_continuity(prev_info, reward_weights, continue_run=args.continue_run,
+                                           allow_change=args.allow_settings_change)
+    for note in reward_notes:
+        print(f"[INFO] run setting {note}", flush=True)
+    dr_notes += reward_notes
     runner = LocomotionOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=str(log_dir), device=agent_cfg.device)
     runner.restore_train_state = args.restore_train_state == "on"
     runner.add_git_repo_to_log(__file__)
@@ -284,19 +302,8 @@ def main() -> int:
         "default_pose_source": env_cfg.default_pose_source,
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
-        "actuator_profile": env_cfg.actuator_profile,
+        **settings,  # item 182: locomotion_settings (checked on --continue_run)
         "robot_mass_kg": env_cfg.robot_mass_kg,
-        "thermal_penalty": args.thermal_penalty,
-        "knee_stop_penalty": float(args.knee_stop_penalty),
-        "stop_model": bool(args.stop_model or args.stop_load_penalty), "stop_load_penalty": float(args.stop_load_penalty),
-        "impact_penalty": float(args.impact_penalty), "knee_band": args.knee_band,
-        "gait_shaping": bool(args.gait_shaping or args.gait_v2 or args.gait_v3),
-        "gait_v2": bool(args.gait_v2),
-        "gait_v3": bool(args.gait_v3),
-        "target_clamp_margin_deg": float(args.target_clamp_margin_deg),
-        "terrain": args.terrain, "stair_max_m": args.stair_max_m, "slope_max": args.slope_max,
-        "feet_width_weight": args.feet_width_weight,
-        "action_rate_weight": args.action_rate_weight,
         "actuator_gains_sim": {n: {"kp": float(as_tensor(uw.scene["robot"].data.joint_stiffness)[0, j]),
                                    "kd": float(as_tensor(uw.scene["robot"].data.joint_damping)[0, j]),
                                    "effort": float(as_tensor(uw.scene["robot"].data.joint_effort_limits)[0, j])}
@@ -312,15 +319,6 @@ def main() -> int:
         "dr_events": dr_events,
         "run_settings_notes": dr_notes,
         "push_velocity": args.push_velocity, "push_interval": args.push_interval,
-        "arm_action_scale": args.arm_action_scale, "arm_deviation_weight": args.arm_deviation_weight,
-        "arm_swing_weight": args.arm_swing_weight, "arm_swing_k": args.arm_swing_k,
-        "arm_abduction_weight": args.arm_abduction_weight, "arm_gate_tilt_rate": args.arm_gate_tilt_rate,
-        "arm_gate_hold_s": args.arm_gate_hold_s,
-        "amp_weight": args.amp_weight, "amp_grad_penalty": args.amp_grad_penalty, "symmetry": bool(args.symmetry),
-        "symmetry_mirror_loss": float(args.symmetry_mirror_loss),
-        "clip_excess_arms": float(args.clip_excess_arms), "clip_excess_legs": float(args.clip_excess_legs),
-        "ankle_roll_bind": ({"roll_limit_deg": float(args.ankle_roll_bind_deg), "margin_deg": float(args.ankle_roll_bind_margin_deg)}
-                            if args.ankle_roll_bind_deg > 0 else None),
         "obs_dim_policy": int(uw.observation_manager.group_obs_dim["policy"][0]),
         "obs_dim_critic": int(uw.observation_manager.group_obs_dim["critic"][0]),
         "obs_terms_policy": list(uw.observation_manager.active_terms["policy"]),
@@ -328,7 +326,7 @@ def main() -> int:
         "command_ranges_start": command_ranges_dict(uw),
         "command_limit_ranges": {k: list(getattr(env_cfg.commands.base_velocity.limit_ranges, k))
                                  for k in ("lin_vel_x", "lin_vel_y", "ang_vel_z")},
-        "reward_weights": {n: float(uw.reward_manager.get_term_cfg(n).weight) for n in uw.reward_manager.active_terms},
+        "reward_weights": reward_weights,
         "termination_terms": list(uw.termination_manager.active_terms),
         "train_state_restore": runner.train_state_report,
         "rsl_rl_path": rsl_rl_path,
