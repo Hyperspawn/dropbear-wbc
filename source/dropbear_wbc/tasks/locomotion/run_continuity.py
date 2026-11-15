@@ -11,7 +11,9 @@ settings or reward weights differ from the run's latest recorded chunk unless ``
 """
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 UNRECORDED = "UNRECORDED"
 
@@ -176,3 +178,50 @@ def chunk_flags_from_run_info(info: dict) -> dict:
         if key in info:
             out[key] = info[key]
     return out
+
+
+def file_sha256(path: str | Path) -> str:
+    """SHA-256 hex digest of a file (streamed; same as ``dropbear_wbc.isaac.launch.sha256_file``)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 22), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def check_stand_continuity(prev_info: dict | None, stand_path: str | Path, *, continue_run: bool,
+                           allow_change: bool = False) -> list[str]:
+    """The reset NPZ of a ``--continue_run`` chunk must be the run's (item 346): it sets the reset state, the anchor
+    height target and the fall threshold. Compared by content (sha256), not path, so a run moved between machines
+    still continues; a regenerated default clip or a missing ``--stand_npz`` is refused unless ``allow_change``."""
+    if not continue_run or prev_info is None:
+        return []
+    prev_sha = prev_info.get("stand_npz_sha256")
+    if prev_sha is None:
+        return [f"stand_npz_sha256 {UNRECORDED} in the run's previous chunk"]
+    sha = file_sha256(stand_path)
+    if sha == prev_sha:
+        return []
+    msg = (f"stand NPZ {stand_path} (sha {sha[:12]}) differs from the run's {prev_info.get('stand_npz')} "
+           f"(sha {prev_sha[:12]})")
+    if not allow_change:
+        raise ValueError(f"--continue_run: {msg}. Pass the run's --stand_npz, or --allow_settings_change")
+    return [f"stand NPZ CHANGED: {msg} (--allow_settings_change)"]
+
+
+def resolve_run_stand_npz(info: dict | None, repo_root: str | Path) -> tuple[str | None, str]:
+    """``(path, note)``: a local file holding the stand NPZ a run recorded (item 346), for
+    ``run_chunked_locomotion.py --resume_run``. Tries the recorded path, then its ``data/...`` part under
+    ``repo_root`` (a run dir copied from another machine); only a file whose sha256 matches is returned."""
+    if not info or not info.get("stand_npz") or not info.get("stand_npz_sha256"):
+        return None, f"stand_npz {UNRECORDED} in run_info"
+    rec = Path(str(info["stand_npz"]).replace("\\", "/"))
+    cands = [rec]
+    if "data" in rec.parts:
+        i = len(rec.parts) - 1 - rec.parts[::-1].index("data")
+        cands.append(Path(repo_root).joinpath(*rec.parts[i:]))
+    for c in cands:
+        if c.is_file() and file_sha256(c) == info["stand_npz_sha256"]:
+            return str(c), "matched"
+    return None, (f"no local file matches the run's stand NPZ {info['stand_npz']} "
+                  f"(sha {str(info['stand_npz_sha256'])[:12]}); train_locomotion refuses unless the default matches")

@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
-from dropbear_wbc.tasks.locomotion.run_continuity import chunk_flags_from_run_info  # noqa: E402
+from dropbear_wbc.tasks.locomotion.run_continuity import chunk_flags_from_run_info, resolve_run_stand_npz  # noqa: E402
 from dropbear_wbc.tasks.tracking.run_settings import latest_run_info  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
@@ -198,6 +198,12 @@ def inherit_resume_flags(ap: argparse.ArgumentParser, argv: list[str], args, inf
         if dest not in given and hasattr(args, dest):
             setattr(args, dest, val)
             out[dest] = val
+    if "stand_npz" not in given:  # item 346: the reset clip, matched by sha256 (train_locomotion checks it too)
+        path, note = resolve_run_stand_npz(info, REPO)
+        if path is not None:
+            args.stand_npz = out["stand_npz"] = path
+        else:
+            print(json.dumps({"time": _now(), "stand_npz_not_inherited": note}), flush=True)
     return out
 
 

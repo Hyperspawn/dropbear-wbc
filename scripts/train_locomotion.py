@@ -253,12 +253,15 @@ def main() -> int:
                                    continue_run=args.continue_run, allow_change=args.allow_settings_change)
     # -- command-line training settings (item 182): same rule; a chunk resumed without the run's flags is refused
     from dropbear_wbc.tasks.locomotion.run_continuity import (check_reward_continuity, check_settings_continuity,
+                                                              check_stand_continuity,
                                                               locomotion_settings)
 
     prev_info = latest_run_info(log_dir) if args.continue_run else None
     settings = locomotion_settings(args, actuator_profile=env_cfg.actuator_profile)
     dr_notes += check_settings_continuity(prev_info, settings, continue_run=args.continue_run,
                                           allow_change=args.allow_settings_change)
+    dr_notes += check_stand_continuity(prev_info, env_cfg.stand_info["path"], continue_run=args.continue_run,
+                                       allow_change=args.allow_settings_change)  # item 346: same reset clip
     for note in dr_notes:
         print(f"[INFO] run setting {note}", flush=True)
 
