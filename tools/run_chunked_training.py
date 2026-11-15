@@ -71,7 +71,13 @@ def npz_pose_mismatch(motion: Path, calibration: Path) -> float | None:
     return max(abs(float(built_for[n]) - v) for n, v in pose.items())
 
 
-def main() -> int:
+def bool_flag(name: str, value: bool) -> str:
+    """``--name`` / ``--no-name`` for a scripts/train.py BooleanOptionalAction flag (item 181: a resumed chunk can turn
+    an inherited flag off; train.py then refuses it unless --allow_settings_change)."""
+    return f"--{name}" if value else f"--no-{name}"
+
+
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run_name", required=True)
     ap.add_argument("--motion_file", default="data/motions/smoke/dropbear_static_stand.npz")
@@ -108,11 +114,13 @@ def main() -> int:
     ap.add_argument("--restore_train_state", choices=("auto", "on", "off"), default="auto",
                     help="scripts/train.py --restore_train_state (learning rate + adaptive sampling across chunks)")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train.py --actuator_profile (legacy / hw_v1 / ...)")
-    ap.add_argument("--hw_regularizers", action="store_true", help="scripts/train.py --hw_regularizers")
+    ap.add_argument("--hw_regularizers", action=argparse.BooleanOptionalAction, default=None,
+                    help="scripts/train.py --hw_regularizers / --no-hw_regularizers (unset: a resumed run inherits it)")
     ap.add_argument("--knee_stop_penalty", type=float, default=0.0, help="scripts/train.py --knee_stop_penalty (< 0)")
     ap.add_argument("--feet_slide_penalty", type=float, default=0.0, help="scripts/train.py --feet_slide_penalty (< 0)")
     ap.add_argument("--thermal_penalty", type=float, default=None, help="scripts/train.py --thermal_penalty (< 0)")
-    ap.add_argument("--stop_model", action="store_true", help="train script --stop_model")
+    ap.add_argument("--stop_model", action=argparse.BooleanOptionalAction, default=None,
+                    help="train script --stop_model / --no-stop_model (unset: a resumed run inherits it)")
     ap.add_argument("--stop_load_penalty", type=float, default=0.0, help="train script --stop_load_penalty (< 0)")
     ap.add_argument("--impact_penalty", type=float, default=0.0, help="train script --impact_penalty (< 0)")
     ap.add_argument("--knee_band", default=None, help="train script --knee_band 'stiffness,engage_deg'")
@@ -123,12 +131,14 @@ def main() -> int:
     ap.add_argument("--feet_height_weight", type=float, default=0.0, help="scripts/train.py --feet_height_weight")
     ap.add_argument("--target_clamp_margin_deg", type=float, default=None, help="scripts/train.py --target_clamp_margin_deg")
     ap.add_argument("--action_rate_weight", type=float, default=None, help="scripts/train.py --action_rate_weight")
+    ap.add_argument("--allow_settings_change", action="store_true",
+                    help="scripts/train.py --allow_settings_change: a --resume_run chunk may change a recorded run setting")
     ap.add_argument("--isaac_python", default=_paths.isaac_python(),
                     help="command that runs an Isaac Lab script (split like a shell word list), e.g. on Linux "
                     "'/isaac-sim/python.sh' or '/opt/IsaacLab/isaaclab.sh -p' or 'python' (pip isaaclab; docs/BREV.md)")
     ap.add_argument("--gap_s", type=float, default=45.0,
                     help="pause between chunks so other team members polling the GPU lock (30 s) can take it")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     exp = EXP
     if args.experiment_name or args.motion_library:
         exp = EXP.parent / (args.experiment_name or "dropbear_tracking_library")
@@ -183,16 +193,16 @@ def main() -> int:
         cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--restore_train_state", args.restore_train_state]
         if args.actuator_profile:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--actuator_profile", args.actuator_profile]
-        if args.hw_regularizers:
-            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--hw_regularizers"]
+        if args.hw_regularizers is not None:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [bool_flag("hw_regularizers", args.hw_regularizers)]
         if args.knee_stop_penalty:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--knee_stop_penalty={args.knee_stop_penalty}"]
         if args.feet_slide_penalty:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--feet_slide_penalty={args.feet_slide_penalty}"]
         if args.thermal_penalty is not None:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--thermal_penalty={args.thermal_penalty}"]
-        if args.stop_model:
-            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--stop_model"]
+        if args.stop_model is not None:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = [bool_flag("stop_model", args.stop_model)]
         if args.stop_load_penalty:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--stop_load_penalty={args.stop_load_penalty}"]
         if args.impact_penalty:
@@ -213,6 +223,8 @@ def main() -> int:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--target_clamp_margin_deg={args.target_clamp_margin_deg}"]
         if args.action_rate_weight is not None:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--action_rate_weight={args.action_rate_weight}"]
+        if args.allow_settings_change:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--allow_settings_change"]
         if args.experiment_name:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--experiment_name", args.experiment_name]
         if args.allow_rejected_motion:

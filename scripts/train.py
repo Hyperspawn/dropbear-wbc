@@ -38,8 +38,9 @@ parser.add_argument("--experiment_name", default=None)
 parser.add_argument("--log_root", type=Path, default=_REPO / "logs" / "rsl_rl")
 parser.add_argument("--save_interval", type=int, default=None)
 parser.add_argument("--solver_iters", type=int, nargs=2, default=None, metavar=("POS", "VEL"))
-parser.add_argument("--hw_regularizers", action="store_true", default=None,
-                    help="hw_* profiles: over-rated-torque (thermal) + torque-rate penalties (enable_hw_regularizers)")
+parser.add_argument("--hw_regularizers", action=argparse.BooleanOptionalAction, default=None,
+                    help="hw_* profiles: over-rated-torque (thermal) + torque-rate penalties (enable_hw_regularizers). "
+                    "--no-hw_regularizers turns them off on a --continue_run chunk (with --allow_settings_change)")
 parser.add_argument("--knee_stop_penalty", type=float, default=None,
                     help="with --hw_regularizers: weight (< 0) on the knee cranks sitting within 3 deg of a hard stop "
                          "(docs/ISSUES.md #19); pass as --knee_stop_penalty=-10")
@@ -65,8 +66,9 @@ parser.add_argument("--joint_pos_weight", type=float, default=None,
                     help="reward on matching the reference motor angles; 0 = off, try 1")
 parser.add_argument("--end_threshold_m", type=float, default=None,
                     help="end the episode when the head / a foot / a hand height is this far off [m] (default 0.25)")
-parser.add_argument("--stop_model", action="store_true", default=None,
-                    help="model the motor joints' end stops explicitly (stop loads measured, needed by --stop_load_penalty)")
+parser.add_argument("--stop_model", action=argparse.BooleanOptionalAction, default=None,
+                    help="model the motor joints' end stops explicitly (stop loads measured, needed by --stop_load_penalty); "
+                    "--no-stop_model turns it off on a --continue_run chunk (with --allow_settings_change)")
 parser.add_argument("--stop_load_penalty", type=float, default=None,
                     help="weight (< 0) on end-stop torque above a safe value (knee 40 N*m); pass as --stop_load_penalty=-5")
 parser.add_argument("--impact_penalty", type=float, default=None,
