@@ -34,6 +34,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source"))
 from dropbear_wbc import paths as _paths  # noqa: E402
+from dropbear_wbc.tasks.locomotion.run_continuity import chunk_flags_from_run_info  # noqa: E402
+from dropbear_wbc.tasks.tracking.run_settings import latest_run_info  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 EXP = REPO / "logs" / "rsl_rl" / "dropbear_velocity"
@@ -97,7 +99,109 @@ def _now() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def main() -> int:  # noqa: C901
+def train_flags(args) -> list[str]:
+    """The scripts/train_locomotion.py training-setting flags of one chunk (identical for every chunk of a run)."""
+    cmd: list[str] = []
+    if args.stand_npz:
+        cmd += ["--stand_npz", args.stand_npz]
+    if args.pushes:
+        cmd += ["--pushes"]
+    if args.push_velocity is not None:
+        cmd += [f"--push_velocity={args.push_velocity}"]
+    if args.push_interval is not None:
+        cmd += ["--push_interval", str(args.push_interval[0]), str(args.push_interval[1])]
+    if args.stair_max_m is not None:
+        cmd += [f"--stair_max_m={args.stair_max_m}"]
+    if args.slope_max is not None:
+        cmd += [f"--slope_max={args.slope_max}"]
+    if args.arm_action_scale is not None:
+        cmd += [f"--arm_action_scale={args.arm_action_scale}"]
+    if args.arm_deviation_weight is not None:
+        cmd += [f"--arm_deviation_weight={args.arm_deviation_weight}"]
+    if args.robot_mass_kg is not None:
+        cmd += [f"--robot_mass_kg={args.robot_mass_kg}"]
+    if args.arm_swing_weight is not None:
+        cmd += [f"--arm_swing_weight={args.arm_swing_weight}"]
+    if args.arm_swing_k is not None:
+        cmd += [f"--arm_swing_k={args.arm_swing_k}"]
+    if args.arm_abduction_weight is not None:
+        cmd += [f"--arm_abduction_weight={args.arm_abduction_weight}"]
+    if args.arm_gate_tilt_rate is not None:
+        cmd += [f"--arm_gate_tilt_rate={args.arm_gate_tilt_rate}"]
+    if args.amp_weight is not None:
+        cmd += [f"--amp_weight={args.amp_weight}"]
+    if args.symmetry:
+        cmd += ["--symmetry"]
+    for key in ("clip_excess_arms", "clip_excess_legs", "amp_grad_penalty", "arm_gate_hold_s", "ankle_roll_bind_deg",
+                "ankle_roll_bind_margin_deg"):
+        if getattr(args, key) is not None:
+            cmd += [f"--{key}={getattr(args, key)}"]
+    if args.symmetry_mirror_loss is not None:
+        cmd += [f"--symmetry_mirror_loss={args.symmetry_mirror_loss}"]
+    if args.actuator_profile:
+        cmd += ["--actuator_profile", args.actuator_profile]
+    if args.thermal_penalty is not None:
+        cmd += [f"--thermal_penalty={args.thermal_penalty}"]
+    if args.knee_stop_penalty:
+        cmd += [f"--knee_stop_penalty={args.knee_stop_penalty}"]
+    if args.stop_model:
+        cmd += ["--stop_model"]
+    if args.stop_load_penalty:
+        cmd += [f"--stop_load_penalty={args.stop_load_penalty}"]
+    if args.impact_penalty:
+        cmd += [f"--impact_penalty={args.impact_penalty}"]
+    if args.knee_band:
+        cmd += ["--knee_band", args.knee_band]
+    if args.gait_shaping:
+        cmd += ["--gait_shaping"]
+    if args.gait_v2:
+        cmd += ["--gait_v2"]
+    if args.gait_v3:
+        cmd += ["--gait_v3"]
+    if args.target_clamp_margin_deg is not None:
+        cmd += [f"--target_clamp_margin_deg={args.target_clamp_margin_deg}"]
+    if args.terrain != "flat":
+        cmd += ["--terrain", args.terrain]
+    if args.feet_width_weight is not None:
+        cmd += [f"--feet_width_weight={args.feet_width_weight}"]
+    if args.action_rate_weight is not None:
+        cmd += [f"--action_rate_weight={args.action_rate_weight}"]
+    if args.allow_settings_change:
+        cmd += ["--allow_settings_change"]
+    return cmd
+
+
+def explicit_dests(ap: argparse.ArgumentParser, argv: list[str]) -> set[str]:
+    """Argument dests given on ``argv`` (not just defaulted)."""
+    sup = argparse.ArgumentParser(add_help=False)
+    for act in ap._actions:
+        if act.option_strings and act.dest != "help":
+            kw = {"dest": act.dest, "default": argparse.SUPPRESS}
+            if act.nargs == 0:
+                kw["action"] = "store_true"
+            else:
+                kw["nargs"] = act.nargs
+            sup.add_argument(*act.option_strings, **kw)
+    known, _ = sup.parse_known_args(argv)
+    return set(vars(known))
+
+
+def inherit_resume_flags(ap: argparse.ArgumentParser, argv: list[str], args, info: dict | None) -> dict:
+    """``--resume_run``: fill every training flag the command line leaves out from the run's latest run_info (item 343).
+    A flag that IS given wins; if it differs from the run, train_locomotion refuses it (item 182) unless
+    ``--allow_settings_change``. Returns the inherited ``{dest: value}``."""
+    if not info:
+        return {}
+    given = explicit_dests(ap, argv)
+    out = {}
+    for dest, val in chunk_flags_from_run_info(info).items():
+        if dest not in given and hasattr(args, dest):
+            setattr(args, dest, val)
+            out[dest] = val
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:  # noqa: C901
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run_name", required=True)
     ap.add_argument("--task", default="Dropbear-Velocity-Flat-v0")
@@ -111,7 +215,9 @@ def main() -> int:  # noqa: C901
     ap.add_argument("--wait_minutes", type=float, default=60.0, help="GPU-lock wait of chunks 2.. [min]")
     ap.add_argument("--first_wait_minutes", type=float, default=60.0, help="GPU-lock wait of the first chunk [min]")
     ap.add_argument("--lock_retries", type=int, default=3, help="retries of a chunk whose lock wait timed out (rc 125)")
-    ap.add_argument("--resume_run", default=None, help="continue an existing run dir name instead of starting one")
+    ap.add_argument("--resume_run", default=None,
+                    help="continue an existing run dir name instead of starting one; every training flag left out is "
+                         "taken from the run's latest run_info (item 343)")
     ap.add_argument("--calibration", type=Path, default=None,
                     help="calibration JSON to pin (default: the run's pinned file when resuming, else the live one)")
     ap.add_argument("--stand_npz", default=None, help="reset NPZ (scripts/train_locomotion.py --stand_npz)")
@@ -136,6 +242,14 @@ def main() -> int:  # noqa: C901
                     help="scripts/train_locomotion.py --symmetry_mirror_loss")
     ap.add_argument("--arm_deviation_weight", type=float, default=None,
                     help="scripts/train_locomotion.py --arm_deviation_weight")
+    ap.add_argument("--arm_gate_hold_s", type=float, default=None, help="scripts/train_locomotion.py --arm_gate_hold_s")
+    ap.add_argument("--amp_grad_penalty", type=float, default=None, help="scripts/train_locomotion.py --amp_grad_penalty")
+    ap.add_argument("--ankle_roll_bind_deg", type=float, default=None,
+                    help="scripts/train_locomotion.py --ankle_roll_bind_deg")
+    ap.add_argument("--ankle_roll_bind_margin_deg", type=float, default=None,
+                    help="scripts/train_locomotion.py --ankle_roll_bind_margin_deg")
+    ap.add_argument("--allow_settings_change", action="store_true",
+                    help="scripts/train_locomotion.py --allow_settings_change (change a resumed run's task on purpose)")
     ap.add_argument("--actuator_profile", default=None, help="scripts/train_locomotion.py --actuator_profile")
     ap.add_argument("--thermal_penalty", type=float, default=None, help="scripts/train_locomotion.py --thermal_penalty")
     ap.add_argument("--stop_model", action="store_true", help="train script --stop_model")
@@ -163,7 +277,8 @@ def main() -> int:  # noqa: C901
                     help="Isaac Lab python launcher (Linux/Brev: e.g. \"python\" inside the Isaac venv); added 2026-09-25")
     ap.add_argument("--crash_retries", type=int, default=1,
                     help="re-run a chunk that exited non-zero (not a lock timeout) this many times, from the latest checkpoint")
-    args = ap.parse_args()
+    argv = sys.argv[1:] if argv is None else argv
+    args = ap.parse_args(argv)
 
     if args.after_pid:
         t_wait = time.time()
@@ -192,12 +307,11 @@ def main() -> int:  # noqa: C901
     print(json.dumps({"time": _now(), "pinned_calibration": str(pinned) if pinned else None, "pid": os.getpid(),
                       "argv": sys.argv[1:]}), flush=True)
 
-    if args.resume_run and not args.actuator_profile:
-        infos = sorted((EXP / args.resume_run).glob("run_info*.json"))
-        if infos:
-            # the newest chunk's profile (run_info_resume_<stamp>.json sort last): a resumed run can change it
-            args.actuator_profile = json.loads(infos[-1].read_text(encoding="utf-8")).get("actuator_profile") or None
-        print(json.dumps({"time": _now(), "actuator_profile_from_run_info": args.actuator_profile}), flush=True)
+    if args.resume_run:
+        info = latest_run_info(EXP / args.resume_run)
+        inherited = inherit_resume_flags(ap, argv, args, info)
+        print(json.dumps({"time": _now(), "flags_from_run_info": inherited,
+                          "run_info_found": info is not None}), flush=True)
     stop_file = REPO / args.log_dir / f"STOP_{args.run_name}"
     run_dir: Path | None = EXP / args.resume_run if args.resume_run else None
     k0 = 0
@@ -234,69 +348,7 @@ def main() -> int:  # noqa: C901
                 "--solver_iters", str(args.solver_iters[0]), str(args.solver_iters[1]),
                 "--seed", str(args.seed + k - 1 + 100 * crashes), "--run_name", args.run_name,
             ]
-            if args.stand_npz:
-                cmd += ["--stand_npz", args.stand_npz]
-            if args.pushes:
-                cmd += ["--pushes"]
-            if args.push_velocity is not None:
-                cmd += [f"--push_velocity={args.push_velocity}"]
-            if args.push_interval is not None:
-                cmd += ["--push_interval", str(args.push_interval[0]), str(args.push_interval[1])]
-            if args.stair_max_m is not None:
-                cmd += [f"--stair_max_m={args.stair_max_m}"]
-            if args.slope_max is not None:
-                cmd += [f"--slope_max={args.slope_max}"]
-            if args.arm_action_scale is not None:
-                cmd += [f"--arm_action_scale={args.arm_action_scale}"]
-            if args.arm_deviation_weight is not None:
-                cmd += [f"--arm_deviation_weight={args.arm_deviation_weight}"]
-            if args.robot_mass_kg is not None:
-                cmd += [f"--robot_mass_kg={args.robot_mass_kg}"]
-            if args.arm_swing_weight is not None:
-                cmd += [f"--arm_swing_weight={args.arm_swing_weight}"]
-            if args.arm_swing_k is not None:
-                cmd += [f"--arm_swing_k={args.arm_swing_k}"]
-            if args.arm_abduction_weight is not None:
-                cmd += [f"--arm_abduction_weight={args.arm_abduction_weight}"]
-            if args.arm_gate_tilt_rate is not None:
-                cmd += [f"--arm_gate_tilt_rate={args.arm_gate_tilt_rate}"]
-            if args.amp_weight is not None:
-                cmd += [f"--amp_weight={args.amp_weight}"]
-            if args.symmetry:
-                cmd += ["--symmetry"]
-            for k in ("clip_excess_arms", "clip_excess_legs"):
-                if getattr(args, k) is not None:
-                    cmd += [f"--{k}={getattr(args, k)}"]
-            if args.symmetry_mirror_loss is not None:
-                cmd += [f"--symmetry_mirror_loss={args.symmetry_mirror_loss}"]
-            if args.actuator_profile:
-                cmd += ["--actuator_profile", args.actuator_profile]
-            if args.thermal_penalty is not None:
-                cmd += [f"--thermal_penalty={args.thermal_penalty}"]
-            if args.knee_stop_penalty:
-                cmd += [f"--knee_stop_penalty={args.knee_stop_penalty}"]
-            if args.stop_model:
-                cmd += ["--stop_model"]
-            if args.stop_load_penalty:
-                cmd += [f"--stop_load_penalty={args.stop_load_penalty}"]
-            if args.impact_penalty:
-                cmd += [f"--impact_penalty={args.impact_penalty}"]
-            if args.knee_band:
-                cmd += ["--knee_band", args.knee_band]
-            if args.gait_shaping:
-                cmd += ["--gait_shaping"]
-            if args.gait_v2:
-                cmd += ["--gait_v2"]
-            if args.gait_v3:
-                cmd += ["--gait_v3"]
-            if args.target_clamp_margin_deg is not None:
-                cmd += [f"--target_clamp_margin_deg={args.target_clamp_margin_deg}"]
-            if args.terrain != "flat":
-                cmd += ["--terrain", args.terrain]
-            if args.feet_width_weight is not None:
-                cmd += [f"--feet_width_weight={args.feet_width_weight}"]
-            if args.action_rate_weight is not None:
-                cmd += [f"--action_rate_weight={args.action_rate_weight}"]
+            cmd += train_flags(args)
             if run_dir is not None and any(run_dir.glob("model_*.pt")):
                 cmd += ["--resume", "--load_run", run_dir.name, "--continue_run"]
             cmd += ["--headless"]

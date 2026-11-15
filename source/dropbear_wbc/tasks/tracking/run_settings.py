@@ -6,10 +6,11 @@ actuator profile and the hardware regularizers came only from that chunk's comma
 thermal / torque-rate / knee-stop / feet-slide terms and the target clamp, while the checkpoint kept its iteration
 count. The same holds for the later run flags (explicit stop model, knee band, stop-load / impact penalties, tracking
 strictness, head / foot height rewards): ``run_chunked_training.py`` forwards them only when they are passed again. ``tools/run_chunked_training.py --resume_run`` builds exactly such a command line when its own flags are left
-out (``tools/run_chunked_locomotion.py`` already inherits the profile from run_info; the tracking runner did not).
+out (``tools/run_chunked_locomotion.py --resume_run`` now inherits every locomotion training flag from run_info, item 343).
 
 :func:`resolve_run_settings` inherits every setting the chunk does not set and refuses a different value unless
-``allow_change``; :func:`audit_run_dir` reports drift between the ``run_info*.json`` files of an existing run.
+``allow_change``; :func:`audit_run_dir` reports drift between the ``run_info*.json`` files of an existing run
+(tracking keys, plus the train_locomotion key set for velocity runs).
 """
 from __future__ import annotations
 
@@ -129,20 +130,35 @@ def resolve_run_settings(cli: dict, prev_info: dict | None, *, continue_run: boo
     return out, notes
 
 
+def is_locomotion_run(info: dict) -> bool:
+    """A run_info written by scripts/train_locomotion.py (velocity task)."""
+    return str(info.get("task", "")).startswith("Dropbear-Velocity") or "gait_v3" in info
+
+
 def audit_run_dir(run_dir: Path) -> list[dict]:
     """Every chunk boundary of ``run_dir`` where a run-defining setting changed (empty = consistent run).
     Each record: ``{"file", "key", "before", "after", "flagged"}`` (``flagged`` = the chunk noted the change).
     The event/DR record (``dr_events``, :mod:`dropbear_wbc.tasks.dr_record`) is compared too; a chunk that records it
     after one that did not is reported with ``unverifiable`` (the earlier randomization is unknown)."""
+    from dropbear_wbc.tasks.locomotion.run_continuity import SETTING_FLAGS, effective_settings
+
     files = run_info_files(run_dir)
     infos = [json.loads(f.read_text(encoding="utf-8")) for f in files]
     drift: list[dict] = []
     for prev, (f, cur) in zip(infos, list(zip(files, infos))[1:]):
         flagged = any("CHANGED" in n for n in cur.get("run_settings_notes", []) or [])
+        loco = is_locomotion_run(prev) or is_locomotion_run(cur)
         for key in RUN_SETTING_KEYS:
+            if loco and key in SETTING_FLAGS:
+                continue  # compared below with the locomotion rule (disabled-feature parameters ignored)
             a, b = recorded(prev, key), recorded(cur, key)
             if not _same(a, b):
                 drift.append({"file": f.name, "key": key, "before": a, "after": b, "flagged": flagged})
+        if loco:  # item 343: the train_locomotion key set (run_continuity.SETTING_FLAGS), keys both chunks record
+            ea, eb = effective_settings(prev), effective_settings(cur)
+            for key in SETTING_FLAGS:
+                if key in prev and key in cur and ea[key] != eb[key]:
+                    drift.append({"file": f.name, "key": key, "before": ea[key], "after": eb[key], "flagged": flagged})
         dr = dr_drift(prev, cur)  # event / DR terms (item 190); UNRECORDED -> recorded is unverifiable drift
         if dr is not None:
             drift.append({"file": f.name, **dr, "flagged": flagged})
@@ -152,7 +168,7 @@ def audit_run_dir(run_dir: Path) -> list[dict]:
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Report run-defining setting drift across the chunks of tracking runs.")
+    ap = argparse.ArgumentParser(description="Report run-defining setting drift across the chunks of tracking and locomotion runs.")
     ap.add_argument("run_dirs", nargs="+", type=Path)
     a = ap.parse_args(argv)
     bad = 0

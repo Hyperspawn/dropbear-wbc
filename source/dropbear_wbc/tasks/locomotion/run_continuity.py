@@ -157,3 +157,22 @@ def check_reward_continuity(prev_info: dict | None, reward_weights: dict, *, con
         raise ValueError(f"--continue_run: reward terms differ from the run's latest recorded chunk: {'; '.join(out)}. "
                          "Pass --allow_settings_change to change the reward mid-run")
     return [f"reward_weights CHANGED {'; '.join(out)} (--allow_settings_change)"]
+
+
+def chunk_flags_from_run_info(info: dict) -> dict:
+    """``tools/run_chunked_locomotion.py`` argument values that reproduce the training settings ``info`` (a run_info
+    dict) records: ``{dest: value}`` for every recorded key (item 343). A key the run_info lacks is left out (the
+    chunk then uses its own flag / default and train_locomotion notes it as UNRECORDED)."""
+    out: dict = {}
+    for key in SETTING_FLAGS:
+        if key in info and key != "ankle_roll_bind":  # gait_shaping recorded True with v2/v3: same task either way
+            out[key] = info[key]
+    if "ankle_roll_bind" in info:
+        bind = info["ankle_roll_bind"]
+        out["ankle_roll_bind_deg"] = float(bind["roll_limit_deg"]) if bind else 0.0
+        if bind:
+            out["ankle_roll_bind_margin_deg"] = float(bind["margin_deg"])
+    for key in ("task", "pushes", "push_velocity", "push_interval"):  # run_info keys outside SETTING_FLAGS
+        if key in info:
+            out[key] = info[key]
+    return out
