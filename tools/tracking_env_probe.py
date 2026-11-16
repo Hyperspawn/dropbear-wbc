@@ -239,7 +239,9 @@ def standing_hold(env, robot, actions, steps: int) -> dict:
     }
     if samples:
         s = torch.cat(samples)
-        q = torch.quantile(s.float(), torch.tensor([0.5, 0.95, 0.99], device=s.device))
+        from dropbear_wbc.isaac.quantile import quantile
+
+        q = quantile(s.float(), [0.5, 0.95, 0.99])
         out.update(
             samples=int(s.numel()),
             worst_gap_m={"median": float(q[0]), "p95": float(q[1]), "p99": float(q[2]), "max": float(s.max())},

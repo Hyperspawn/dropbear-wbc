@@ -22,6 +22,7 @@ from collections.abc import Sequence
 
 import torch
 
+from dropbear_wbc.isaac.quantile import quantile
 from dropbear_wbc.robots.hw_introspect import actuator_effort_limit
 
 KEYS = ("peak_limit_Nm", "max_Nm", "p95_Nm", "rms_Nm", "clip_frac", "max_speed_rad_s", "p95_speed_rad_s")
@@ -115,11 +116,11 @@ class MotorTorqueSampler:
     def _per_motor(self, tq: torch.Tensor, cl: torch.Tensor, vl: torch.Tensor) -> dict:
         # identical reductions / rounding to play_locomotion.py before the refactor (tests pin it)
         return {name: {"peak_limit_Nm": round(float(self.peak_lim[i]), 2), "max_Nm": round(float(tq[:, i].max()), 2),
-                       "p95_Nm": round(float(torch.quantile(tq[:, i], 0.95)), 2),
+                       "p95_Nm": round(float(quantile(tq[:, i], 0.95)), 2),
                        "rms_Nm": round(float(tq[:, i].pow(2).mean().sqrt()), 2),
                        "clip_frac": round(float(cl[:, i].mean()), 4),
                        "max_speed_rad_s": round(float(vl[:, i].max()), 2),
-                       "p95_speed_rad_s": round(float(torch.quantile(vl[:, i], 0.95)), 2)}
+                       "p95_speed_rad_s": round(float(quantile(vl[:, i], 0.95)), 2)}
                 for i, name in enumerate(self.names)}
 
     def _cat(self):

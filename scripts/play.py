@@ -27,6 +27,7 @@ _REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_REPO / "third_party" / "pydeps"), str(_REPO / "source")]
 from dropbear_wbc.isaac.launch import prepare_kit_python  # noqa: E402
 from dropbear_wbc.isaac.compat import as_tensor, body_quat_wxyz, root_quat_wxyz  # noqa: E402
+from dropbear_wbc.isaac.quantile import quantile  # noqa: E402
 
 prepare_kit_python()
 
@@ -559,7 +560,7 @@ def main() -> int:  # noqa: C901
                    out / "parity_rollout.pt")
         summary["export"]["parity_rollout_samples"] = len(rollout_obs)
     gaps = torch.stack(gap_hist).flatten() if gap_hist else torch.zeros(1)
-    q = torch.quantile(gaps.float(), torch.tensor([0.5, 0.95, 0.99]))
+    q = quantile(gaps.float(), [0.5, 0.95, 0.99])
     summary.update(
         steps=steps,
         finite=finite,
