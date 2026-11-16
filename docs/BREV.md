@@ -110,7 +110,10 @@ is written `<instance>`; the last instance was called `dropbear-training`, so th
 cd <repo>
 python3 tools/build_motion_library_manifest.py --dry-run            # "unchanged" or the new accepted_v<N> it would write
 python3 tools/pack_brev_bundle.py --manifest data/motions/libraries/accepted_v1.json \
+    --launcher tools/brev/run_session<N>.sh \
     --out logs/brev/dropbear-wbc-brev.tgz   # the stand reset NPZ is always shipped (DATA_FILES)
+# --launcher: the pack fails if the job script names a data/ file the bundle lacks, or uses --amp_weight != 0 without
+# the AMP library (tasks/locomotion/amp.py DEFAULT_LIBRARY, today accepted_v8push.json) as a --manifest.
 sha256sum logs/brev/dropbear-wbc-brev.tgz
 
 # (WSL) 2. log in (user), then copy the bundle and the plant USD (421 MB USDC, self-contained; read-only original on P:)
