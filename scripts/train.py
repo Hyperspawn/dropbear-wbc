@@ -96,6 +96,9 @@ parser.add_argument("--continue_run", action="store_true",
 parser.add_argument("--allow_rejected_motion", action="store_true",
                     help="EXPLORATORY: train on a motion whose meta.status or <clip>.validation.json verdict is 'rejected'. "
                     "Written to <run>/motion_acceptance.json (resumed chunks inherit it) and to run_info.json")
+parser.add_argument("--allow_uncurated", action="store_true",
+                    help="hw_* / legacy_hwarm library runs: allow a --motion_library without a valid hardware curation "
+                    "(tools/curate_hw_library.py). Recorded in run_info.hw_library_curation")
 parser.add_argument("--accept_reason", default="", help="why the rejected motion is used (with --allow_rejected_motion)")
 parser.add_argument("--restore_train_state", choices=("auto", "on", "off"), default="auto",
                     help="restore the learning rate and the adaptive-sampling statistics saved in the checkpoint on "
@@ -162,6 +165,14 @@ def main() -> int:
     if rs["actuator_profile"] is not None:
         env_cfg.set_actuator_profile(rs["actuator_profile"])
     print(f"[INFO] actuator profile: {getattr(env_cfg, 'actuator_profile', 'legacy')}", flush=True)
+    # hardware-armed library runs train on a hardware-curated manifest (item 349; library_curation.py)
+    from dropbear_wbc.tasks.tracking.library_curation import check_hw_library
+
+    hw_curation, cur_notes = check_hw_library(motion if is_library else None,
+                                              getattr(env_cfg, "actuator_profile", "legacy"),
+                                              allow_uncurated=args.allow_uncurated, continue_run=args.continue_run)
+    for note in cur_notes:
+        print(f"[INFO] {note}", flush=True)
     if rs["robot_mass_kg"] is not None:
         from dropbear_wbc.robots.mass_dr import predicted_mass_kg
 
@@ -291,6 +302,7 @@ def main() -> int:
         "allow_rejected_motion": bool(env_cfg.commands.motion.allow_rejected_motion),
         "motion_acceptance": acceptance,
         "motion_library": getattr(motion_term, "library_info", None),
+        "hw_library_curation": hw_curation,
         "train_state_persistence": restore,
         "restore_train_state": restore,
         "train_state_restore": runner.train_state_report,

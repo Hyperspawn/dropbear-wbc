@@ -131,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--feet_height_weight", type=float, default=0.0, help="scripts/train.py --feet_height_weight")
     ap.add_argument("--target_clamp_margin_deg", type=float, default=None, help="scripts/train.py --target_clamp_margin_deg")
     ap.add_argument("--action_rate_weight", type=float, default=None, help="scripts/train.py --action_rate_weight")
+    ap.add_argument("--allow_uncurated", action="store_true",
+                    help="scripts/train.py --allow_uncurated: an hw_* / legacy_hwarm library run may use a manifest "
+                    "without a hardware curation (tools/curate_hw_library.py)")
     ap.add_argument("--allow_settings_change", action="store_true",
                     help="scripts/train.py --allow_settings_change: a --resume_run chunk may change a recorded run setting")
     ap.add_argument("--isaac_python", default=_paths.isaac_python(),
@@ -225,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = [f"--action_rate_weight={args.action_rate_weight}"]
         if args.allow_settings_change:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--allow_settings_change"]
+        if args.allow_uncurated:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--allow_uncurated"]
         if args.experiment_name:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--experiment_name", args.experiment_name]
         if args.allow_rejected_motion:
