@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -61,13 +62,74 @@ def test_comments_do_not_count_as_references_or_flags():
     assert tool.check_launcher(text, set(), set(), "data/x.json") == []
 
 
-def test_unshipped_data_file_is_reported_and_dirs_or_vars_are_not():
+def _miss(ref):
+    return f"{ref}: named by the launcher, not in the bundle (add --manifest or --extra)"
+
+
+def test_unshipped_data_file_is_reported_and_dirs_or_unknown_vars_are_not():
     tool = _tool()
     text = ("M=data/motions\nCAL=data/calibration/snapshots/c_1234abcd.json\n"
             "python scripts/train.py --motion_file data/motions_cyclic/walk.npz --x $M/a.npz data/motions/${C}.npz\n"
-            "ls data/m/a.np* data/m/b.json$SUF data/m/c.v{1,2}\n")
+            "ls data/m/a.np* data/m/b.json$SUF data/m/c.v{1,2} $D/telemetry.npz\n")
     bad = tool.check_launcher(text, {"data/calibration/snapshots/c_1234abcd.json"}, set(), "data/x.json")
-    assert bad == ["data/motions_cyclic/walk.npz: named by the launcher, not in the bundle (add --manifest or --extra)"]
+    assert bad == [_miss("data/motions/a.npz"), _miss("data/motions_cyclic/walk.npz")]
+    assert tool.check_launcher(text, {"data/calibration/snapshots/c_1234abcd.json", "data/motions/a.npz",
+                                      "data/motions_cyclic/walk.npz"}, set(), "data/x.json") == []
+
+
+@pytest.mark.parametrize("line", [
+    "clip_job a $M/sub/a.npz 2500 11", "clip_job a ${M}/sub/a.npz 2500 11", "x --motion_file=$M/sub/a.npz",
+    "declare -A NPZ=( [a]=$M/sub/a.npz )", "x \"$M/sub/a.npz\"", "x ${N:-data/motions}/sub/a.npz",
+    "x $SUB/a.npz", "x $LIB2",
+])
+def test_composed_paths_resolve(line):
+    tool = _tool()
+    text = f"export M=data/motions\nSUB=$M/sub\nLIB2=\"$SUB/a.npz\"\n{line}\n"
+    assert tool.composed_data_refs(text) == {"data/motions/sub/a.npz"}
+    assert tool.check_launcher(text, set(), set(), "data/x.json") == [_miss("data/motions/sub/a.npz")]
+
+
+def test_every_value_of_a_reassigned_name_is_checked_and_unresolvable_values_skipped():
+    tool = _tool()
+    text = ("M=data/a\nf() { local M=data/b; run $M/c.npz; }\nM=$(ls -d data/*)\nG=data/*\n"
+            "LIB=\"--task T --motion_library data/l.json\"\nrun $G/x.npz $LIB # $M/comment.npz\n# $M/z.npz\n")
+    assert tool.shell_assignments(text)["M"] == {"data/a", "data/b"}
+    assert "G" not in tool.shell_assignments(text) and "LIB" not in tool.shell_assignments(text)
+    assert tool.composed_data_refs(text) == {"data/a/c.npz", "data/b/c.npz"}
+
+
+def test_real_launchers_composed_clip_refs():
+    """run_all.sh / eval_watcher.sh name their single-clip jobs as $M/<set>/<clip>.npz (unchecked before 0094)."""
+    tool = _tool()
+    want = {"data/motions/unitree_rl_lab_mimic/G1_Take_102_v4.npz",
+            "data/motions/unitree_rl_lab_mimic/G1_gangnam_style_V01_v4.npz",
+            "data/motions/gmr_lafan1/lafan1_dance2_subject1_v4.npz", "data/motions/gmr_lafan1/lafan1_walk1_subject1_v4.npz",
+            "data/motions/kimodo_g1/output_walk_v4.npz", "data/motions/synthetic/wave_right_v2.npz"}
+    for name in ("run_all.sh", "eval_watcher.sh"):
+        text = (ROOT / "tools/brev" / name).read_text(encoding="utf-8")
+        assert tool.composed_data_refs(text) >= want, name
+        assert set(tool.check_launcher(text, _default_shipped(tool), set(), "data/x.json")) >= {_miss(r) for r in want}
+
+
+def test_expansion_is_bounded():
+    tool = _tool()
+    text = "".join(f"A=data/v{i}\n" for i in range(20)) + "".join(f"B=b{i}\n" for i in range(20)) + "x $A/$B/c.npz\n"
+    assert 0 < len(tool.composed_data_refs(text)) <= tool._MAX_EXPANSIONS
+    lim = sys.getrecursionlimit()
+    sys.setrecursionlimit(250)  # a self-referential value must stop at the depth bound, not at the interpreter's
+    try:
+        assert tool.expand_word("$A/$A/$A/x", {"A": {"$A"}}) == set()
+    finally:
+        sys.setrecursionlimit(lim)
+    chain = "".join(f"V{i}=$V{i - 1}/d{i}\n" for i in range(1, 6))
+    assert tool.composed_data_refs("V0=data\n" + chain + "x $V5/c.npz\n") == {"data/d1/d2/d3/d4/d5/c.npz"}
+
+
+def test_default_value_expansion():
+    tool = _tool()
+    assert tool.composed_data_refs("x ${N:-data/motions}/a.npz ${N-data/m2}/b.npz\n") == {
+        "data/motions/a.npz", "data/m2/b.npz"}
+    assert tool.composed_data_refs("N=data/set\nx ${N:-data/motions}/a.npz\n") == {"data/set/a.npz"}
 
 
 def test_driver_fstring_passthrough_is_not_amp_on():

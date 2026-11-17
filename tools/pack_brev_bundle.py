@@ -10,7 +10,8 @@ Stdlib only (any Python 3.10+, Windows or WSL). Contents:
 * ``DATA_FILES`` (always): the locomotion/tabletop reset pose ``data/motions/smoke/dropbear_static_stand.npz``;
 * ``--extra`` files/dirs;
 * ``--launcher`` (optional, the job script or driver the instance will run, e.g. ``tools/brev/run_session11.sh``):
-  checked, not packed separately. Every repo ``data/<file>`` it names must be in the bundle, and a job with a
+  checked, not packed separately. Every repo ``data/<file>`` it names (literally or as ``$VAR/<file>`` with a
+  literal ``VAR=data/...`` assignment) must be in the bundle, and a job with a
   non-zero ``--amp_weight`` needs the AMP reference library (``tasks/locomotion/amp.py`` ``DEFAULT_LIBRARY``) as a
   ``--manifest``: otherwise the pack fails here instead of the GPU job failing on the instance;
 * ``BUNDLE.json``: file list with SHA-256, the manifests' clip pins, the source host and time.
@@ -45,6 +46,15 @@ AMP_PY = REPO / "source" / "dropbear_wbc" / "tasks" / "locomotion" / "amp.py"
 # repo data/ file tokens in a launcher (needs a file suffix; directories such as M=data/motions are composed later)
 _DATA_TOKEN = re.compile(r"(?<![\w./$-])(data/[A-Za-z0-9_.\-/]+\.[A-Za-z0-9]+)(?![\w$*{])")
 _AMP_FLAG = re.compile(r"--amp_weight(?:=|\s+)([^\s\\\"';|&)]+)")
+# simple shell assignments NAME=value (optionally after export/readonly/local/declare); value must be one literal word
+_ASSIGN_PREFIX = {"export", "readonly", "local", "declare", "typeset"}
+_CMD_SEP = {"{", "}", "then", "do", "else", "elif", "&&", "||", "|", "!", ";", "(", ")"}
+_ASSIGN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+# a word that expands one or more variables ($NAME, ${NAME}, ${NAME:-default}, ${NAME-default})
+_VAR_WORD = re.compile(r"[^\s\"'=()\[\]`;|&<>]*\$(?:\{[A-Za-z_][A-Za-z0-9_]*(?::?-[^}]*)?\}|[A-Za-z_][A-Za-z0-9_]*)"
+                       r"[^\s\"'()`;|&<>]*")
+_VAR_REF = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))")
+_MAX_EXPANSIONS = 64
 
 
 def _sha256(path: Path) -> str:
@@ -111,15 +121,84 @@ def _strip_comments(text: str) -> str:
     return "\n".join(out)
 
 
+def shell_assignments(text: str) -> dict[str, set[str]]:
+    """Literal one-word values of ``NAME=value`` assignments (every value a name takes anywhere in the script).
+
+    Values holding command substitution, globbing or whitespace are skipped (not resolvable statically); a name
+    assigned in several places keeps every value, so each composed path is checked under each of them.
+    """
+    out: dict[str, set[str]] = {}
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        try:
+            toks = shlex.split(line, comments=True, posix=True)
+        except ValueError:
+            continue
+        start = True  # assignments only lead a simple command (A=x B=y cmd ...); `;`, `{`, `then`, `do` start one
+        for t in toks:
+            if t in _CMD_SEP:
+                start = True
+                continue
+            if not start:
+                if t.endswith(";"):
+                    start = True
+                continue
+            if t in _ASSIGN_PREFIX or (t.startswith("-") and t != "-"):  # export / local -r / declare -x flags
+                continue
+            end = t.endswith(";")
+            m = _ASSIGN.match(t.rstrip(";"))
+            if m:
+                name, val = m.groups()
+                if val and not any(c in val for c in " \t`*?()") and "$(" not in val:
+                    out.setdefault(name, set()).add(val)
+            start = end or bool(m)
+    return out
+
+
+def expand_word(word: str, env: dict[str, set[str]], depth: int = 0) -> set[str]:
+    """Every expansion of ``word`` under ``env``; a word with an unknown variable expands to nothing."""
+    m = _VAR_REF.search(word)
+    if not m:
+        return {word}
+    if depth > 8:
+        return set()
+    name, default = m.group(1) or m.group(3), m.group(2)
+    vals = env.get(name) or ({default} if default is not None else set())
+    res: set[str] = set()
+    for v in sorted(vals):
+        for tail in expand_word(word[m.end():], env, depth + 1):
+            for head in expand_word(v, env, depth + 1):  # a value may itself compose another variable
+                res.add(word[:m.start()] + head + tail)
+                if len(res) >= _MAX_EXPANSIONS:
+                    return res
+    return res
+
+
+def composed_data_refs(text: str) -> set[str]:
+    """Repo ``data/<file>`` paths built from simple variables (``M=data/motions`` ... ``$M/clip.npz``)."""
+    env = shell_assignments(text)
+    refs: set[str] = set()
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        for word in _VAR_WORD.findall(line.split(" #", 1)[0]):
+            for w in expand_word(word, env):
+                refs.update(r for r in _DATA_TOKEN.findall(w) if w.startswith(r) or w.startswith("./" + r))
+    return refs
+
+
 def check_launcher(text: str, shipped: set[str], manifests: set[str], amp_library: str) -> list[str]:
     """Problems that would make the jobs in ``text`` fail on the instance with this bundle (empty = OK).
 
     ``shipped``: repo-relative files in the bundle; ``manifests``: repo-relative ``--manifest`` paths.
-    Comments are ignored, so a usage note naming a manifest does not count as a reference.
+    Comments are ignored, so a usage note naming a manifest does not count as a reference. Paths composed from
+    simple literal variables (``M=data/motions`` then ``$M/clip.npz``) are resolved; a word with a variable that is
+    never assigned a literal value (``$D/x.npz``, ``${C}``, command substitution) stays unchecked.
     """
     body = _strip_comments(text)
     problems = []
-    for ref in sorted(set(_DATA_TOKEN.findall(body))):
+    for ref in sorted(set(_DATA_TOKEN.findall(body)) | composed_data_refs(text)):
         if ref not in shipped:
             problems.append(f"{ref}: named by the launcher, not in the bundle (add --manifest or --extra)")
     amp_on = []
