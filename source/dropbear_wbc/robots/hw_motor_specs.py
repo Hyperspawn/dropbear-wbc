@@ -380,12 +380,80 @@ STOP_MODEL: dict[str, float] = {"omega": 250.0, "zeta": 0.7, "margin_deg": 10.0,
                                 "knee_damping": 20.0}
 """Explicit end-stop model (``--stop_model``): past a motor joint's mechanical limit the actuator adds a damped spring
 torque ``k * penetration - d * velocity`` with ``k = omega^2 * armature`` and ``d = 2 * zeta * sqrt(k * armature)`` (stable
-at the 200 Hz explicit step, ~1-2 deg of penetration at full load), and PhysX's own rigid limit moves ``margin_deg``
+at the 200 Hz explicit step when the link adds >= ~0.65x the armature, ~1-2 deg of penetration at full load; light
+links get per-role ``STOP_ROLE_PARAMS``, the calves since item 353), and PhysX's own rigid limit moves ``margin_deg``
 outward so that only the modeled stop acts. The knee cranks hold the body's weight through the four-bar (hundreds of
 N*m when a landing drives the knee into a stop), so they get a stiffer spring (``knee_stiffness``, ~3.6 deg at 500
 N*m; their effective inertia includes the reflected shank, so it stays stable). Joints without a mechanical stop
 (travel >= 350 deg: shoulder and wrist rolls) are not modeled. The stop torque is then known exactly (``DatasheetMotor.stop_effort``):
 what the printed stop parts carry (e.g. the knee-lock blocks on the knee drive's 300 mm extrusion)."""
+STOP_ROLE_PARAMS: dict[str, dict[str, float]] = {"calf": {"omega": 210.0, "zeta": 0.3}}
+"""Per-role overrides of ``STOP_MODEL["omega"]/["zeta"]`` (item 353, notes/223 F2). The generic omega 250 / zeta 0.7 stop is
+explicit over the 5 ms step, so with the role PD on top it needs I_total / armature >= ~1.65; the calf motors
+(Revolute67/81, X8 Pro through the ankle linkage) can see ~1.0-1.2 (the foot is light), and the generic stop then limit-
+cycles at step rate (stop_effort std 5-7 N*m). omega 210 / zeta 0.3 (k 1215 N*m/rad, d 3.47 N*m*s/rad on the X8 Pro)
+keeps the discrete spectral radius < 0.95 down to the armature alone, with ~0.9 deg of penetration at 20 N*m."""
+STOP_LINK_INERTIA_MIN: dict[str, float] = {
+    # joint -> smallest link inertia [kg*m^2] the motor sees beyond its own armature, in MOTOR space (swing, link free;
+    # notes/223 223_joint_ratios.json, MJCF dropbear_serial_hw_cem6, min of L/R). Used by the stop stability check.
+    **{f"PG_{s}_leg_pitch": 0.93 for s in ("left", "right")},  # hip roll, direct
+    **{f"PG_{s}_leg_roll": 0.044 for s in ("left", "right")},  # hip yaw, direct
+    **{f"{p}_hip_joint": 0.56 for p in ("LL", "RL")},  # hip pitch, direct
+    **{f"{p}_knee_actuator_joint": 0.24 for p in ("LL", "RL")},  # shank+foot at the crank, lower stop (notes/223 F1)
+    **{f"{p}_Revolute{n}": 0.0 for p in ("LL", "RL") for n in (67, 81)},  # ankle linkage: unknown, worst case 0 (item 354)
+    **{f"{p}_pitch": 0.15 for p in ("LH", "RH")},  # shoulder roll (190 deg), direct
+    **{f"{p}_elbow_joint": 0.5 for p in ("LH", "RH")},  # elbow 0.025 semantic x ~21 (motor/semantic armature ratio)
+}
+
+
+def stop_spring_params(joint: str, armature: float) -> dict:
+    """Explicit stop spring of one STOPPED motor joint: ``{"k", "d", "source", "omega", "zeta"}`` (knee: fixed k, d)."""
+    if "knee" in joint:
+        return {"k": float(STOP_MODEL["knee_stiffness"]), "d": float(STOP_MODEL["knee_damping"]), "source": "knee",
+                "omega": None, "zeta": None}
+    role = JOINT_ROLES.get(joint)
+    over = STOP_ROLE_PARAMS.get(role, {})
+    w, z = float(over.get("omega", STOP_MODEL["omega"])), float(over.get("zeta", STOP_MODEL["zeta"]))
+    k = w * w * float(armature)
+    return {"k": k, "d": 2.0 * z * math.sqrt(k * float(armature)), "source": role if over else "generic",
+            "omega": w, "zeta": z}
+
+
+def stop_param_table(map_name: str) -> dict[str, dict]:
+    """Motor joint -> stop spring of ``map_name`` (``k = d = 0`` and ``source "none"`` for joints without a mechanical
+    stop, travel >= 350 deg). What ``make_hw_motor_groups(stop_model=True)`` builds; recorded in run_info."""
+    lim = motor_stop_limits()
+    out: dict[str, dict] = {}
+    for j, p in joint_hw_params(map_name).items():
+        if math.degrees(lim[j][1] - lim[j][0]) >= 350.0:
+            out[j] = {"k": 0.0, "d": 0.0, "source": "none", "omega": None, "zeta": None}
+        else:
+            out[j] = stop_spring_params(j, float(p["armature"]))
+    return out
+
+
+def stop_spectral_radius(k: float, d: float, kp: float, kd: float, inertia: float, dt: float = 0.005) -> float:
+    """Spectral radius of one joint pressed into its stop: stop spring (k, d) + PD (kp, kd) applied explicitly over
+    ``dt`` on ``inertia`` (semi-implicit Euler, the PhysX explicit-force step). < 1: the contact settles."""
+    K, C = (k + kp) * dt / inertia, (d + kd) * dt / inertia
+    a, b, c, e = 1.0 - K * dt, dt * (1.0 - C), -K, 1.0 - C
+    tr, det = a + e, a * e - b * c
+    disc = tr * tr / 4.0 - det
+    if disc >= 0.0:
+        r = math.sqrt(disc)
+        return max(abs(tr / 2.0 + r), abs(tr / 2.0 - r))
+    return math.sqrt(det)
+
+
+def stop_params_run_info(profile: str | None, enabled: bool) -> dict | None:
+    """run_info record of the stop springs of an ``hw_*`` profile with the stop model on (else None)."""
+    if not enabled or profile not in HW_PROFILE_MAPS:
+        return None
+    return {"map": HW_PROFILE_MAPS[profile], "role_params": {r: dict(v) for r, v in STOP_ROLE_PARAMS.items()},
+            "joints": {j: {"k": round(v["k"], 6), "d": round(v["d"], 6), "source": v["source"]}
+                       for j, v in stop_param_table(HW_PROFILE_MAPS[profile]).items()}}
+
+
 KNEE_LOCK_ARM_M: float = 0.28
 """Distance from the knee motor axis to the knee-lock stop blocks (``*_knee_lock_2*`` on the 300 mm extrusion of the knee
 drive; plant USD 45586414): stop torque / this = force on the blocks."""

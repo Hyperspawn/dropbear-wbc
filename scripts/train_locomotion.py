@@ -312,6 +312,8 @@ def main() -> int:
     uw = env.unwrapped
     reset_term = uw.event_manager.get_term_cfg("reset_robot").func
     action_term = uw.action_manager.get_term("joint_pos")
+    from dropbear_wbc.robots.hw_motor_specs import stop_params_run_info
+
     run_info = {
         "task": args.task,
         "stand_npz": env_cfg.stand_info.get("path"),
@@ -325,6 +327,8 @@ def main() -> int:
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         **settings,  # item 182: locomotion_settings (checked on --continue_run)
         "clamp_mirror": clamp_mirror,  # item 250: mirror offsets of the clamp actually built
+        "stop_params": stop_params_run_info(getattr(env_cfg, "actuator_profile", None),
+                                            bool(args.stop_model or args.stop_load_penalty)),  # item 353
         "allow_asymmetric_clamp": bool(args.allow_asymmetric_clamp),
         "robot_mass_kg": env_cfg.robot_mass_kg,
         "actuator_gains_sim": {n: {"kp": float(as_tensor(uw.scene["robot"].data.joint_stiffness)[0, j]),

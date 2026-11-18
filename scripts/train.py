@@ -293,6 +293,8 @@ def main() -> int:
     dump_pickle(str(log_dir / "params" / f"agent{params_tag}.pkl"), agent_cfg)
     unwrapped = env.unwrapped
     motion_term = unwrapped.command_manager.get_term("motion")
+    from dropbear_wbc.robots.hw_motor_specs import stop_params_run_info
+
     run_info = {
         "task": args.task,
         "motion_file": str(motion),
@@ -314,6 +316,8 @@ def main() -> int:
         "feet_slide_penalty": float(rs["feet_slide_penalty"]),
         "thermal_penalty": rs["thermal_penalty"],
         "stop_model": bool(rs["stop_model"] or rs["stop_load_penalty"]), "stop_load_penalty": float(rs["stop_load_penalty"]),
+        "stop_params": stop_params_run_info(getattr(env_cfg, "actuator_profile", None),
+                                            bool(rs["stop_model"] or rs["stop_load_penalty"])),  # item 353
         "impact_penalty": float(rs["impact_penalty"]), "knee_band": rs["knee_band"],
         "body_pos_std": rs["body_pos_std"],
         "joint_pos_weight": float(rs["joint_pos_weight"]),

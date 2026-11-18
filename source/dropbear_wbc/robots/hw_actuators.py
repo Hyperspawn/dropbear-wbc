@@ -241,12 +241,12 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
     (``DropbearFlatEnvCfg.enable_armature_dr``). The explicit stop model and the knee band act on the DatasheetMotor
     groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits."""
     from .hw_motor_specs import (
-        STOP_MODEL,
         _check_motion_mode_gains,
         _with_gains,
         armature_dr_group_plan,
         motor_stop_limits,
         normalize_kd_side,
+        stop_spring_params,
     )
 
     side = normalize_kd_side(kd_side)
@@ -297,14 +297,11 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
             stopped = [j for j in joints if math.degrees(lim[j][1] - lim[j][0]) < 350.0]  # rolls without a stop: off
             k, d = {}, {}
             for j in joints:
-                arm = float(params[j]["armature"])
                 if j not in stopped:
                     k[j], d[j] = 0.0, 0.0
-                elif "knee" in j:
-                    k[j], d[j] = STOP_MODEL["knee_stiffness"], STOP_MODEL["knee_damping"]
-                else:
-                    k[j] = STOP_MODEL["omega"] ** 2 * arm
-                    d[j] = 2.0 * STOP_MODEL["zeta"] * math.sqrt(k[j] * arm)
+                else:  # generic omega/zeta x armature, per-role overrides (calf: item 353), knee fixed
+                    sp = stop_spring_params(j, float(params[j]["armature"]))
+                    k[j], d[j] = sp["k"], sp["d"]
             groups[key].stop_lower = {j: lim[j][0] for j in joints}
             groups[key].stop_upper = {j: lim[j][1] for j in joints}
             groups[key].stop_stiffness = k
