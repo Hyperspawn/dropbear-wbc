@@ -95,7 +95,8 @@ def test_run_chunked_training_forwards_tristate(monkeypatch, tmp_path, argv, wan
         assert a not in cmd, (a, cmd)
 
 
-LOCO_BOOLS = ["pushes", "symmetry", "stop_model", "gait_shaping", "gait_v2", "gait_v3"]
+LOCO_BOOLS = ["pushes", "symmetry", "stop_model", "gait_shaping", "gait_v2", "gait_v3", "symmetric_clamp",
+              "allow_asymmetric_clamp"]
 
 
 def test_locomotion_driver_bools_have_a_no_form():

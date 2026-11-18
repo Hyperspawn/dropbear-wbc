@@ -159,7 +159,8 @@ def main() -> int:  # noqa: C901
         env_cfg.enable_knee_band(*(float(x) for x in args.knee_band.split(",")))
     if any(i.get("gait_shaping") for i in infos):
         margin = float(next((i["target_clamp_margin_deg"] for i in infos if i.get("target_clamp_margin_deg") is not None), 3.0))
-        env_cfg.clamp_targets_to_limits(margin)
+        symmetric = bool(next((i["symmetric_clamp"] for i in reversed(infos) if i.get("symmetric_clamp") is not None), False))
+        env_cfg.clamp_targets_to_limits(margin, symmetric=symmetric)  # item 250
     bind = next((i["ankle_roll_bind"] for i in reversed(infos) if i.get("ankle_roll_bind")), None)
     if bind:  # the semantic ankle-roll clamp the policy was trained with
         env_cfg.enable_ankle_roll_bind(bind["roll_limit_deg"], bind["margin_deg"])

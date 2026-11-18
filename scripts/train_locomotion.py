@@ -93,6 +93,12 @@ parser.add_argument("--ankle_roll_bind_margin_deg", type=float, default=1.0, hel
 parser.add_argument("--target_clamp_margin_deg", type=float, default=3.0,
                     help="gait-shaped runs: motor targets clipped to the hard limits +- this [deg]; 3 pressed the knees "
                          "into their stops at 26 N*m (docs/ISSUES.md #23), use 0 for new runs")
+parser.add_argument("--symmetric_clamp", action="store_true",
+                    help="gait-shaped runs: clip each motor target to its hard-limit box intersected with the mirror of the "
+                         "partner's (tasks/locomotion/clamp_mirror.py; RL_Revolute81 (-60, 50) and LL (-50, 60) -> about "
+                         "(-50, 50) both). Needed for --symmetry on a fresh run unless --allow_asymmetric_clamp (notes/250)")
+parser.add_argument("--allow_asymmetric_clamp", action="store_true",
+                    help="run --symmetry on the mirror-inconsistent USD target clamp anyway (warned, recorded in run_info)")
 parser.add_argument("--gait_shaping", action="store_true",
                     help="knee flexion in swing + swing clearance + torque-rate terms (flat_env_cfg.enable_gait_shaping)")
 parser.add_argument("--stop_model", action="store_true",
@@ -185,6 +191,11 @@ def main() -> int:
                                     clamp_margin_deg=args.target_clamp_margin_deg)
     elif args.gait_shaping or args.gait_v2:
         env_cfg.enable_gait_shaping(knee_stance=-1.0 if args.gait_v2 else 0.0, clamp_margin_deg=args.target_clamp_margin_deg)
+    clamp_active = bool(getattr(env_cfg.actions.joint_pos, "clip", None))
+    if args.symmetric_clamp:  # item 250: mirror-consistent clamp box (after gait shaping, which sets the clamp)
+        if not clamp_active:
+            raise SystemExit("--symmetric_clamp needs the target clamp (--gait_shaping / --gait_v2 / --gait_v3)")
+        env_cfg.clamp_targets_to_limits(args.target_clamp_margin_deg, symmetric=True)
     if args.clip_excess_arms or args.clip_excess_legs:  # after gait shaping, which sets the clamp
         env_cfg.enable_clip_excess_penalty(arms=args.clip_excess_arms, legs=args.clip_excess_legs)
     if args.ankle_roll_bind_deg > 0:  # after gait shaping, which sets the per-motor clamp
@@ -262,6 +273,13 @@ def main() -> int:
                                           allow_change=args.allow_settings_change)
     dr_notes += check_stand_continuity(prev_info, env_cfg.stand_info["path"], continue_run=args.continue_run,
                                        allow_change=args.allow_settings_change)  # item 346: same reset clip
+    # -- item 250: --symmetry needs a left/right mirror-consistent target clamp (RL_Revolute81 USD limits are not)
+    from dropbear_wbc.tasks.locomotion.clamp_mirror import check_symmetry_clamp, clamp_mirror_record
+
+    dr_notes += check_symmetry_clamp(symmetry=args.symmetry, clamp_active=clamp_active,
+                                     symmetric_clamp=args.symmetric_clamp, continue_run=args.continue_run,
+                                     allow_asymmetric=args.allow_asymmetric_clamp)
+    clamp_mirror = clamp_mirror_record(getattr(env_cfg.actions.joint_pos, "clip", None), args.symmetric_clamp)
     for note in dr_notes:
         print(f"[INFO] run setting {note}", flush=True)
 
@@ -306,6 +324,8 @@ def main() -> int:
         "default_pose_info": dict(env_cfg.default_pose_info),
         "default_motor_pos": {n: env_cfg.scene.robot.init_state.joint_pos[n] for n in MOTOR_NAMES},
         **settings,  # item 182: locomotion_settings (checked on --continue_run)
+        "clamp_mirror": clamp_mirror,  # item 250: mirror offsets of the clamp actually built
+        "allow_asymmetric_clamp": bool(args.allow_asymmetric_clamp),
         "robot_mass_kg": env_cfg.robot_mass_kg,
         "actuator_gains_sim": {n: {"kp": float(as_tensor(uw.scene["robot"].data.joint_stiffness)[0, j]),
                                    "kd": float(as_tensor(uw.scene["robot"].data.joint_damping)[0, j]),

@@ -30,6 +30,7 @@ SETTING_FLAGS: dict[str, str] = {
     "gait_v2": "--gait_v2",
     "gait_v3": "--gait_v3",
     "target_clamp_margin_deg": "--target_clamp_margin_deg",
+    "symmetric_clamp": "--symmetric_clamp",
     "terrain": "--terrain",
     "stair_max_m": "--stair_max_m",
     "slope_max": "--slope_max",
@@ -66,6 +67,7 @@ def locomotion_settings(args, *, actuator_profile) -> dict:
         "gait_v2": bool(args.gait_v2),
         "gait_v3": bool(args.gait_v3),
         "target_clamp_margin_deg": float(args.target_clamp_margin_deg),
+        "symmetric_clamp": bool(args.symmetric_clamp),
         "terrain": args.terrain, "stair_max_m": args.stair_max_m, "slope_max": args.slope_max,
         "feet_width_weight": args.feet_width_weight,
         "action_rate_weight": args.action_rate_weight,
@@ -109,7 +111,7 @@ def effective_settings(s: dict) -> dict:
     if s.get("terrain", "flat") != "rough":
         e["stair_max_m"] = e["slope_max"] = None
     if not s.get("gait_shaping"):
-        e["target_clamp_margin_deg"] = None
+        e["target_clamp_margin_deg"] = e["symmetric_clamp"] = None
     return e
 
 

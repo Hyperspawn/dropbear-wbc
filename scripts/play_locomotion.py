@@ -159,8 +159,11 @@ def main() -> int:  # noqa: C901
     if trained_clamped or args.clamp_targets:
         margins = [json.loads(i.read_text(encoding="utf-8")).get("target_clamp_margin_deg") for i in infos]
         margin = float(next((m for m in margins if m is not None), 3.0))  # runs before the option used 3 deg
-        env_cfg.clamp_targets_to_limits(margin)
-        print(f"[play_locomotion] motor targets clamped to the joint limits +- {margin:g} deg", flush=True)
+        symmetric = bool(next((json.loads(i.read_text(encoding="utf-8")).get("symmetric_clamp") for i in reversed(infos)
+                               if json.loads(i.read_text(encoding="utf-8")).get("symmetric_clamp") is not None), False))
+        env_cfg.clamp_targets_to_limits(margin, symmetric=symmetric)  # item 250: the mirror-consistent box if trained so
+        print(f"[play_locomotion] motor targets clamped to the {'mirror-consistent ' if symmetric else ''}joint limits "
+              f"+- {margin:g} deg", flush=True)
     bind = next((json.loads(i.read_text(encoding="utf-8")).get("ankle_roll_bind") for i in reversed(infos)
                  if json.loads(i.read_text(encoding="utf-8")).get("ankle_roll_bind")), None)
     if bind:  # the semantic ankle-roll clamp the policy was trained with

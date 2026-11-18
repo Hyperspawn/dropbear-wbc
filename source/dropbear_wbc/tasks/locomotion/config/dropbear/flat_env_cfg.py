@@ -52,6 +52,10 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
     """Measured total robot mass [kg] the plant is re-centred on (:meth:`set_robot_mass`); ``None`` = CAD + motor swap."""
     actuator_profile: str = ""
     """Name of the applied :data:`ACTUATOR_PROFILES` entry (logged in run_info and exported)."""
+    target_clamp_margin_deg: float | None = None
+    """Margin of the motor target clamp [deg] (:meth:`clamp_targets_to_limits`); ``None`` = no clamp."""
+    symmetric_clamp: bool = False
+    """The clamp uses the left/right mirror-consistent limits (``clamp_mirror.symmetric_limits_deg``, item 250)."""
 
     def __post_init__(self):
         super().__post_init__()
@@ -348,19 +352,19 @@ class DropbearVelocityFlatEnvCfg(VelocityEnvCfg):
         if clamp_targets:
             self.clamp_targets_to_limits(clamp_margin_deg)
 
-    def clamp_targets_to_limits(self, margin_deg: float = 3.0) -> None:
+    def clamp_targets_to_limits(self, margin_deg: float = 3.0, symmetric: bool = False) -> None:
         """Clip the motor position targets (processed actions) to each motor's hard limits +- ``margin_deg``: a target
         far beyond a stop (the stiff-leg policies sent the right knee crank -300 deg) is just full torque into the stop;
         clamped, pressing a stop costs at most kp * margin (knee crank 500 * 0.052 = 26 N*m). A real deployment clamps
         p_des to the motor range too. The telemetry scan found the 3 deg walkers doing exactly that: the knee cranks
-        held 3 deg past a stop, 26 N*m (0.77x rated) of continuous squeeze (docs/ISSUES.md #23), so new runs use 0."""
-        import math
+        held 3 deg past a stop, 26 N*m (0.77x rated) of continuous squeeze (docs/ISSUES.md #23), so new runs use 0.
+        ``symmetric``: the limits intersected with their left/right mirror (``clamp_mirror.symmetric_limits_deg``,
+        item 250: RL_Revolute81 is authored (-60, 50), LL (-50, 60)), so ``--symmetry`` transitions stay consistent."""
+        from dropbear_wbc.tasks.locomotion.clamp_mirror import clamp_clip_rad
 
-        from dropbear_wbc.robots.dropbear_names import MOTOR_HARD_LIMITS_DEG
-
-        m = math.radians(margin_deg)
-        self.actions.joint_pos.clip = {n: (math.radians(lo) - m, math.radians(hi) + m)
-                                       for n, (lo, hi) in MOTOR_HARD_LIMITS_DEG.items()}
+        self.actions.joint_pos.clip = clamp_clip_rad(margin_deg, symmetric=symmetric)
+        self.target_clamp_margin_deg = float(margin_deg)
+        self.symmetric_clamp = bool(symmetric)
 
     def set_stand_npz(self, path: str | Path) -> None:
         """Use ``path`` as the reset state and derive the anchor height target / fall threshold from it."""

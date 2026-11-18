@@ -160,6 +160,10 @@ def train_flags(args) -> list[str]:
         cmd += ["--gait_v3"]
     if args.target_clamp_margin_deg is not None:
         cmd += [f"--target_clamp_margin_deg={args.target_clamp_margin_deg}"]
+    if args.symmetric_clamp:
+        cmd += ["--symmetric_clamp"]
+    if args.allow_asymmetric_clamp:
+        cmd += ["--allow_asymmetric_clamp"]
     if args.terrain != "flat":
         cmd += ["--terrain", args.terrain]
     if args.feet_width_weight is not None:
@@ -271,6 +275,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
     ap.add_argument("--action_rate_weight", type=float, default=None, help="scripts/train_locomotion.py --action_rate_weight")
     ap.add_argument("--target_clamp_margin_deg", type=float, default=None,
                     help="scripts/train_locomotion.py --target_clamp_margin_deg (0 for new runs; docs/ISSUES.md #23)")
+    ap.add_argument("--symmetric_clamp", action=argparse.BooleanOptionalAction, default=False,
+                    help="scripts/train_locomotion.py --symmetric_clamp (mirror-consistent target clamp; item 250)")
+    ap.add_argument("--allow_asymmetric_clamp", action=argparse.BooleanOptionalAction, default=False,
+                    help="scripts/train_locomotion.py --allow_asymmetric_clamp (--symmetry on the USD clamp anyway)")
     ap.add_argument("--log_dir", default="logs/locomotion", help="per-chunk logs (repo-relative)")
     ap.add_argument("--owner", default="locomotion", help="GPU lock owner name")
     ap.add_argument("--gap_s", type=float, default=45.0, help="pause between chunks so other tracks can take the lock")
