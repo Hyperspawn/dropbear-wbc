@@ -236,7 +236,8 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
                          stop_model: bool = False,
                          knee_band: tuple[float, float] | None = None,
                          armature_dr: bool = False,
-                         kd_side: str | None = None) -> dict:
+                         kd_side: str | None = None,
+                         allow_unstable_pd: bool = False) -> dict:
     """One :class:`DatasheetMotorCfg` group per motor model of ``map_name`` (group name ``hw_<model>``).
     ``gain_overrides``: motor name -> (kp, kd_FIELD) replacing the role gains (checked against the motion-mode limits).
     ``kd_side``: ``"output"`` (default) or ``"motor"`` — IdealPD ``damping`` uses ``kd_sim`` after the notes/13 T5
@@ -244,9 +245,12 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
     ``armature_dr``: put :data:`ARMATURE_DR_IMPLICIT_JOINTS` on ImplicitActuator (stable at the alt armature under
     explicit 5 ms PD) and leave the rest on DatasheetMotor; callers must also install the armature DR EventTerm
     (``DropbearFlatEnvCfg.enable_armature_dr``). The explicit stop model and the knee band act on the DatasheetMotor
-    groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits."""
+    groups only: with ``armature_dr`` the implicit joints (calves, wrist roll) keep PhysX's rigid limits.
+    ``allow_unstable_pd``: skip the item-356 check that refuses explicit groups whose PD alone is discretely unstable
+    at 5 ms at armature + ``STOP_LINK_INERTIA_MIN`` (e.g. ``kd_side="motor"`` without ``armature_dr``)."""
     from .hw_motor_specs import (
         _check_motion_mode_gains,
+        check_explicit_pd_stability,
         _with_gains,
         armature_dr_group_plan,
         motor_stop_limits,
@@ -264,6 +268,8 @@ def make_hw_motor_groups(map_name: str = "user_2026_09_25", *, randomize: bool =
 
     plan = (armature_dr_group_plan(map_name, gain_overrides=gain_overrides, kd_side=side)
             if armature_dr else None)
+    if not allow_unstable_pd:
+        check_explicit_pd_stability(map_name, kd_side=side, gain_overrides=gain_overrides, armature_dr=armature_dr)
     by_model: dict[str, list[str]] = {}
     if plan is None:
         for joint, p in params.items():

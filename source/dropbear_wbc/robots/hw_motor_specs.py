@@ -445,6 +445,52 @@ def stop_spectral_radius(k: float, d: float, kp: float, kd: float, inertia: floa
     return math.sqrt(det)
 
 
+PD_RHO_MAX: float = 1.0
+"""Explicit DatasheetMotor PD (no stop) must have a discrete spectral radius below this at the joint's smallest
+plausible inertia (item 356). kd_side="motor" multiplies kd by the gear ratio, and c*h/I > 2 makes the explicit damping
+itself diverge (calf kd 36 on the X8 Pro armature: c*h/I ~6.5)."""
+
+
+def explicit_pd_stability(map_name: str = "user_2026_09_25", *, kd_side: str | None = None,
+                          gain_overrides: dict[str, tuple[float, float]] | None = None,
+                          armature_dr: bool = False, dt: float = 0.005) -> dict[str, dict]:
+    """Explicit (DatasheetMotor) joint -> ``{"rho", "kp", "kd_sim", "inertia", "armature", "link"}``: spectral radius of
+    the role PD alone over ``dt`` at armature + ``STOP_LINK_INERTIA_MIN`` (0 where unknown). With ``armature_dr`` the
+    implicit joints are left out (datasheet armature for the rest; stability at the alt armature with the real link
+    inertia is the notes/13 T3 split, which this check does not redo: upper-arm roll at alt + link 0 reads rho ~2.6)."""
+    side = normalize_kd_side(kd_side)
+    params = joint_hw_params(map_name, kd_side=side)
+    for name, (kp, kd) in (gain_overrides or {}).items():
+        if name not in params:
+            raise ValueError(f"gain override for unknown motor {name!r}")
+        params[name] = _with_gains(params[name], float(kp), float(kd), side)
+    out: dict[str, dict] = {}
+    for j, p in params.items():
+        if armature_dr and j in ARMATURE_DR_IMPLICIT_JOINTS:
+            continue
+        arm = float(p["armature"])
+        link = float(STOP_LINK_INERTIA_MIN.get(j, 0.0))
+        out[j] = {"rho": stop_spectral_radius(0.0, 0.0, float(p["kp"]), float(p["kd_sim"]), arm + link, dt),
+                  "kp": float(p["kp"]), "kd_sim": float(p["kd_sim"]), "inertia": arm + link, "armature": arm,
+                  "link": link}
+    return out
+
+
+def check_explicit_pd_stability(map_name: str = "user_2026_09_25", *, kd_side: str | None = None,
+                                gain_overrides: dict[str, tuple[float, float]] | None = None,
+                                armature_dr: bool = False, dt: float = 0.005) -> None:
+    """Raise ValueError naming every explicit joint whose PD-only rho >= ``PD_RHO_MAX`` (item 356)."""
+    tab = explicit_pd_stability(map_name, kd_side=kd_side, gain_overrides=gain_overrides,
+                                armature_dr=armature_dr, dt=dt)
+    bad = {j: v for j, v in tab.items() if v["rho"] >= PD_RHO_MAX}
+    if bad:
+        worst = ", ".join(f"{j} rho {v['rho']:.2f} (kp {v['kp']:g}, kd_sim {v['kd_sim']:g}, I {v['inertia']:.4f})"
+                          for j, v in sorted(bad.items(), key=lambda kv: -kv[1]["rho"]))
+        raise ValueError(f"explicit PD unstable at dt {dt * 1e3:g} ms on map {map_name!r} (kd_side "
+                         f"{normalize_kd_side(kd_side)!r}): {worst}. Lower kd, use armature_dr / a smaller dt, or pass "
+                         f"allow_unstable_pd=True (item 356).")
+
+
 def stop_params_run_info(profile: str | None, enabled: bool) -> dict | None:
     """run_info record of the stop springs of an ``hw_*`` profile with the stop model on (else None)."""
     if not enabled or profile not in HW_PROFILE_MAPS:
