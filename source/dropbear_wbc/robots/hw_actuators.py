@@ -6,8 +6,9 @@ loop) with
 * a per-joint DC-motor torque-speed envelope (Isaac Lab ``DCMotor`` law, but with per-joint saturation effort),
 * Coulomb + viscous gearbox friction subtracted after the envelope (randomized per episode by a scale),
 * a per-episode random delay of the position/velocity/effort targets (``min_delay..max_delay`` physics steps),
-* optionally an explicit end-stop spring past each joint's mechanical limit (``hw_motor_specs.STOP_MODEL``), whose torque
-  ``stop_effort`` is what the stop parts carry,
+* optionally an explicit end-stop spring-damper past each joint's mechanical limit (``hw_motor_specs.STOP_MODEL``),
+  unilateral (it only pushes the joint out of the stop, never pulls it in), whose torque ``stop_effort`` is what the
+  stop parts carry,
 * optionally a parallel elastic (an elastic band beside the motor, like a tendon): ``-k * max(0, q - engage)``, pushing
   the joint back once it is past ``engage``; its torque ``spring_effort`` is not motor torque.
 
@@ -146,8 +147,12 @@ class DatasheetMotor(IdealPDActuator):
         if self._stops:
             below = torch.clamp(self._stop_lo - joint_pos, min=0.0)
             above = torch.clamp(joint_pos - self._stop_hi, min=0.0)
-            touching = (below > 0) | (above > 0)
-            self.stop_effort[:] = self._stop_k * (below - above) - torch.where(touching, self._stop_d * joint_vel, 0.0)
+            # a stop can only push: the damper term must not pull the joint back while it leaves the stop, so the
+            # lower-stop torque is clamped to >= 0 and the upper-stop torque to <= 0 (unilateral contact)
+            damp = self._stop_d * joint_vel
+            lo = torch.where(below > 0, torch.clamp(self._stop_k * below - damp, min=0.0), 0.0)
+            hi = torch.where(above > 0, torch.clamp(-self._stop_k * above - damp, max=0.0), 0.0)
+            self.stop_effort[:] = lo + hi
             out.joint_efforts = out.joint_efforts + self.stop_effort
         if self._springs:
             self.spring_effort[:] = -self._spring_k * torch.clamp(joint_pos - self._spring_q0, min=0.0)

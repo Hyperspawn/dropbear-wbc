@@ -248,3 +248,65 @@ def test_stop_model_and_knee_band_build_and_act_on_both_labs(lab):
             act.compute(_Actions(q.clone(), zero.clone(), zero.clone()), q, zero)
             assert act.stop_effort[0, k] < 0.0 and abs(float(act.stop_effort[0, k]) + 0.01 * float(act._stop_k[0, k])) < 1e-3
             assert act.spring_effort[0, k] < 0.0  # past 15 deg of crank the band pulls back
+
+
+def _stop_actuators(H):
+    for cfg in H.make_hw_profile_groups("hw_v4", stop_model=True).values():
+        if cfg.stop_stiffness is None:
+            continue
+        cfg.min_delay = cfg.max_delay = 0
+        act = cfg.class_type(cfg, list(cfg.joint_names_expr), slice(None), 4, "cpu")
+        act.reset(None)
+        yield act
+
+
+def _stop_torque(act, q, v):
+    zero = torch.zeros_like(q)
+    act.compute(_Actions(q.clone(), zero.clone(), zero.clone()), q, v)
+    return act.stop_effort.clone()
+
+
+def test_stop_is_unilateral_on_both_labs(lab):
+    """Item 355: the stop damper must never pull a joint back into the stop while it leaves it."""
+    _, H = lab
+    n_joints = 0
+    for act in _stop_actuators(H):
+        m = (act._stop_k[0] > 0) & (act._stop_d[0] > 0)  # joints of this group that have a stop
+        if not bool(m.any()):
+            continue
+        n_joints += int(m.sum())
+        k, d = act._stop_k[0], act._stop_d[0]
+        lo = torch.where(m, act._stop_lo[0], -1.0)
+        hi = torch.where(m, act._stop_hi[0], 1.0)
+        mid = torch.where(m, 0.5 * (lo + hi), 0.0)
+        pen = 0.002
+        kd = torch.where(m, k / torch.where(m, d, 1.0), 0.0)
+        v_out, v_in, v_slow = 4.0 * kd * pen, torch.full_like(k, 0.5), 0.25 * kd * pen
+
+        def tau(q_rows, v_rows):
+            q = torch.stack([torch.where(m, r, mid) for r in q_rows])
+            return _stop_torque(act, q, torch.stack(v_rows))[:, m]
+
+        km, dm, vin, vslow = k[m], d[m], v_in[m], v_slow[m]
+        # rows: lower stop leaving, lower entering, upper leaving, upper entering
+        t = tau([lo - pen, lo - pen, hi + pen, hi + pen], [v_out, -v_in, -v_out, v_in])
+        assert torch.all(t[0] == 0.0) and torch.all(t[2] == 0.0)  # fast exit (k*pen - d*v < 0): no pull
+        torch.testing.assert_close(t[1], km * pen + dm * vin, rtol=1e-4, atol=1e-3)
+        torch.testing.assert_close(t[3], -(km * pen + dm * vin), rtol=1e-4, atol=1e-3)
+        # slow exit: the spring still dominates, so the law is unchanged and the stop keeps pushing
+        t = tau([lo - pen, hi + pen, lo - pen, hi + pen], [v_slow, -v_slow, v_slow, -v_slow])
+        torch.testing.assert_close(t[0], km * pen - dm * vslow, rtol=1e-4, atol=1e-3)
+        assert torch.all(t[0] > 0) and torch.all(t[1] < 0)
+        # inside the range: nothing at any velocity
+        t = tau([mid, mid, mid, mid], [v_out, -v_out, v_in, -v_in])
+        assert torch.all(t == 0.0)
+        # sign invariant over random states: the lower stop only pushes up, the upper only down
+        g = torch.Generator().manual_seed(1)
+        for _ in range(25):
+            u = torch.rand((4, k.numel()), generator=g)
+            qr = [lo + (u[i] * 1.4 - 0.2) * (hi - lo) for i in range(4)]
+            vr = [(torch.rand(k.numel(), generator=g) * 2 - 1) * 2 * v_out for _ in range(4)]
+            t = tau(qr, vr)
+            q = torch.stack(qr)[:, m]
+            assert torch.all(t[q < lo[m]] >= 0.0) and torch.all(t[q > hi[m]] <= 0.0)
+    assert n_joints > 0
