@@ -403,6 +403,10 @@ STOP_LINK_INERTIA_MIN: dict[str, float] = {
     **{f"{p}_Revolute{n}": 0.0 for p in ("LL", "RL") for n in (67, 81)},  # ankle linkage: unknown, worst case 0 (item 354)
     **{f"{p}_pitch": 0.15 for p in ("LH", "RH")},  # shoulder roll (190 deg), direct
     **{f"{p}_elbow_joint": 0.5 for p in ("LH", "RH")},  # elbow 0.025 semantic x ~21 (motor/semantic armature ratio)
+    # 360 deg joints (no stop; used by the explicit PD check), direct drive, MJCF swing inertia (notes/357):
+    **{f"{p}_yaw": 0.158 for p in ("LH", "RH")},  # shoulder pitch (0.1584-0.1593)
+    **{f"{p}_roll": 0.026 for p in ("LH", "RH")},  # upper-arm roll = semantic shoulder yaw (0.0267; datasheet 0.0049)
+    **{f"{p}_wrist_roll": 0.00034 for p in ("LH", "RH")},  # hand only (0.000349)
 }
 
 
@@ -456,8 +460,9 @@ def explicit_pd_stability(map_name: str = "user_2026_09_25", *, kd_side: str | N
                           armature_dr: bool = False, dt: float = 0.005) -> dict[str, dict]:
     """Explicit (DatasheetMotor) joint -> ``{"rho", "kp", "kd_sim", "inertia", "armature", "link"}``: spectral radius of
     the role PD alone over ``dt`` at armature + ``STOP_LINK_INERTIA_MIN`` (0 where unknown). With ``armature_dr`` the
-    implicit joints are left out (datasheet armature for the rest; stability at the alt armature with the real link
-    inertia is the notes/13 T3 split, which this check does not redo: upper-arm roll at alt + link 0 reads rho ~2.6)."""
+    implicit joints are left out and the explicit joints that armature DR samples (critical set) are checked at the
+    low end of the range, the alt armature (upper-arm roll at alt + MJCF link 0.026: rho 0.81 output-side, 2.13 with
+    kd_side=motor; notes/357)."""
     side = normalize_kd_side(kd_side)
     params = joint_hw_params(map_name, kd_side=side)
     for name, (kp, kd) in (gain_overrides or {}).items():
@@ -469,6 +474,8 @@ def explicit_pd_stability(map_name: str = "user_2026_09_25", *, kd_side: str | N
         if armature_dr and j in ARMATURE_DR_IMPLICIT_JOINTS:
             continue
         arm = float(p["armature"])
+        if armature_dr and j in ARMATURE_DR_CRITICAL_JOINTS and p.get("armature_alt") is not None:
+            arm = min(arm, float(p["armature_alt"]))  # DR samples down to the alt read: check the low end
         link = float(STOP_LINK_INERTIA_MIN.get(j, 0.0))
         out[j] = {"rho": stop_spectral_radius(0.0, 0.0, float(p["kp"]), float(p["kd_sim"]), arm + link, dt),
                   "kp": float(p["kp"]), "kd_sim": float(p["kd_sim"]), "inertia": arm + link, "armature": arm,

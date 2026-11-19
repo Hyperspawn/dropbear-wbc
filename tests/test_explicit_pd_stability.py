@@ -96,3 +96,34 @@ def test_gain_overrides_enter_the_check():
     assert hot["kd_sim"] == pytest.approx(36.0) and hot["rho"] > 5.0
     with pytest.raises(ValueError, match="LH_wrist_roll"):
         S.check_explicit_pd_stability(gain_overrides={"LH_wrist_roll": (50.0, 36.0)})
+
+
+def test_arm_link_inertia_from_mjcf():
+    """notes/357: arm yaw / upper-arm roll / wrist roll carry their MJCF swing inertia (min L/R), not 0."""
+    for p in ("LH", "RH"):
+        assert S.STOP_LINK_INERTIA_MIN[f"{p}_yaw"] == pytest.approx(0.158)
+        assert S.STOP_LINK_INERTIA_MIN[f"{p}_roll"] == pytest.approx(0.026)
+        assert S.STOP_LINK_INERTIA_MIN[f"{p}_wrist_roll"] == pytest.approx(0.00034)
+    tab = S.explicit_pd_stability("user_2026_09_25", kd_side="motor")
+    assert tab["LH_yaw"]["rho"] < 1.0 and tab["LH_roll"]["rho"] < 1.0  # were 2.83 / 2.30 at link 0
+    assert tab["LH_wrist_roll"]["rho"] > 2.0  # hand inertia is negligible: still unstable
+    bad = sorted(j for j, v in tab.items() if v["rho"] >= 1.0)
+    assert bad == sorted(["LH_wrist_roll", "RH_wrist_roll", "PG_left_leg_roll", "PG_right_leg_roll",
+                          "LL_knee_actuator_joint", "RL_knee_actuator_joint",
+                          "LL_Revolute67", "LL_Revolute81", "RL_Revolute67", "RL_Revolute81"])
+
+
+def test_armature_dr_checks_explicit_critical_joints_at_alt():
+    """The DR'd explicit joints (upper-arm roll) are checked at the alt armature, the low end of the sampled range."""
+    params = S.joint_hw_params("user_2026_09_25")
+    out = S.explicit_pd_stability("user_2026_09_25", armature_dr=True)
+    roll = out["LH_roll"]
+    assert roll["armature"] == pytest.approx(params["LH_roll"]["armature_alt"])
+    assert roll["rho"] == pytest.approx(0.81, abs=0.01) and roll["rho"] < 1.0
+    assert out["LH_yaw"]["armature"] == pytest.approx(params["LH_yaw"]["armature"])  # not DR'd: datasheet
+    mot = S.explicit_pd_stability("user_2026_09_25", kd_side="motor", armature_dr=True)
+    assert mot["LH_roll"]["rho"] == pytest.approx(2.13, abs=0.01)
+    # at datasheet armature the same joint would pass: the alt end is what makes it unstable
+    assert S.explicit_pd_stability("user_2026_09_25", kd_side="motor")["LH_roll"]["rho"] < 1.0
+    for prof in ("hw_v1_armdr", "hw_v1i_armdr", "hw_v1ie_armdr"):
+        S.check_explicit_pd_stability(S.HW_PROFILE_MAPS[prof], **_opts(prof))  # published output-side: still pass
