@@ -127,9 +127,15 @@ class ThermalModel:
                 trip[new] = (k + 1) * dt
         return {"tw": rec, "tw_end": Tw, "th_end": Th, "tw_max": tw_max, "trip_s": trip}
 
-    def time_to_trip(self, ratio: float, *, T0_C=None, dt: float = 0.05, t_max: float = 3600.0) -> float:
-        """Constant ``ratio`` x rated from ``T0_C`` (default ambient): seconds until the trip, inf if none by ``t_max``."""
+    def time_to_trip(self, ratio: float, *, T0_C=None, dt: float = 0.05, t_max: float = 3600.0,
+                     interpolate: bool = False) -> float:
+        """Constant ``ratio`` x rated from ``T0_C`` (default ambient): seconds until the trip, inf if none by ``t_max``.
+
+        ``interpolate`` returns the linearly interpolated crossing inside the step (continuous and strictly monotone in
+        ``ratio``, which :meth:`ratio_for_time_to_trip` needs) instead of the end of the step that crossed."""
         T0 = self.ambient_C if T0_C is None else T0_C
+        if interpolate:
+            return self._trip_scalar(float(ratio), float(T0), dt, t_max)
         Tw, Th = np.array([float(T0)]), np.array([float(T0)])
         r = np.array([float(ratio)])
         for k in range(int(math.ceil(t_max / dt))):
@@ -137,6 +143,46 @@ class ThermalModel:
             if Tw[0] >= self.t_trip_C:
                 return (k + 1) * dt
         return math.inf
+
+    def _trip_scalar(self, r: float, T0: float, dt: float, t_max: float) -> float:
+        """Scalar copy of :meth:`step` (pure floats, ~50x faster) with an interpolated trip crossing."""
+        Tw = Th = T0
+        if Tw >= self.t_trip_C:
+            return 0.0
+        pr = self.P_ref * r * r
+        for k in range(int(math.ceil(t_max / dt))):
+            q_wh = (Tw - Th) / self.R_wh
+            Tw_n = Tw + dt * (pr * (1.0 + ALPHA_CU * (Tw - 25.0)) - q_wh) / self.C_w
+            Th = Th + dt * (q_wh - (Th - self.ambient_C) / self.R_ha) / self.C_h
+            if Tw_n >= self.t_trip_C:
+                return (k + (self.t_trip_C - Tw) / (Tw_n - Tw)) * dt
+            Tw = Tw_n
+        return math.inf
+
+    def ratio_for_time_to_trip(self, t_s: float, *, T0_C=None, dt: float = 0.05, tol: float = 1e-7) -> float:
+        """Constant torque ratio that reaches the trip in exactly ``t_s`` seconds from ``T0_C`` (default: soaked at
+        ambient); bisection on the interpolated :meth:`time_to_trip`. Always above :meth:`max_continuous_ratio`."""
+        if not (t_s > 0 and math.isfinite(t_s)):
+            raise ValueError("t_s must be finite and > 0")
+        T0 = self.ambient_C if T0_C is None else float(T0_C)
+        t_max = 1.5 * t_s + dt
+
+        def ttt(r):
+            return self._trip_scalar(r, T0, dt, t_max)
+
+        lo = self.max_continuous_ratio()
+        hi = max(2.0 * lo, 0.1)
+        while ttt(hi) > t_s:
+            lo, hi = hi, 2.0 * hi
+            if hi > 1e3:
+                raise ValueError(f"no ratio trips within {t_s} s")
+        while hi - lo > tol:
+            mid = 0.5 * (lo + hi)
+            if ttt(mid) > t_s:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi)
 
     def describe(self) -> dict:
         return {"ambient_C": self.ambient_C, "rise_at_rated_K": self.rise_at_rated_K, "ref_ambient_C": REF_AMBIENT_C,

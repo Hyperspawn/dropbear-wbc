@@ -34,6 +34,34 @@ def test_longest_run_and_duty_metrics():
     assert mds.severity("sus", 1.1) == "warn" and mds.severity("sus", 0.9) == ""
 
 
+def test_sus_thresholds_follow_the_thermal_model():
+    """Item 363: warn = max continuous ratio at ambient, HIGH = same trip time as 1.3x from a 25 C soak."""
+    from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C, ThermalModel
+    assert mds.thresholds(25.0)["sus"] == (1.0905, 1.3)  # HIGH parity with the old fixed 1.3x at 25 C
+    assert mds.thresholds(35.0)["sus"] == (1.0152, 1.2064)
+    assert mds.thresholds(45.0)["sus"] == (0.9339, 1.1064)
+    assert DESIGN_AMBIENT_C == 45.0 and mds.thresholds()["sus"] == mds.thresholds(45.0)["sus"]
+    for amb in (25.0, 45.0):  # peak / static unchanged at any ambient
+        assert mds.thresholds(amb)["peak"] == (1.0, 1.0) and mds.thresholds(amb)["static_sus"] == (0.8, 1.0)
+    assert mds.sus_high_trip_s() == pytest.approx(1041.0, abs=0.5)  # 17.35 min (notes/129, notes/362)
+    m45 = ThermalModel(45.0)
+    assert m45.time_to_trip(mds.thresholds(45.0)["sus"][1], interpolate=True) == pytest.approx(1041.0, abs=1.0)
+    assert m45.time_to_trip(0.93, t_max=7200) == float("inf") and m45.time_to_trip(0.94, t_max=7200) < 7200
+
+
+def test_sus_severity_at_25C_matches_old_high_and_flips_at_45C():
+    old = {"sus": (1.0, 1.3)}
+    t25, t45 = mds.thresholds(25.0), mds.thresholds(45.0)
+    for v in np.linspace(0.5, 2.0, 301):  # 25 C: HIGH exactly where the old fixed 1.3 put it
+        assert (mds.severity("sus", v, t25) == "HIGH") == (mds.severity("sus", v, old) == "HIGH"), v
+    # warn moves 1.0 -> 1.09 at 25 C (rated is continuous below 36.9 C ambient)
+    assert mds.severity("sus", 1.05, old) == "warn" and mds.severity("sus", 1.05, t25) == ""
+    # 45 C default: 0.95 and 1.15 get worse
+    assert mds.severity("sus", 0.95, old) == "" and mds.severity("sus", 0.95) == "warn"
+    assert mds.severity("sus", 1.15, t25) == "warn" and mds.severity("sus", 1.15) == "HIGH"
+    assert mds.severity("sus", 0.93) == "" and mds.severity("sus", 1.10) == "warn"
+
+
 def test_gaussian_lp_is_zero_phase_and_minus_3db_at_fc():
     dt, fc = 0.02, 6.0
     t = np.arange(2000) * dt
@@ -95,3 +123,34 @@ def test_cli_fail_on(tmp_path, plant):
     assert mds.main([str(p), "--json", str(tmp_path / "o.json")]) == 0
     assert mds.main([str(p), "--fail-on", "warn"]) == 1
     assert mds.main([str(STAND), "--fail-on", "warn"]) == 0
+
+
+def test_held_arm_sus_flips_with_ambient(plant, tmp_path):
+    """The raised straight-arm hold (RH elbow dynamic sus ~0.93x rated): no sus finding at 25 or 45 C (just under
+    the 0.934 continuous limit), sus warn at 47 C (0.917) and 50 C (0.890, trips within the hour); ambient and schema
+    recorded."""
+    p = _held_pose_clip(plant, tmp_path, -1.4)
+    out = {}
+    for amb in (25.0, 45.0, 47.0, 50.0):
+        res = mds.screen([p], plant=plant, ambient_C=amb)
+        assert res["ambient_C"] == amb and res["schema"] == "dropbear-motion-duty-screen-v2"
+        assert res["thresh"]["sus"] == mds.thresholds(amb)["sus"]
+        rec = res["clips"][0]
+        out[amb] = rec
+    sus = out[25.0]["motors"]["RH_elbow_joint"]["dynamic"]["sus"]
+    assert 0.9167 < sus < 0.9339, sus
+    f = {a: {(x["motor"], x["metric"], x["severity"]) for x in r["findings"]} for a, r in out.items()}
+    assert ("RH_elbow_joint", "sus", "warn") not in f[25.0] | f[45.0]
+    assert ("RH_elbow_joint", "sus", "warn") in f[47.0] & f[50.0]
+    th = {a: r["motors"]["RH_elbow_joint"]["thermal"] for a, r in out.items()}
+    assert th[45.0]["sus_trip_s"] is None and 0 < th[50.0]["sus_trip_s"] < mds.SUS_TRIP_MAX_S
+    assert th[25.0]["rms_steady_winding_C"] < th[45.0]["rms_steady_winding_C"] < 100.0
+
+
+def test_cli_ambient_option(tmp_path, plant):
+    import json
+    for amb, warn in (("25", 1.0905), (None, 0.9339)):
+        o = tmp_path / f"o{amb}.json"
+        assert mds.main([str(STAND), "--json", str(o)] + (["--ambient_C", amb] if amb else [])) == 0
+        r = json.loads(o.read_text(encoding="utf-8"))
+        assert r["ambient_C"] == (float(amb) if amb else 45.0) and r["thresh"]["sus"][0] == warn

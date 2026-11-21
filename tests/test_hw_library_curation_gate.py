@@ -114,8 +114,8 @@ def test_real_tool_output_passes_and_source_refuses(tmp_path, monkeypatch):
     src = _write(libdir, {"schema": "dropbear-motion-library-v1", "name": "src",
                           "clips": [{"name": n, "npz": f"../synthetic/{n}.npz"} for n in CLIPS]}, "src.json")
     worst = {"stand": "ok", "wave_right": "HIGH", "arm_swing": "warn", "squat_lite": "ok"}
-    screen = {"schema": "dropbear-motion-duty-screen-v1", "map": "m", "window_s": 2.0, "lp_hz": 6.0, "basis": "dynamic",
-              "payload_kg": 0.0, "thresh": {}, "errors": [],
+    screen = {"schema": "dropbear-motion-duty-screen-v2", "map": "m", "window_s": 2.0, "lp_hz": 6.0, "basis": "dynamic",
+              "payload_kg": 0.0, "ambient_C": 45.0, "thresh": {}, "thermal": {}, "errors": [],
               "clips": [{"clip": n, "path": str(d / f"{n}.npz"), "worst": w,
                          "findings": ([{"motor": "LH_elbow_joint", "metric": "sus", "value": 1.5, "severity": "HIGH",
                                         "basis": "dynamic"}] if w == "HIGH" else [])} for n, w in worst.items()]}

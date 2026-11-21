@@ -187,3 +187,18 @@ def test_scoreboard_rms_gate_uses_ambient_continuous_limit():
     assert sb.evaluate("locomotion", _summary(1.05), ambient_C=25.0)["pass"]  # below 1.09 at 25 C
     assert not sb.evaluate("locomotion", _summary(1.10), ambient_C=25.0)["pass"]
     assert abs(sb.rms_limit(35.0) - 1.0152) < 1e-3
+
+def test_ratio_for_time_to_trip_inverts_time_to_trip():
+    """Item 363: interpolated trip time is within one step of the stepped one; the inverse round-trips."""
+    for amb in (25.0, 45.0):
+        m = th.ThermalModel(amb)
+        for r in (1.2, 1.3, 1.6):
+            t_step = m.time_to_trip(r)
+            t_int = m.time_to_trip(r, interpolate=True)
+            assert t_step - 0.05 <= t_int <= t_step + 1e-9
+            assert m.ratio_for_time_to_trip(t_int) == pytest.approx(r, abs=1e-6)
+        assert m.ratio_for_time_to_trip(2e4) > m.max_continuous_ratio()
+    assert th.ThermalModel(25.0).ratio_for_time_to_trip(th.ThermalModel(25.0).time_to_trip(1.3, interpolate=True)) \
+        == pytest.approx(1.3, abs=1e-6)
+    with pytest.raises(ValueError):
+        th.ThermalModel(25.0).ratio_for_time_to_trip(0.0)

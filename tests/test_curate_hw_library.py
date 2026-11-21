@@ -52,8 +52,9 @@ def _screen(lib, worst):
         elif w == "warn":
             f = [{"motor": "RH_pitch", "metric": "static_sus", "value": 0.9, "severity": "warn", "basis": "static"}]
         clips.append({"clip": n, "path": str(lib.parent.parent / "synthetic" / f"{n}.npz"), "worst": w, "findings": f})
-    return {"schema": "dropbear-motion-duty-screen-v1", "map": "user_2026_09_25", "window_s": 2.0, "lp_hz": 6.0,
-            "basis": "dynamic", "payload_kg": 0.0, "thresh": {}, "clips": clips, "errors": []}
+    return {"schema": "dropbear-motion-duty-screen-v2", "map": "user_2026_09_25", "window_s": 2.0, "lp_hz": 6.0,
+            "basis": "dynamic", "payload_kg": 0.0, "ambient_C": 45.0, "thresh": {}, "thermal": {},
+            "clips": clips, "errors": []}
 
 
 def _load(lib):
@@ -143,3 +144,32 @@ def test_cli_refuses_to_overwrite_source(lib, tmp_path):
 def test_real_screen_on_synthetic_clips(lib):
     pytest.importorskip("mujoco")
     assert chl.main([str(lib), "--dry-run"]) == 0
+
+
+def test_cli_screen_json_ambient_is_checked_and_recorded(lib, tmp_path):
+    """Item 363: a pre-thermal (no ambient_C) screen is refused, a mismatching --ambient_C is refused, and the
+    curation records the ambient the severities were computed at."""
+    sj = tmp_path / "screen.json"
+    res = _screen(lib, {n: "ok" for n in CLIPS})
+    legacy = {k: v for k, v in res.items() if k not in ("ambient_C", "thermal")}
+    legacy["schema"] = "dropbear-motion-duty-screen-v1"
+    sj.write_text(json.dumps(legacy), encoding="utf-8")
+    assert chl.main([str(lib), "--screen-json", str(sj), "--name", "a"]) == 2
+    assert not (lib.parent / "a.json").exists()
+    sj.write_text(json.dumps(res), encoding="utf-8")
+    assert chl.main([str(lib), "--screen-json", str(sj), "--name", "b", "--ambient_C", "25"]) == 2
+    assert not (lib.parent / "b.json").exists()
+    assert chl.main([str(lib), "--screen-json", str(sj), "--name", "c", "--ambient_C", "45"]) == 0
+    cur = json.loads((lib.parent / "c.json").read_text(encoding="utf-8"))["curation"]
+    assert cur["screen"]["ambient_C"] == 45.0 and "thermal" in cur["screen"]
+
+
+def test_real_screen_ambient_passthrough(lib, tmp_path):
+    pytest.importorskip("mujoco")
+    for amb in (25.0, 45.0):
+        assert chl.main([str(lib), "--ambient_C", str(amb), "--name", f"t{amb:g}", "--out-dir", str(tmp_path)]) == 0
+        cur = json.loads((tmp_path / f"t{amb:g}.json").read_text(encoding="utf-8"))["curation"]
+        assert cur["screen"]["ambient_C"] == amb
+        assert cur["screen"]["thresh"]["sus"][0] == {25.0: 1.0905, 45.0: 0.9339}[amb]
+    assert chl.main([str(lib), "--name", "tdef", "--out-dir", str(tmp_path)]) == 0  # default = design ambient
+    assert json.loads((tmp_path / "tdef.json").read_text(encoding="utf-8"))["curation"]["screen"]["ambient_C"] == 45.0

@@ -20,20 +20,25 @@ duty if the clip is looped), ``sus`` = worst sliding ``--window`` s RMS / rated 
 ``over_s`` = longest run with |tau| > rated, ``over_frac`` = share of frames above rated. A clip shorter than the window
 uses its whole-clip RMS for ``sus``.
 
-Severity (``THRESH``, same convention as ``telemetry_issue_scan.thermal``): dynamic ``sus`` >= 1.0 warn, >= 1.3 HIGH;
-dynamic ``peak`` >= 1.0 HIGH (the reference asks for more than the motor's peak: tracking error by construction);
+Severity (``thresholds(ambient_C)``): dynamic ``sus`` >= the max continuous ratio at ``--ambient_C`` warn (the
+window's duty, held, reaches the winding trip; 1.09 / 1.02 / 0.93 at 25 / 35 / 45 C, ``dropbear_wbc.robots.thermal``),
+>= the ratio that trips in ``SUS_HIGH_TRIP_S`` (17.35 min, the trip time of the old fixed 1.3x from a 25 C soak) from a
+soak at ``--ambient_C`` HIGH (1.30 / 1.21 / 1.11 at 25 / 35 / 45 C); ``--ambient_C`` defaults to ``DESIGN_AMBIENT_C``
+(45 C, ASSUMED). Before item 363 these were fixed 1.0 / 1.3 x rated (no ambient). Unchanged: dynamic ``peak`` >= 1.0
+HIGH (the reference asks for more than the motor's peak: tracking error by construction);
 static ``sus`` >= 0.8 warn, >= 1.0 HIGH (gravity-only pose hold; with zero payload the worst X8 Pro elbow pose is
 ~0.93x rated, so any payload or brace pushes a warned hold over rated). ``--fail-on high|warn`` exits 1 when any clip reaches that level. This is a REFERENCE screen: the
 trained policy can brace differently (ISSUES #10), so ``telemetry_issue_scan`` (``thermal`` + ``sustained``) remains the
 gate on rollouts. Payload is zero (no grasp point in any model).
 
 usage: python tools/motion_duty_screen.py <clip.npz | dir | library.json> [...] [--map user_2026_09_25]
-       [--window 2.0] [--md out.md] [--json out.json] [--fail-on high]
+       [--window 2.0] [--ambient_C 45] [--md out.md] [--json out.json] [--fail-on high]
 Needs mujoco (requirements/tests-cpu.txt).
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 from pathlib import Path
@@ -44,8 +49,15 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO / "source") not in sys.path:
     sys.path.insert(0, str(REPO / "source"))
 
+from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C, ThermalModel  # noqa: E402
+
 ARM_SUFFIX = ("_yaw", "_pitch", "_roll", "_elbow_joint", "_wrist_roll")
-THRESH = {"sus": (1.0, 1.3), "peak": (1.0, 1.0), "static_sus": (0.8, 1.0)}
+THRESH_FIXED = {"peak": (1.0, 1.0), "static_sus": (0.8, 1.0)}  # instantaneous / gravity-hold: not ambient-scaled
+# ``sus`` HIGH keeps the endurance the old fixed 1.3x rated had at room temperature: the trip time of 1.3x held from a
+# soak at 25 C under the thermal model (17.35 min); at another ambient HIGH is the ratio with that same trip time.
+SUS_HIGH_REF = (1.3, 25.0)  # (ratio, ambient C) defining SUS_HIGH_TRIP_S
+SUS_TRIP_DT = 0.05
+SUS_TRIP_MAX_S = 3600.0  # per-motor sus_trip_s horizon
 DEFAULT_WINDOW_S = 2.0
 DEFAULT_LP_HZ = 6.0  # zero-phase Gaussian low-pass before differentiating (50 Hz clips hit joint stops in one frame)
 J_REFRESH = 5  # frames between motor-Jacobian refreshes (arm LUTs are smooth)
@@ -99,8 +111,27 @@ def longest_run(mask: np.ndarray) -> np.ndarray:
     return out
 
 
-def severity(metric: str, value: float) -> str:
-    warn, high = THRESH[metric]
+@functools.lru_cache(maxsize=None)
+def sus_high_trip_s() -> float:
+    r, amb = SUS_HIGH_REF
+    return ThermalModel(amb).time_to_trip(r, dt=SUS_TRIP_DT, interpolate=True)
+
+
+@functools.lru_cache(maxsize=None)
+def _sus_thresholds(ambient_C: float) -> tuple[float, float]:
+    m = ThermalModel(ambient_C)
+    warn = m.max_continuous_ratio()
+    high = m.ratio_for_time_to_trip(sus_high_trip_s(), dt=SUS_TRIP_DT) if warn > 0 else 0.0
+    return round(warn, 4), round(high, 4)
+
+
+def thresholds(ambient_C: float = DESIGN_AMBIENT_C) -> dict:
+    """Severity thresholds at ``ambient_C``: ``sus`` from the thermal model, ``peak`` / ``static_sus`` fixed."""
+    return {"sus": _sus_thresholds(float(ambient_C)), **THRESH_FIXED}
+
+
+def severity(metric: str, value: float, thresh: dict | None = None) -> str:
+    warn, high = (thresh or thresholds())[metric]
     if not np.isfinite(value):
         return ""
     if value >= high:
@@ -293,9 +324,12 @@ class ArmDutyPlant:
 
 
 def screen(paths: list[Path], map_name: str = "user_2026_09_25", window_s: float = DEFAULT_WINDOW_S,
-           dynamic: bool = True, plant: ArmDutyPlant | None = None, lp_hz: float | None = DEFAULT_LP_HZ) -> dict:
+           dynamic: bool = True, plant: ArmDutyPlant | None = None, lp_hz: float | None = DEFAULT_LP_HZ,
+           ambient_C: float = DESIGN_AMBIENT_C) -> dict:
     from dropbear_wbc.robots.hw_motor_specs import JOINT_MOTOR_MAPS, MOTOR_MODELS
 
+    tm = ThermalModel(ambient_C)
+    thresh = thresholds(ambient_C)
     plant = plant or ArmDutyPlant()
     mmap = JOINT_MOTOR_MAPS[map_name]
     arm = [plant.motor_names[j] for j in plant.arm_motors]
@@ -323,24 +357,38 @@ def screen(paths: list[Path], map_name: str = "user_2026_09_25", window_s: float
         for n, r in rec["motors"].items():
             g = r[gate_kind]
             for metric in ("sus", "peak"):
-                sev = severity(metric, g[metric])
+                sev = severity(metric, g[metric], thresh)
                 if sev:
                     rec["findings"].append({"motor": n, "metric": metric, "value": round(g[metric], 3),
                                             "severity": sev, "basis": gate_kind})
-            sev = severity("static_sus", r["static"]["sus"])  # gravity-only pose hold (straight arm raised)
+            # thermal: the worst window held from a soak at ambient (inf below the continuous ratio: never trips) and
+            # the steady winding temperature of the looped clip
+            sus_trip = (tm.time_to_trip(g["sus"], dt=SUS_TRIP_DT, t_max=SUS_TRIP_MAX_S, interpolate=True)
+                        if g["sus"] >= thresh["sus"][0] else float("inf"))
+            tw_ss = float(tm.steady_winding_C(g["rms"]))
+            # None: no trip within SUS_TRIP_MAX_S / thermal runaway
+            r["thermal"] = {"basis": gate_kind, "sus_trip_s": sus_trip if np.isfinite(sus_trip) else None,
+                            "rms_steady_winding_C": tw_ss if np.isfinite(tw_ss) else None}
+            sev = severity("static_sus", r["static"]["sus"], thresh)  # gravity-only pose hold (straight arm raised)
             if sev:
                 rec["findings"].append({"motor": n, "metric": "static_sus", "value": round(r["static"]["sus"], 3),
                                         "severity": sev, "basis": "static"})
         sevs = {f["severity"] for f in rec["findings"]}
         rec["worst"] = "HIGH" if "HIGH" in sevs else ("warn" if "warn" in sevs else "ok")
         clips.append(rec)
-    return {"schema": "dropbear-motion-duty-screen-v1", "map": map_name, "window_s": window_s, "lp_hz": lp_hz,
-            "basis": "dynamic" if dynamic else "static", "payload_kg": 0.0, "thresh": THRESH,
-            "clips": clips, "errors": errors}
+    thermal = {**tm.describe(), "sus_warn": "max continuous ratio at ambient",
+               "sus_high": f"ratio tripping in sus_high_trip_s from a soak at ambient (= {SUS_HIGH_REF[0]}x at "
+                           f"{SUS_HIGH_REF[1]:g} C)", "sus_high_trip_s": round(sus_high_trip_s(), 3)}
+    return {"schema": "dropbear-motion-duty-screen-v2", "map": map_name, "window_s": window_s, "lp_hz": lp_hz,
+            "basis": "dynamic" if dynamic else "static", "payload_kg": 0.0, "ambient_C": float(ambient_C),
+            "thresh": thresh, "thermal": thermal, "clips": clips, "errors": errors}
 
 
 def to_markdown(res: dict) -> str:
+    sw, sh = res["thresh"]["sus"]
     L = [f"# Arm duty screen (map {res['map']}, window {res['window_s']} s, basis {res['basis']}, payload 0 kg)", "",
+         f"Ambient {res['ambient_C']:g} C (thermal constants ASSUMED): sus warn >= {sw:.3f}x rated (max continuous), "
+         f"HIGH >= {sh:.3f}x rated (trips in {res['thermal']['sus_high_trip_s'] / 60:.2f} min from a soak).", "",
          f"Dynamic = inverse dynamics on a {res.get('lp_hz')} Hz zero-phase low-passed reference; static = gravity only. "
          "Columns are motor-side ratios: sus = worst-window RMS / rated, rms = whole-clip RMS / rated, peak = max / peak.",
          "", "| clip | s | worst | elbow L dyn sus / rms / peak | elbow R dyn sus / rms / peak | elbow L/R static sus | other findings |",
@@ -365,12 +413,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("inputs", nargs="+", help="clip .npz, directory of clips, or a library manifest .json")
     ap.add_argument("--map", default="user_2026_09_25")
     ap.add_argument("--window", type=float, default=DEFAULT_WINDOW_S, help="sustained-RMS window [s]")
+    ap.add_argument("--ambient_C", type=float, default=DESIGN_AMBIENT_C,
+                    help=f"ambient / enclosure temperature for the sus thresholds [C] "
+                         f"(default {DESIGN_AMBIENT_C:g}, ASSUMED)")
     ap.add_argument("--static-only", action="store_true", help="gravity only (skip finite-difference dynamics)")
     ap.add_argument("--lp-hz", type=float, default=DEFAULT_LP_HZ, help="reference low-pass before differentiating; 0 = raw")
     ap.add_argument("--md"); ap.add_argument("--json")
     ap.add_argument("--fail-on", choices=("high", "warn"), default=None)
     a = ap.parse_args(argv)
-    res = screen(clip_paths(a.inputs), a.map, a.window, dynamic=not a.static_only, lp_hz=a.lp_hz)
+    res = screen(clip_paths(a.inputs), a.map, a.window, dynamic=not a.static_only, lp_hz=a.lp_hz,
+                 ambient_C=a.ambient_C)
     md = to_markdown(res)
     print(md)
     if a.md:
