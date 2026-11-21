@@ -3,10 +3,16 @@
 Input: the ``--telemetry`` npz of ``scripts/play.py`` / ``scripts/play_locomotion.py`` (``isaac/telemetry.py``), one env,
 50 Hz rows plus 200 Hz substep torques. Checks, each with a threshold in ``THRESH``:
 
-* ``thermal``        RMS torque over the rollout / rated (continuous) torque, per motor
+* ``thermal``        ambient-aware two-node thermal check (``dropbear_wbc.robots.thermal``), per motor: value =
+                     (rollout RMS / rated) / max continuous ratio at ``--ambient_C`` (0.93 at the 45 C default, 1.09
+                     at 25 C), i.e. >= 1 when the duty held indefinitely reaches the winding trip. The detail and the
+                     JSON ``thermal`` block give the steady winding temperature and the time to trip with the
+                     rollout looped from a motor soaked at ambient (``THERMAL_LOOP_S``). Replaces the old
+                     ``rms <= rated`` proxy, which is not continuous above 36.9 C ambient. Constants ASSUMED
 * ``sustained``      worst sliding ``SUSTAIN_S`` (5 s) RMS torque / rated, per motor: a held pose inside a longer rollout
                      (straight arm raised, ISSUES #10/#28c) that the whole-rollout RMS dilutes. Only on rollouts longer
-                     than 1.5 windows; a quality warning, not in ``HW_GATE`` until a thermal model sets the window
+                     than 1.5 windows; a burst-quality warning, not in ``HW_GATE``: no fixed window is ambient-robust
+                     (35 C would need <= 4 s, 45 C none), so the thermal gate is ``thermal`` above
 * ``clipped``        share of policy steps where the PD asked for more than the torque-speed envelope gave
 * ``torque_jump``    share of 5 ms steps whose torque change exceeds 25 % of peak (48 V bus ripple, gear shock)
 * ``speed``          p99 |joint speed| / no-load speed (headroom for the torque-speed line)
@@ -32,19 +38,26 @@ Input: the ``--telemetry`` npz of ``scripts/play.py`` / ``scripts/play_locomotio
 * ``sway``           RMS lateral base speed and RMS tilt (needs ``proj_grav``)
 * ``fall``           the anchor drops below 55 % of its start height
 
-usage: python tools/telemetry_issue_scan.py <telemetry.npz> [...] [--md out.md] [--json out.json]
+usage: python tools/telemetry_issue_scan.py <telemetry.npz> [...] [--md out.md] [--json out.json] [--ambient_C 45]
 Old files without the newer keys skip those checks; joint limits fall back to the USD dump ``--limits_json``. Pure numpy.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
+_SRC = Path(__file__).resolve().parents[1] / "source"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C, thermal_trace_check  # noqa: E402
+
 THRESH = {
-    "thermal": (1.0, 1.3),           # RMS / rated: warn, high
+    "thermal": (1.0, 1.3),           # (RMS / rated) / max continuous ratio at the ambient: warn, high
     "sustained": (1.0, 1.3),         # worst SUSTAIN_S-window RMS / rated
     "clipped": (0.05, 0.20),         # share of policy steps
     "torque_jump": (0.05, 0.15),     # share of 5 ms steps with |d tau| > 25 % peak
@@ -69,7 +82,8 @@ HW_GATE = ("fall", "stop_load", "stop_rest", "thermal", "clipped", "speed", "tou
 """Checks whose HIGH findings fail the hardware gate: each one breaks or overheats a real part, or slips a foot. The
 rest (jitter, lag, asymmetry, sway, ...) are quality warnings."""
 JUMP_FRAC_OF_PEAK = 0.25
-SUSTAIN_S = 5.0  # s, sliding RMS window of the ``sustained`` check
+SUSTAIN_S = 5.0  # s, sliding RMS window of the ``sustained`` (burst) check; keep 5 s (notes/361: no window is ambient-robust)
+THERMAL_LOOP_S = 3600.0  # s, the rollout is looped this long from ambient for the time-to-trip
 CHATTER_S = 0.06
 SETTLE_V = 0.1  # m/s: a landed sole below this planar speed has settled
 LIMIT_MARGIN = np.deg2rad(3.0)
@@ -124,7 +138,7 @@ def _segments(x: np.ndarray) -> list[tuple[bool, int]]:
     return [(on, L) for on, _, L in _runs(x)]
 
 
-def scan(path: Path, limits_json: Path = USD_LIMITS_JSON) -> dict:
+def scan(path: Path, limits_json: Path = USD_LIMITS_JSON, ambient_C: float = DESIGN_AMBIENT_C) -> dict:
     d = np.load(path, allow_pickle=True)
     names = [str(n) for n in d["motor_names"]]
     dt = float(d["dt"]) if "dt" in d.files else 0.02
@@ -144,8 +158,21 @@ def scan(path: Path, limits_json: Path = USD_LIMITS_JSON) -> dict:
 
     # ---- per motor ----
     rms = np.sqrt((tau ** 2).mean(0))
+    th = thermal_trace_check(tau, rated, dt, ambient_C, loop_s=THERMAL_LOOP_S)
+    lim = th["model"]["max_continuous_ratio"]
+    thermal = {**th["model"], "loop_s": THERMAL_LOOP_S, "per_motor": {}}
     for i, n in enumerate(names):
-        add("thermal", rms[i] / rated[i], motor=n, detail=f"RMS {rms[i]:.1f} N*m vs rated {rated[i]:.0f}")
+        trip, ss = float(th["trip_s"][i]), float(th["steady_winding_C"][i])
+        thermal["per_motor"][n] = {"rms_Nm": round(float(rms[i]), 4), "rms_over_rated": round(float(th["rms_over_rated"][i]), 4),
+                                   "over_continuous": round(float(th["value"][i]), 4),
+                                   "steady_winding_C": round(ss, 2) if np.isfinite(ss) else None,
+                                   "time_to_trip_s": round(trip, 2) if np.isfinite(trip) else None,
+                                   "tw_max_C": round(float(th["tw_max_C"][i]), 2)}
+        tt = f"trips after {trip / 60:.1f} min looped" if np.isfinite(trip) else f"no trip in {THERMAL_LOOP_S / 60:.0f} min looped"
+        st = f"steady winding {ss:.0f} C" if np.isfinite(ss) else "thermal runaway"
+        add("thermal", th["value"][i], motor=n,
+            detail=f"RMS {rms[i]:.1f} N*m = {th['rms_over_rated'][i]:.2f}x rated {rated[i]:.0f} vs continuous {lim:.2f}x "
+                   f"at {ambient_C:g} C ambient; {st}; {tt}")
     win = int(round(SUSTAIN_S / dt))
     if T >= 1.5 * win:
         c2 = np.vstack([np.zeros((1, tau.shape[1])), np.cumsum(tau ** 2, axis=0)])
@@ -275,7 +302,7 @@ def scan(path: Path, limits_json: Path = USD_LIMITS_JSON) -> dict:
     findings.sort(key=lambda f: (order[f["severity"]], f["check"], -f["value"]))
     fails = sorted({f"{f['check']}:{f['motor'] or 'body'}" for f in findings if f["severity"] == "HIGH" and f["check"] in HW_GATE})
     gate = {"pass": not fails, "fails": fails}
-    return {"file": str(path), "meta": meta, "body": body, "hw_gate": gate, "findings": findings}
+    return {"file": str(path), "meta": meta, "body": body, "hw_gate": gate, "findings": findings, "thermal": thermal}
 
 
 def _label(r: dict) -> str:
@@ -284,8 +311,11 @@ def _label(r: dict) -> str:
 
 
 def to_md(results: list[dict]) -> str:
+    amb = sorted({r["thermal"]["ambient_C"] for r in results if "thermal" in r})
     out = ["# Telemetry issue scan", "",
-           "HW gate = FAIL on any HIGH " + " / ".join(HW_GATE) + " finding (`tools/telemetry_issue_scan.py`).", "",
+           "HW gate = FAIL on any HIGH " + " / ".join(HW_GATE) + " finding (`tools/telemetry_issue_scan.py`).",
+           f"Thermal: two-node model at ambient {', '.join(f'{a:g}' for a in amb)} C (constants ASSUMED; "
+           "value = RMS/rated over the max continuous ratio at that ambient).", "",
            "| rollout | motors | s | HW gate | gate failures (worst first) | falls | 200 Hz jumps > 25 % |",
            "|---|---|---|---|---|---|---|"]
     for r in results:
@@ -323,8 +353,10 @@ def main() -> None:
     ap.add_argument("--md", default=None)
     ap.add_argument("--json", default=None)
     ap.add_argument("--limits_json", default=str(USD_LIMITS_JSON), help="USD joint dump for files without joint_limits")
+    ap.add_argument("--ambient_C", type=float, default=DESIGN_AMBIENT_C,
+                    help="ambient (room / enclosure) temperature of the thermal check, C (default 45, ASSUMED design value)")
     args = ap.parse_args()
-    results = [scan(Path(f), Path(args.limits_json)) for f in args.files]
+    results = [scan(Path(f), Path(args.limits_json), ambient_C=args.ambient_C) for f in args.files]
     md = to_md(results)
     print(md)
     if args.md:

@@ -16,10 +16,12 @@ the summary was simulated with (``robots.hw_motor_specs.HW_PROFILE_MAPS[actuator
 * locomotion: gate on the *worst* ``by_scenario[*].motor_torque`` block (play_locomotion 0079+); a scenario missing
   its block is UNKNOWN = FAIL. A pooled-only summary over more than one scenario is UNKNOWN = FAIL (rerun play):
   the pooled rms can hide one hot scenario. A single-scenario pooled block is exact and still gates
-* per motor: rms <= rated (thermal proxy until a thermal model exists), max <= peak, clip_frac <= 1 %,
-  max |joint speed| <= no-load speed, and the summary's sim peak limit equals the map's peak (catches a wrong map)
+* per motor: rms / rated <= the max continuous ratio of the two-node thermal model (``dropbear_wbc.robots.thermal``)
+  at ``--ambient_C`` (default 45 C, ASSUMED design value: 0.93x; 1.09x at 25 C; rated itself is not continuous above
+  36.9 C), max <= peak, clip_frac <= 1 %, max |joint speed| <= no-load speed, and the summary's sim peak limit equals
+  the map's peak (catches a wrong map). Each row records the ambient and limit it used (``thermal``)
 
-    python tools/scoreboard.py --registry tools/skills.json [--json out.json]
+    python tools/scoreboard.py --registry tools/skills.json [--json out.json] [--ambient_C 45]
 
 Exit code 1 if any registered skill is missing or fails, so it can gate a run.
 """
@@ -39,8 +41,10 @@ if str(ROOT / "source") not in sys.path:
 
 from dropbear_wbc.motion.names import MOTOR_NAMES  # noqa: E402
 from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS, joint_hw_params  # noqa: E402
+from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C, ThermalModel  # noqa: E402
 
 GATE = {"rms_over_rated": 1.0, "max_over_peak": 1.0, "clip_frac": 0.01, "speed_over_no_load": 1.0}
+"""Static limits; ``rms_over_rated`` is replaced per call by :func:`rms_limit` (the thermal continuous ratio)."""
 PEAK_MATCH_TOL = 0.02  # |sim peak limit - map peak| / map peak; summaries round to 0.01 N*m
 _EPS = 1e-6
 
@@ -51,7 +55,13 @@ def motor_specs(profile: str) -> dict[str, dict]:
                 "no_load": float(p["no_load_speed"])} for n, p in joint_hw_params(HW_PROFILE_MAPS[profile]).items()}
 
 
-def _per_motor_torque_check(per: dict, specs: dict[str, dict], *, clip: str | None = None) -> tuple[dict, list[str]]:
+def rms_limit(ambient_C: float) -> float:
+    """Max continuous rms / rated at ``ambient_C`` (two-node thermal model, ASSUMED constants)."""
+    return ThermalModel(ambient_C).max_continuous_ratio()
+
+
+def _per_motor_torque_check(per: dict, specs: dict[str, dict], *, clip: str | None = None,
+                            ambient_C: float = DESIGN_AMBIENT_C) -> tuple[dict, list[str]]:
     """Worst per-motor ratios + failure reasons for one ``per_motor`` block. ``clip`` tags each reason."""
     tag = f" [clip {clip}]" if clip is not None else ""
     if not per:
@@ -86,14 +96,17 @@ def _per_motor_torque_check(per: dict, specs: dict[str, dict], *, clip: str | No
         why.append(f"sim peak limit != motor-map peak on {len(mism)} motors ({'; '.join(mism[:2])}){tag}")
     labels = {"rms_over_rated": "rms {v:.2f}x rated", "max_over_peak": "max {v:.2f}x peak",
               "clip_frac": "clip {v:.1%}", "speed_over_no_load": "speed {v:.2f}x no-load"}
-    for k, lim in GATE.items():
+    limits = {**GATE, "rms_over_rated": rms_limit(ambient_C)}
+    for k, lim in limits.items():
         v, n = worst[k]
         if v > lim + _EPS:
-            why.append(f"{labels[k].format(v=v)} ({n}, {specs[n]['model']}){tag}")
+            extra_k = f" > {lim:.2f}x continuous at {ambient_C:g} C ambient" if k == "rms_over_rated" else ""
+            why.append(f"{labels[k].format(v=v)} ({n}, {specs[n]['model']}){extra_k}{tag}")
     return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
 
 
-def _worst_group_check(groups: dict, specs: dict[str, dict], label: str) -> tuple[dict, list[str]]:
+def _worst_group_check(groups: dict, specs: dict[str, dict], label: str,
+                       ambient_C: float = DESIGN_AMBIENT_C) -> tuple[dict, list[str]]:
     """Worst ratios over the ``motor_torque`` blocks of ``groups`` (name -> entry); a group without a block is
     UNKNOWN = FAIL, tagged ``[<label> NAME]``."""
     why: list[str] = []
@@ -101,7 +114,7 @@ def _worst_group_check(groups: dict, specs: dict[str, dict], label: str) -> tupl
     any_block = False
     for name in groups:
         per = ((groups.get(name) or {}).get("motor_torque") or {}).get("per_motor")
-        tw, tw_why = _per_motor_torque_check(per, specs, clip=str(name))
+        tw, tw_why = _per_motor_torque_check(per, specs, clip=str(name), ambient_C=ambient_C)
         if label != "clip":
             tw_why = [w.replace(f" [clip {name}]", f" [{label} {name}]") for w in tw_why]
         why += tw_why
@@ -116,7 +129,7 @@ def _worst_group_check(groups: dict, specs: dict[str, dict], label: str) -> tupl
     return {k: {"value": round(v, 4), "motor": n} for k, (v, n) in worst.items()}, why
 
 
-def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]]:
+def torque_check(summary: dict, specs: dict[str, dict], ambient_C: float = DESIGN_AMBIENT_C) -> tuple[dict, list[str]]:
     """Worst per-motor ratios + failure reasons. Missing torque block / motor -> failure, never a skip.
 
     When ``summary["per_clip"]`` is a dict (tracking libraries), pass/fail uses the *worst* clip's
@@ -126,17 +139,17 @@ def torque_check(summary: dict, specs: dict[str, dict]) -> tuple[dict, list[str]
     """
     clips = summary.get("per_clip")
     if isinstance(clips, dict):
-        return _worst_group_check(clips, specs, "clip")
+        return _worst_group_check(clips, specs, "clip", ambient_C)
     scen = summary.get("by_scenario")
     if isinstance(scen, dict) and scen:
         if any(isinstance(g, dict) and "motor_torque" in g for g in scen.values()):
-            return _worst_group_check(scen, specs, "scenario")
-        pooled = _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs)
+            return _worst_group_check(scen, specs, "scenario", ambient_C)
+        pooled = _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs, ambient_C=ambient_C)
         if len(scen) > 1 and pooled[0]:
             return pooled[0], pooled[1] + [f"torque per-scenario UNKNOWN (pooled over {len(scen)} scenarios can hide "
                                            f"a hot one; rerun play_locomotion with per-scenario blocks)"]
         return pooled
-    return _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs)
+    return _per_motor_torque_check((summary.get("motor_torque") or {}).get("per_motor"), specs, ambient_C=ambient_C)
 
 
 def _perturbed(s: dict) -> bool | None:
@@ -147,8 +160,8 @@ def _perturbed(s: dict) -> bool | None:
     return None if rnd is None else str(rnd).startswith("training-level")
 
 
-def evaluate(kind: str, s: dict, allow_profiles: tuple[str, ...] = ()) -> dict:
-    """Return {"scenarios", "envs", "falls", "profile", "perturbed", "torque", "torque_x", "pass", "why"}."""
+def evaluate(kind: str, s: dict, allow_profiles: tuple[str, ...] = (), ambient_C: float = DESIGN_AMBIENT_C) -> dict:
+    """Return {"scenarios", "envs", "falls", "profile", "perturbed", "torque", "torque_x", "thermal", "pass", "why"}."""
     why: list[str] = []
     if kind == "locomotion":
         scen = s.get("by_scenario") or {}
@@ -177,7 +190,7 @@ def evaluate(kind: str, s: dict, allow_profiles: tuple[str, ...] = ()) -> dict:
     elif allow_profiles and profile not in allow_profiles:
         why.append(f"actuator_profile {profile!r} not in allow_profiles")
     else:
-        torque, twhy = torque_check(s, motor_specs(profile))
+        torque, twhy = torque_check(s, motor_specs(profile), ambient_C)
         why += twhy
     clips = s.get("per_clip")
     has_pooled = bool((s.get("motor_torque") or {}).get("per_motor"))
@@ -188,7 +201,8 @@ def evaluate(kind: str, s: dict, allow_profiles: tuple[str, ...] = ()) -> dict:
             why.append("torque UNKNOWN (no motor_torque block)")
     tx = max((torque[k]["value"] for k in ("rms_over_rated", "max_over_peak")), default=None) if torque else None
     return {"scenarios": scenarios, "envs": envs, "falls": falls, "profile": profile, "perturbed": pert,
-            "torque": torque, "torque_x": tx, "pass": not why, "why": why}
+            "torque": torque, "torque_x": tx, "thermal": {"ambient_C": float(ambient_C), "rms_limit": round(rms_limit(ambient_C), 4)},
+            "pass": not why, "why": why}
 
 
 def _created(p: Path, s: dict) -> float:
@@ -224,7 +238,7 @@ def select(pattern: str, allow_profiles: tuple[str, ...] = ()) -> tuple[Path | N
     return p, s, len(cands)
 
 
-def build(registry: dict, root: Path) -> list[dict]:
+def build(registry: dict, root: Path, ambient_C: float = DESIGN_AMBIENT_C) -> list[dict]:
     rows = []
     allow = tuple(registry.get("allow_profiles", ()))
     for name, spec in registry["skills"].items():
@@ -232,14 +246,16 @@ def build(registry: dict, root: Path) -> list[dict]:
         row = {"skill": name, "kind": spec["kind"], "file": str(p) if p else None, "candidates": n}
         if p is None:
             row.update(scenarios=0, envs=0, falls=None, profile=None, perturbed=None, torque={}, torque_x=None,
+                       thermal={"ambient_C": float(ambient_C), "rms_limit": round(rms_limit(ambient_C), 4)},
                        **{"pass": False, "why": ["no summary"]})
         else:
-            row.update(evaluate(spec["kind"], s, allow))
+            row.update(evaluate(spec["kind"], s, allow, ambient_C))
         rows.append(row)
     return rows
 
 
 def render(rows: list[dict]) -> str:
+    th = (rows[0].get("thermal") if rows else None) or {"ambient_C": DESIGN_AMBIENT_C, "rms_limit": rms_limit(DESIGN_AMBIENT_C)}
     out = [f"{'skill':<28}{'scen':>5}{'envs':>6}{'falls':>7}{'profile':>18}{'rms/rt':>8}{'max/pk':>8}  result"]
     for r in rows:
         t = r.get("torque") or {}
@@ -250,7 +266,7 @@ def render(rows: list[dict]) -> str:
                    + ("PASS" if r["pass"] else "FAIL: " + "; ".join(r["why"])))
     ok = sum(r["pass"] for r in rows)
     out.append(f"\n{ok}/{len(rows)} skills pass the hardware gate (hw_* profile, perturbed, 0 falls, per motor: "
-               f"rms <= rated, max <= peak, clip <= {GATE['clip_frac']:.0%}, speed <= no-load; "
+               f"rms <= {th['rms_limit']:.2f}x rated (continuous at {th['ambient_C']:g} C, thermal constants ASSUMED), max <= peak, clip <= {GATE['clip_frac']:.0%}, speed <= no-load; "
                f"worst per_clip / by_scenario motor_torque)")
     return "\n".join(out)
 
@@ -260,8 +276,10 @@ def main(argv=None) -> int:
     ap.add_argument("--registry", type=Path, default=Path("tools/skills.json"))
     ap.add_argument("--root", type=Path, default=Path("."))
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument("--ambient_C", type=float, default=DESIGN_AMBIENT_C,
+                    help="ambient temperature of the thermal rms gate, C (default 45, ASSUMED design value)")
     a = ap.parse_args(argv)
-    rows = build(json.loads(a.registry.read_text(encoding="utf-8")), a.root)
+    rows = build(json.loads(a.registry.read_text(encoding="utf-8")), a.root, a.ambient_C)
     print(render(rows))
     if a.json:
         a.json.write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
