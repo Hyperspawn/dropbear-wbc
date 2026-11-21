@@ -15,6 +15,20 @@ and a library task it refuses, unless ``allow_uncurated``:
 
 A ``--continue_run`` chunk only warns: the run already trained on that library, and the continuity checks
 (motion sha, run settings) decide whether it may continue. Single-clip tasks and sim-only profiles are not checked.
+
+Screen ambient (item 367). Since 0101 the arm-duty screen's ``sus`` thresholds depend on the ambient (schema
+``dropbear-motion-duty-screen-v2`` with ``ambient_C``; 0.934x rated warn at the 45 C design ambient instead of the
+fixed 1.0x). :func:`screen_ambient_status` classifies ``curation.screen``:
+
+* ``ok``: v2 screen at the design ambient (``dropbear_wbc.robots.thermal.DESIGN_AMBIENT_C``);
+* ``no_ambient``: a pre-0101 fixed-rated screen (v1 / no ``ambient_C`` / no ``screen`` block);
+* ``mismatch``: screened at another ambient than the design ambient;
+* ``inconsistent``: ``screen.ambient_C`` differs from ``screen.thermal.ambient_C``.
+
+Anything but ``ok`` only WARNS by default (an older ``*_hw.json`` on the PC / Brev keeps working until it is
+re-curated); ``require_curation_ambient`` (train.py ``--require_curation_ambient``) refuses a fresh run instead.
+``--allow_uncurated`` and ``--continue_run`` downgrade that refusal to a warning, as for the other curation checks.
+The result goes to run_info ``hw_library_curation.ambient_status``.
 """
 from __future__ import annotations
 
@@ -29,6 +43,56 @@ CURATION_TOOL = "tools/curate_hw_library.py"
 
 class UncuratedLibraryError(ValueError):
     """An hardware-armed tracking run would train on a motion library without a valid hardware curation."""
+
+
+class CurationAmbientError(UncuratedLibraryError):
+    """``require_curation_ambient``: the curation's duty screen is not ambient-aware or not at the design ambient."""
+
+
+SCREEN_SCHEMA_V2 = "dropbear-motion-duty-screen-v2"
+AMBIENT_TOL_C = 1e-6
+
+
+def _design_ambient_C() -> float:
+    from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C
+
+    return float(DESIGN_AMBIENT_C)
+
+
+def screen_ambient_status(manifest: dict, design_ambient_C: float | None = None) -> dict[str, Any] | None:
+    """Classify the ambient of the duty screen a curated manifest was made with (item 367).
+
+    Returns ``{"status", "screen_schema", "ambient_C", "design_ambient_C", "detail"}``; ``status`` is ``ok``,
+    ``no_ambient``, ``mismatch`` or ``inconsistent`` (module docstring). ``None`` for a manifest without curation.
+    """
+    cur = manifest.get("curation")
+    if not isinstance(cur, dict):
+        return None
+    design = _design_ambient_C() if design_ambient_C is None else float(design_ambient_C)
+    scr = cur.get("screen")
+    scr = scr if isinstance(scr, dict) else {}
+    schema, amb = scr.get("schema"), scr.get("ambient_C")
+    out = {"status": "ok", "screen_schema": schema, "ambient_C": amb, "design_ambient_C": design, "detail": ""}
+    if not scr:
+        out.update(status="no_ambient", detail="curation has no 'screen' block")
+    elif schema != SCREEN_SCHEMA_V2 or amb is None:
+        out.update(status="no_ambient", detail=f"screen schema {schema!r}, ambient_C {amb!r}: fixed-rated screen "
+                                               "from before the thermal model (0101)")
+    else:
+        try:
+            amb_f = float(amb)
+        except (TypeError, ValueError):
+            amb_f = math.nan
+        th = scr.get("thermal")
+        th_amb = th.get("ambient_C") if isinstance(th, dict) else None
+        if not math.isfinite(amb_f):
+            out.update(status="no_ambient", detail=f"screen ambient_C {amb!r} is not a finite number")
+        elif th_amb is not None and abs(float(th_amb) - amb_f) > AMBIENT_TOL_C:
+            out.update(status="inconsistent", detail=f"screen ambient_C {amb_f:g} C != screen.thermal.ambient_C "
+                                                     f"{float(th_amb):g} C")
+        elif abs(amb_f - design) > AMBIENT_TOL_C:
+            out.update(status="mismatch", detail=f"screened at {amb_f:g} C, design ambient is {design:g} C")
+    return out
 
 
 def is_hw_profile(profile: str | None) -> bool:
@@ -78,23 +142,44 @@ def curation_summary(manifest: dict) -> dict[str, Any] | None:
 
 
 def check_hw_library(manifest_path: str | Path | None, actuator_profile: str | None, *, allow_uncurated: bool = False,
-                     continue_run: bool = False) -> tuple[dict[str, Any], list[str]]:
+                     continue_run: bool = False, require_curation_ambient: bool = False,
+                     design_ambient_C: float | None = None) -> tuple[dict[str, Any], list[str]]:
     """Gate an hardware-armed library run on a curated manifest.
 
     Returns ``(record, notes)``: ``record`` goes to run_info (``checked``, ``curated``, ``problems``, ``allowed``,
-    ``curation``), ``notes`` are printable lines. Raises :class:`UncuratedLibraryError` for a fresh run that fails.
+    ``curation``, ``ambient_status``), ``notes`` are printable lines. Raises :class:`UncuratedLibraryError` for a fresh
+    run that fails, :class:`CurationAmbientError` when ``require_curation_ambient`` and the screen ambient is not ``ok``.
     """
-    rec: dict[str, Any] = {"checked": False, "curated": None, "problems": [], "allowed": False, "curation": None}
+    rec: dict[str, Any] = {"checked": False, "curated": None, "problems": [], "allowed": False, "curation": None,
+                           "ambient_status": None}
     if manifest_path is None or not is_hw_profile(actuator_profile):
         return rec, []
     p = Path(manifest_path)
     data = json.loads(p.read_text(encoding="utf-8"))
     problems = curation_problems(data)
     rec.update(checked=True, curated=not problems, problems=problems, curation=curation_summary(data))
+    amb = screen_ambient_status(data, design_ambient_C)
+    if amb is not None:
+        amb["required"] = bool(require_curation_ambient)
+    rec["ambient_status"] = amb
     if not problems:
         c = rec["curation"] or {}
-        return rec, [f"hw library curation OK: {p.name} from {c.get('source_manifest')!r}, policy {c.get('policy')}, "
-                     f"counts {c.get('counts')}"]
+        notes = [f"hw library curation OK: {p.name} from {c.get('source_manifest')!r}, policy {c.get('policy')}, "
+                 f"counts {c.get('counts')}"]
+        if amb is None or amb["status"] == "ok":
+            return rec, notes
+        head = (f"{p.name} curation screen ambient {amb['status']}: {amb['detail']} (sus thresholds differ from the "
+                f"{amb['design_ambient_C']:g} C design ambient; re-run {CURATION_TOOL})")
+        if not require_curation_ambient:
+            return rec, notes + [f"WARNING {head}"]
+        if allow_uncurated:
+            rec["allowed"] = True
+            return rec, notes + [f"WARNING {head} (--require_curation_ambient overridden by --allow_uncurated)"]
+        if continue_run:
+            rec["allowed"] = True
+            return rec, notes + [f"WARNING {head} (--continue_run: kept)"]
+        raise CurationAmbientError(f"{head}. --require_curation_ambient refuses it; re-curate, drop the flag or pass "
+                                   "--allow_uncurated")
     head = f"{p.name} is not a hardware-curated library for actuator profile {actuator_profile!r}: " + "; ".join(problems[:5])
     if len(problems) > 5:
         head += f"; ... {len(problems) - 5} more"

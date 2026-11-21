@@ -99,6 +99,10 @@ parser.add_argument("--allow_rejected_motion", action="store_true",
 parser.add_argument("--allow_uncurated", action="store_true",
                     help="hw_* / legacy_hwarm library runs: allow a --motion_library without a valid hardware curation "
                     "(tools/curate_hw_library.py). Recorded in run_info.hw_library_curation")
+parser.add_argument("--require_curation_ambient", action="store_true",
+                    help="hw_* / legacy_hwarm library runs: refuse (instead of warn) a hardware curation whose duty "
+                    "screen has no ambient_C (pre-0101) or another ambient than the 45 C design ambient. Recorded in "
+                    "run_info.hw_library_curation.ambient_status")
 parser.add_argument("--accept_reason", default="", help="why the rejected motion is used (with --allow_rejected_motion)")
 parser.add_argument("--restore_train_state", choices=("auto", "on", "off"), default="auto",
                     help="restore the learning rate and the adaptive-sampling statistics saved in the checkpoint on "
@@ -170,7 +174,8 @@ def main() -> int:
 
     hw_curation, cur_notes = check_hw_library(motion if is_library else None,
                                               getattr(env_cfg, "actuator_profile", "legacy"),
-                                              allow_uncurated=args.allow_uncurated, continue_run=args.continue_run)
+                                              allow_uncurated=args.allow_uncurated, continue_run=args.continue_run,
+                                              require_curation_ambient=args.require_curation_ambient)
     for note in cur_notes:
         print(f"[INFO] {note}", flush=True)
     if rs["robot_mass_kg"] is not None:

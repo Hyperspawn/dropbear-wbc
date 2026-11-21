@@ -134,6 +134,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow_uncurated", action="store_true",
                     help="scripts/train.py --allow_uncurated: an hw_* / legacy_hwarm library run may use a manifest "
                     "without a hardware curation (tools/curate_hw_library.py)")
+    ap.add_argument("--require_curation_ambient", action="store_true",
+                    help="scripts/train.py --require_curation_ambient: refuse a curation screened without / at another "
+                    "ambient than the design ambient")
     ap.add_argument("--allow_settings_change", action="store_true",
                     help="scripts/train.py --allow_settings_change: a --resume_run chunk may change a recorded run setting")
     ap.add_argument("--isaac_python", default=_paths.isaac_python(),
@@ -230,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--allow_settings_change"]
         if args.allow_uncurated:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--allow_uncurated"]
+        if args.require_curation_ambient:
+            cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--require_curation_ambient"]
         if args.experiment_name:
             cmd[cmd.index("--headless"):cmd.index("--headless")] = ["--experiment_name", args.experiment_name]
         if args.allow_rejected_motion:

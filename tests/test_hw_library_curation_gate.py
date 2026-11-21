@@ -98,7 +98,7 @@ def test_sim_profile_and_single_clip_unchecked(tmp_path):
     m.pop("curation")
     p = _write(tmp_path, m)
     assert check_hw_library(p, "legacy") == ({"checked": False, "curated": None, "problems": [], "allowed": False,
-                                              "curation": None}, [])
+                                              "curation": None, "ambient_status": None}, [])
     assert check_hw_library(None, "hw_v1ie")[0]["checked"] is False
 
 
