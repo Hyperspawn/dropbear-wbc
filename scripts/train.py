@@ -179,6 +179,13 @@ def main() -> int:
                                               require_curation_ambient=args.require_curation_ambient)
     for note in cur_notes:
         print(f"[INFO] {note}", flush=True)
+    # serial model / sign-test provenance vs the training calibration (item 371; record + warn, never refuses)
+    from dropbear_wbc.kinematics.serial_provenance import run_info_record as calibration_consistency_record
+
+    calib_consistency = calibration_consistency_record()
+    if calib_consistency["status"] != "ok":
+        print(f"[WARN] calibration consistency {calib_consistency['status']}: {calib_consistency['findings'][:3]} "
+              f"(run {calib_consistency['check_tool']} before training)", flush=True)
     if rs["robot_mass_kg"] is not None:
         from dropbear_wbc.robots.mass_dr import predicted_mass_kg
 
@@ -311,6 +318,7 @@ def main() -> int:
         "motion_acceptance": acceptance,
         "motion_library": getattr(motion_term, "library_info", None),
         "hw_library_curation": hw_curation,
+        "calibration_consistency": calib_consistency,
         "train_state_persistence": restore,
         "restore_train_state": restore,
         "train_state_restore": runner.train_state_report,

@@ -17,6 +17,8 @@ import numpy as np
 import pytest
 
 import sdk_test_paths  # noqa: F401
+# MIRROR_SIGN: single source calib_build (tied to the serial MJCF in tests/test_motor_sign_constants.py; item 371)
+from dropbear_wbc.kinematics.calib_build import MIRROR_SIGN
 from dropbear_wbc.kinematics.semantic import MOTOR_NAMES, SCHEMA, SEMANTIC_NAMES, SemanticMap
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -214,10 +216,6 @@ def test_real_zero_and_standing(real):
     assert np.all(real.standing_motor_pos >= lim[:, 0] - 1e-9) and np.all(real.standing_motor_pos <= lim[:, 1] + 1e-9)
     if all(real.calib["dofs"][f"{k}_knee"]["type"] == "lut1d" for k in ("left", "right")):
         assert s[SEMANTIC_NAMES.index("left_knee")] > 0.05 and s[SEMANTIC_NAMES.index("right_knee")] > 0.05
-
-
-MIRROR_SIGN = {"hip_yaw": -1, "hip_roll": -1, "hip_pitch": 1, "knee": 1, "ankle_pitch": 1, "ankle_roll": -1,
-               "shoulder_pitch": 1, "shoulder_roll": -1, "shoulder_yaw": -1, "elbow": 1, "wrist_roll": -1}
 
 
 @real_only
