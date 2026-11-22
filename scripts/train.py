@@ -101,7 +101,8 @@ parser.add_argument("--allow_uncurated", action="store_true",
                     "(tools/curate_hw_library.py). Recorded in run_info.hw_library_curation")
 parser.add_argument("--require_curation_ambient", action="store_true",
                     help="hw_* / legacy_hwarm library runs: refuse (instead of warn) a hardware curation whose duty "
-                    "screen has no ambient_C (pre-0101) or another ambient than the 45 C design ambient. Recorded in "
+                    "screen has no ambient_C (pre-0101), another ambient than the 45 C design ambient or stale thermal "
+                    "constants / sus thresholds (stale_thermal). Recorded in "
                     "run_info.hw_library_curation.ambient_status")
 parser.add_argument("--accept_reason", default="", help="why the rejected motion is used (with --allow_rejected_motion)")
 parser.add_argument("--restore_train_state", choices=("auto", "on", "off"), default="auto",

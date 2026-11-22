@@ -29,9 +29,14 @@ V1_SCREEN = {"schema": "dropbear-motion-duty-screen-v1", "map": "user_2026_09_25
 
 
 def _v2(amb=45.0, thermal_amb="same"):
-    th = {"ambient_C": amb if thermal_amb == "same" else thermal_amb, "max_continuous_ratio": 0.9339}
+    # a screen as tools/motion_duty_screen.py writes it now (current thermal constants / sus thresholds, item 368)
+    from dropbear_wbc.robots.thermal import duty_screen_thermal, duty_sus_thresholds
+
+    th = duty_screen_thermal(amb)
+    th["ambient_C"] = amb if thermal_amb == "same" else thermal_amb
+    thresh = {**V1_SCREEN["thresh"], "sus": list(duty_sus_thresholds(amb))}
     return {**{k: v for k, v in V1_SCREEN.items() if k != "schema"}, "schema": SCREEN_SCHEMA_V2, "ambient_C": amb,
-            "thermal": th}
+            "thresh": thresh, "thermal": th}
 
 
 def _manifest(screen):

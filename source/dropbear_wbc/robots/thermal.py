@@ -24,6 +24,7 @@ command-line tools (Indian summer, enclosed hip), ASSUMED pending a design decis
 """
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass, field
 
@@ -33,6 +34,11 @@ ALPHA_CU = 0.00393  # 1/K, copper resistance tempco
 REF_AMBIENT_C = 24.0  # datasheet thermal balance point ambient
 DESIGN_AMBIENT_C = 45.0  # ASSUMED design ambient of the gates (pending decision)
 THERMAL_ASSUMED = {"rise_at_rated_K": 60.0, "split_wh": 0.3, "tau_w_s": 40.0, "tau_h_s": 900.0, "t_trip_C": 100.0}
+# Arm-duty screen ``sus`` HIGH (item 363): the trip time of 1.3x rated held from a soak at 25 C (17.35 min); at another
+# ambient HIGH is the ratio with that same trip time. Lives here (not in tools/motion_duty_screen.py) since item 368 so
+# the hw-library gate can recompute what a screen made now would record.
+SUS_HIGH_REF = (1.3, 25.0)  # (ratio, ambient C) defining sus_high_trip_s()
+SUS_TRIP_DT = 0.05
 
 
 @dataclass
@@ -208,3 +214,28 @@ def thermal_trace_check(tau: np.ndarray, rated: np.ndarray, dt: float, ambient_C
         value = rr / lim if lim > 0 else np.full_like(rr, np.inf)
     return {"model": m.describe(), "rms_over_rated": rr, "value": value, "steady_winding_C": m.steady_winding_C(rr),
             "trip_s": sim["trip_s"], "tw_max_C": sim["tw_max"], "loop_s": loop_s}
+
+
+# ---------------------------------------------------------------- arm-duty screen thresholds (items 363, 368)
+@functools.lru_cache(maxsize=None)
+def sus_high_trip_s() -> float:
+    """Seconds for ``SUS_HIGH_REF`` ratio held from a soak at its ambient to reach the trip (1041.0 s)."""
+    r, amb = SUS_HIGH_REF
+    return ThermalModel(amb).time_to_trip(r, dt=SUS_TRIP_DT, interpolate=True)
+
+
+@functools.lru_cache(maxsize=None)
+def duty_sus_thresholds(ambient_C: float) -> tuple[float, float]:
+    """``(warn, HIGH)`` dynamic ``sus`` thresholds of the arm-duty screen at ``ambient_C`` (rounded to 1e-4):
+    warn = max continuous ratio, HIGH = ratio that trips in :func:`sus_high_trip_s` from a soak at ``ambient_C``."""
+    m = ThermalModel(float(ambient_C))
+    warn = m.max_continuous_ratio()
+    high = m.ratio_for_time_to_trip(sus_high_trip_s(), dt=SUS_TRIP_DT) if warn > 0 else 0.0
+    return round(warn, 4), round(high, 4)
+
+
+def duty_screen_thermal(ambient_C: float) -> dict:
+    """The ``thermal`` block a ``motion_duty_screen`` result records at ``ambient_C`` (schema v2)."""
+    return {**ThermalModel(float(ambient_C)).describe(), "sus_warn": "max continuous ratio at ambient",
+            "sus_high": f"ratio tripping in sus_high_trip_s from a soak at ambient (= {SUS_HIGH_REF[0]}x at "
+                        f"{SUS_HIGH_REF[1]:g} C)", "sus_high_trip_s": round(sus_high_trip_s(), 3)}

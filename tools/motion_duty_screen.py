@@ -38,7 +38,6 @@ Needs mujoco (requirements/tests-cpu.txt).
 from __future__ import annotations
 
 import argparse
-import functools
 import json
 import sys
 from pathlib import Path
@@ -49,14 +48,16 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO / "source") not in sys.path:
     sys.path.insert(0, str(REPO / "source"))
 
-from dropbear_wbc.robots.thermal import DESIGN_AMBIENT_C, ThermalModel  # noqa: E402
+from dropbear_wbc.robots.thermal import (  # noqa: E402,F401  (re-exported)
+    DESIGN_AMBIENT_C, SUS_HIGH_REF, SUS_TRIP_DT, ThermalModel, duty_screen_thermal, duty_sus_thresholds,
+    sus_high_trip_s,
+)
 
 ARM_SUFFIX = ("_yaw", "_pitch", "_roll", "_elbow_joint", "_wrist_roll")
 THRESH_FIXED = {"peak": (1.0, 1.0), "static_sus": (0.8, 1.0)}  # instantaneous / gravity-hold: not ambient-scaled
 # ``sus`` HIGH keeps the endurance the old fixed 1.3x rated had at room temperature: the trip time of 1.3x held from a
 # soak at 25 C under the thermal model (17.35 min); at another ambient HIGH is the ratio with that same trip time.
-SUS_HIGH_REF = (1.3, 25.0)  # (ratio, ambient C) defining SUS_HIGH_TRIP_S
-SUS_TRIP_DT = 0.05
+# SUS_HIGH_REF / SUS_TRIP_DT / sus_high_trip_s / the sus thresholds live in dropbear_wbc.robots.thermal (item 368).
 SUS_TRIP_MAX_S = 3600.0  # per-motor sus_trip_s horizon
 DEFAULT_WINDOW_S = 2.0
 DEFAULT_LP_HZ = 6.0  # zero-phase Gaussian low-pass before differentiating (50 Hz clips hit joint stops in one frame)
@@ -111,18 +112,7 @@ def longest_run(mask: np.ndarray) -> np.ndarray:
     return out
 
 
-@functools.lru_cache(maxsize=None)
-def sus_high_trip_s() -> float:
-    r, amb = SUS_HIGH_REF
-    return ThermalModel(amb).time_to_trip(r, dt=SUS_TRIP_DT, interpolate=True)
-
-
-@functools.lru_cache(maxsize=None)
-def _sus_thresholds(ambient_C: float) -> tuple[float, float]:
-    m = ThermalModel(ambient_C)
-    warn = m.max_continuous_ratio()
-    high = m.ratio_for_time_to_trip(sus_high_trip_s(), dt=SUS_TRIP_DT) if warn > 0 else 0.0
-    return round(warn, 4), round(high, 4)
+_sus_thresholds = duty_sus_thresholds
 
 
 def thresholds(ambient_C: float = DESIGN_AMBIENT_C) -> dict:
@@ -376,9 +366,7 @@ def screen(paths: list[Path], map_name: str = "user_2026_09_25", window_s: float
         sevs = {f["severity"] for f in rec["findings"]}
         rec["worst"] = "HIGH" if "HIGH" in sevs else ("warn" if "warn" in sevs else "ok")
         clips.append(rec)
-    thermal = {**tm.describe(), "sus_warn": "max continuous ratio at ambient",
-               "sus_high": f"ratio tripping in sus_high_trip_s from a soak at ambient (= {SUS_HIGH_REF[0]}x at "
-                           f"{SUS_HIGH_REF[1]:g} C)", "sus_high_trip_s": round(sus_high_trip_s(), 3)}
+    thermal = duty_screen_thermal(ambient_C)
     return {"schema": "dropbear-motion-duty-screen-v2", "map": map_name, "window_s": window_s, "lp_hz": lp_hz,
             "basis": "dynamic" if dynamic else "static", "payload_kg": 0.0, "ambient_C": float(ambient_C),
             "thresh": thresh, "thermal": thermal, "clips": clips, "errors": errors}

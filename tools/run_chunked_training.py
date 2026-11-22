@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                     "without a hardware curation (tools/curate_hw_library.py)")
     ap.add_argument("--require_curation_ambient", action="store_true",
                     help="scripts/train.py --require_curation_ambient: refuse a curation screened without / at another "
-                    "ambient than the design ambient")
+                    "ambient than the design ambient or with stale thermal constants")
     ap.add_argument("--allow_settings_change", action="store_true",
                     help="scripts/train.py --allow_settings_change: a --resume_run chunk may change a recorded run setting")
     ap.add_argument("--isaac_python", default=_paths.isaac_python(),
