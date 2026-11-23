@@ -431,6 +431,41 @@ def load_standing_pose(calibration_path: Path) -> np.ndarray:
     return pose
 
 
+POSE_MIRROR_WARN_DEG = 3.0
+"""Semantic left/right mirror error above which a commanded stand pose is reported as asymmetric (item 376). The
+calibration standing pose and the loaded stand are < 0.05 deg; the legacy pose (sdk ``motors.DEFAULT_POS``) has both
+hip rolls at -0.1 rad motor = left -5.9 / right -5.6 deg semantic, mirror error 11.5 deg (item 370)."""
+
+
+def pose_mirror_report(q_sdk, calibration_path: Path | None = None) -> dict:
+    """Left/right semantic mirror check of a 22-motor SDK-order pose (numpy only; deploy-computer safe).
+
+    Returns ``max_err_deg`` / ``worst`` over all semantic joints, ``asymmetric`` (> :data:`POSE_MIRROR_WARN_DEG`),
+    the per-joint errors above the threshold, and the semantic hip rolls in degrees. Mirror convention as
+    ``tasks.locomotion.symmetry.semantic_mirror``: left_* <-> right_*, roll/yaw change sign.
+    """
+    from ..kinematics.semantic import DEFAULT_CALIBRATION, SemanticMap
+
+    path = Path(calibration_path) if calibration_path is not None else DEFAULT_CALIBRATION
+    calib = json.loads(path.read_text(encoding="utf-8"))
+    if list(calib["motor_names"]) != list(motors.MOTOR_NAMES):
+        raise ValueError(f"{path}: motor order differs from sdk motors.MOTOR_NAMES")
+    q = np.asarray(q_sdk, dtype=float)
+    if q.shape != (motors.NUM_MOTORS,):
+        raise ValueError(f"pose has shape {q.shape}, expected ({motors.NUM_MOTORS},)")
+    names = list(calib["semantic_names"])
+    s = np.asarray(SemanticMap(calib).motor_to_semantic(q, clip=False), dtype=float)
+    partner = [names.index(n.replace("left_", "\0").replace("right_", "left_").replace("\0", "right_")) for n in names]
+    sign = np.array([-1.0 if ("roll" in n or "yaw" in n) else 1.0 for n in names])
+    err = np.degrees(np.abs(sign * s[partner] - s))
+    k = int(np.argmax(err))
+    bad = {n: round(float(e), 3) for n, e in zip(names, err) if e > POSE_MIRROR_WARN_DEG}
+    hip = {n: round(float(np.degrees(s[names.index(n)])), 3) for n in ("left_hip_roll", "right_hip_roll") if n in names}
+    return {"max_err_deg": float(err[k]), "worst": names[k], "asymmetric": bool(err[k] > POSE_MIRROR_WARN_DEG),
+            "over_threshold_deg": bad, "hip_roll_deg": hip, "threshold_deg": POSE_MIRROR_WARN_DEG,
+            "calibration": path.as_posix()}
+
+
 LOADED_STAND_SCHEMA = "dropbear-loaded-stand-v1"
 
 

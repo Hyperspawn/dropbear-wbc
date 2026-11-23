@@ -7,7 +7,9 @@ Connects to ``rt/lowstate`` / ``rt/lowcmd`` (CONTRACTS section 6) and runs the F
 Modes:
     * ``hold``: no ONNX. Passive for ``--passive-s``, MoveToDefault, then Hold for the
       rest of ``--duration``. Default pose: ``--default-pose legacy`` (DROPBEAR_CFG
-      init pose) or a semantic calibration JSON (``standing_motor_pos``).
+      init pose; hip rolls not mirror-symmetric, item 370), ``calibration`` (repo calibration) or a semantic
+      calibration JSON (``standing_motor_pos``). The MoveToDefault/Hold target is the loaded stand unless
+      ``--hold-pose default``; an asymmetric target (> 3 deg semantic mirror error) is warned about (item 376).
     * ``policy``: needs ``--deploy-yaml`` (unitree_rl_lab ``deploy.yaml`` format) or
       ``--sidecar`` (``dropbear-policy-sidecar-v1`` JSON next to an ONNX export),
       and switches Hold -> Policy after ``--hold-s``.
@@ -42,7 +44,7 @@ import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy import quat as Q  # noqa: E402
 from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_yaml, load_loaded_stand_pose, load_sidecar,  # noqa: E402
-                                        load_standing_pose)
+                                        load_standing_pose, pose_mirror_report)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
@@ -59,7 +61,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--deploy-yaml", type=Path)
     ap.add_argument("--sidecar", type=Path)
     ap.add_argument("--onnx", type=Path, help="override the policy path of the yaml/sidecar")
-    ap.add_argument("--default-pose", default="legacy", help="'legacy' or a semantic calibration JSON (hold mode)")
+    ap.add_argument("--default-pose", default="legacy",
+                    help="hold mode: 'legacy' (sdk motors.DEFAULT_POS; both hip rolls -0.1 rad = semantic L -5.9 / "
+                         "R -5.6 deg, NOT mirror-symmetric, item 370), 'calibration' (the repo calibration "
+                         "data/calibration/dropbear_semantic_calibration.json standing_motor_pos, symmetric < 0.05 deg) "
+                         "or a semantic calibration JSON path")
     ap.add_argument("--hold-pose", default="loaded",
                     help="MoveToDefault/Hold target: 'loaded' (default; data/calibration/dropbear_loaded_stand.json, "
                          "knee crank ~3 deg, static knee ~0.35x rated, item 241), 'default' (the config's default pose "
@@ -178,6 +184,15 @@ def _parse_timing_limits(items: list[str]) -> dict:
 
 
 LOADED_STAND_JSON = ROOT / "data/calibration/dropbear_loaded_stand.json"
+CALIBRATION_JSON = ROOT / "data/calibration/dropbear_semantic_calibration.json"
+
+
+def default_pose_calibration(args) -> Path | None:
+    """Hold-mode ``--default-pose`` -> calibration JSON (``None`` = legacy pose); 'calibration' = the repo file."""
+    choice = getattr(args, "default_pose", "legacy")
+    if choice in (None, "legacy"):
+        return None
+    return CALIBRATION_JSON if choice == "calibration" else Path(choice)
 
 
 def resolve_hold_pose(args) -> np.ndarray | None:
@@ -186,15 +201,31 @@ def resolve_hold_pose(args) -> np.ndarray | None:
     if choice in (None, "default"):
         return None
     path = LOADED_STAND_JSON if choice == "loaded" else Path(choice)
-    calib = None
-    if getattr(args, "mode", None) == "hold" and getattr(args, "default_pose", "legacy") != "legacy":
-        calib = Path(args.default_pose)  # the loaded stand must come from the same calibration
+    # The loaded stand must come from the same calibration as the hold-mode --default-pose; with the legacy default
+    # pose or in policy mode there is no such argument, so it is checked against the repo calibration (before item
+    # 376 the sha check was skipped there).
+    calib = default_pose_calibration(args) if getattr(args, "mode", None) == "hold" else None
+    calib = calib or CALIBRATION_JSON
     return load_loaded_stand_pose(path, calib)
+
+
+def hold_target_symmetry(cfg: DeployConfig) -> dict | None:
+    """Mirror check of the FSM MoveToDefault/Hold target (item 376); warns, never refuses. None = no calibration."""
+    if not CALIBRATION_JSON.exists():
+        return None
+    rep = pose_mirror_report(cfg.hold_target_sdk, CALIBRATION_JSON)
+    if rep["asymmetric"]:
+        print(f"[runner] WARNING: hold target is not left/right symmetric: max semantic mirror error "
+              f"{rep['max_err_deg']:.1f} deg ({rep['worst']}; hip roll {rep['hip_roll_deg']}). The legacy default pose "
+              f"rolls both hips the same way (item 370); a symmetric stand: --hold-pose loaded or --default-pose "
+              f"calibration", flush=True)
+    return rep
 
 
 def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode == "hold":
-        pose = None if args.default_pose == "legacy" else load_standing_pose(Path(args.default_pose))
+        calib = default_pose_calibration(args)
+        pose = None if calib is None else load_standing_pose(calib)
         cfg = hold_config(pose, resolve_hold_pose(args))
         policy = motion = None
     else:
@@ -308,6 +339,7 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         cfg.validate()
     print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
           f"(--hold-pose {args.hold_pose})", flush=True)
+    cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg)
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
@@ -355,6 +387,7 @@ def main(argv=None) -> int:
                              "joint_names": list(cfg.joint_names), "step_dt": cfg.step_dt,
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
                              "hold_target_sdk": cfg.hold_target_sdk.tolist(),
+                             "hold_target_symmetry": cfg.meta.get("hold_target_symmetry"),
                              "hold_kp": cfg.fsm.hold_kp.tolist(), "hold_kd": cfg.fsm.hold_kd.tolist(),
                              "move_to_default_s": cfg.fsm.move_to_default_s,
                              "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
