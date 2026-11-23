@@ -53,6 +53,8 @@ _REPORT: dict = {}
 def _repo_path(p) -> Path:
     """The serial-model meta records absolute build paths; resolve them inside this checkout when they do not exist."""
     p = Path(p)
+    if not p.is_absolute() and ":" not in str(p):  # repo-relative (meta written after item 374)
+        return ROOT / p
     if p.exists():
         return p
     s = str(p).replace("\\", "/")

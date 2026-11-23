@@ -110,7 +110,8 @@ def test_committed_surrogates_are_up_to_date(jac_si, path):
     profile, map_name = path.stem.removeprefix("dropbear_serial_"), meta["map"]
     assert meta["profile"] == profile
     assert hw.HW_PROFILE_MAPS.get(profile, map_name) == map_name, (profile, map_name)
-    assert meta["source_xml_sha256"] == hashlib.sha256(sh.SERIAL_XML.read_bytes()).hexdigest()
+    assert meta["sha256_newlines"] == "lf"  # newline-insensitive pin (item 374)
+    assert meta["source_xml_sha256"] == hashlib.sha256(sh.SERIAL_XML.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
     fresh = sh.hw_surrogates(jac, si, map_name)
     assert set(meta["joints"]) == set(fresh)
     for j, rec in fresh.items():

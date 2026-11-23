@@ -9,7 +9,6 @@ surrogates + J). Needs ``mujoco`` for the URDF; CPU only. Rerun after tools/buil
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -18,6 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "source"))
 
 from dropbear_wbc.kinematics import serial_hw_actuators as sh  # noqa: E402
+from dropbear_wbc.kinematics import serial_provenance as sp  # noqa: E402
 from dropbear_wbc.robots.hw_motor_specs import HW_PROFILE_MAPS  # noqa: E402
 
 PROFILE_FOR_MAP: dict[str, str] = {}
@@ -36,10 +36,10 @@ def main(argv=None) -> int:
     jac = sh.standing_jacobian()
     sur = sh.hw_surrogates(jac, si, a.map)
     xml = sh.SERIAL_XML.read_text()
-    sha = hashlib.sha256(sh.SERIAL_XML.read_bytes()).hexdigest()
+    sha = sp.text_sha256(sh.SERIAL_XML)  # newline-insensitive pin (item 374)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / f"dropbear_serial_{prof}.xml").write_text(sh.hw_mjcf_text(xml, sur, a.map))
-    meta = {"schema": "dropbear-serial-hw-surrogate-v1", "source_xml_sha256": sha, "map": a.map, "profile": prof,
+    meta = {"schema": "dropbear-serial-hw-surrogate-v1", "source_xml_sha256": sha, sp.SHA_NEWLINES_KEY: sp.SHA_NEWLINES_LF, "map": a.map, "profile": prof,
             "method": "J = dm/ds at standing_semantic_pos; effort = sum|J| x peak|rated|saturation; velocity = min no_load/|J|; "
                       "armature = sum J^2 rotor N^2; kp/kd = sum J^2 HW_GAINS",
             "joints": sur, "legacy": sh.legacy_surrogates(jac, si)}

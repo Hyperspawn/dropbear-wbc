@@ -44,7 +44,7 @@ def test_rerun_list_is_the_notes_342_list_and_exists():
 
 def _copy_tree(dst: Path) -> Path:
     meta = json.loads((ROOT / sp.SERIAL_META_REL).read_text(encoding="utf-8"))["inputs"]
-    files = [sp.SERIAL_META_REL, sp.SERIAL_XML_REL, sp.CALIBRATION_REL]
+    files = [sp.SERIAL_META_REL, sp.SERIAL_XML_REL, sp.MOTIONLIB_XML_REL, sp.CALIBRATION_REL]
     files += [str(sp.repo_path(meta[k], ROOT).relative_to(ROOT)) for k in ("body_properties", "raw_sweep")]
     files += [str(p.relative_to(ROOT)) for p in sp.hw_surrogate_jsons(ROOT)]
     files += [str(p.with_suffix(".xml").relative_to(ROOT)) for p in sp.hw_surrogate_jsons(ROOT)]

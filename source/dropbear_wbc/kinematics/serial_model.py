@@ -41,6 +41,7 @@ import datetime as _dt
 import hashlib
 import json
 import math
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,7 @@ import numpy as np
 
 from dropbear_wbc.kinematics.calib_fit import MeasuredFK, Raw, seg_bodies, seg_motors
 from dropbear_wbc.kinematics.rigid import axis_angle_matrix, euler_yxz, mat_to_quat, quat_mat, rotvec, signed_angle_about
+from dropbear_wbc.kinematics.serial_provenance import SHA_NEWLINES_KEY, SHA_NEWLINES_LF, text_sha256
 from dropbear_wbc.kinematics.semantic import MOTOR_NAMES, SEMANTIC_NAMES, SemanticMap, euler_yxz_matrix
 
 REPO = Path(__file__).resolve().parents[3]
@@ -93,9 +95,28 @@ def sha256_file(path: Path | str) -> str:
 
 
 def resolve_path(p: str | Path) -> Path:
-    """Absolute path; relative paths are taken relative to the repository root."""
-    q = Path(str(p))
-    return q if q.is_absolute() else REPO / q
+    """Absolute path; relative paths are taken relative to the repository root. A path recorded on another machine
+    (``H:/dropbear/dropbear-wbc/data/...`` in a Windows-built calibration) that does not exist here is mapped into
+    this checkout."""
+    s = str(p).replace("\\", "/")
+    q = Path(s)
+    if not q.is_absolute():
+        if len(s) > 1 and s[1] == ":" and "dropbear-wbc/" in s:  # Windows drive path on a POSIX host
+            return REPO / s.split("dropbear-wbc/", 1)[1]
+        return REPO / q
+    if not q.exists() and "dropbear-wbc/" in s and (REPO / s.split("dropbear-wbc/", 1)[1]).exists():
+        return REPO / s.split("dropbear-wbc/", 1)[1]
+    return q
+
+
+def rel_path(p: str | Path) -> str:
+    """Repo-relative POSIX path for build metadata (portable across checkouts); paths outside the repo unchanged."""
+    for q, r in ((Path(os.path.abspath(p)), REPO), (Path(p).resolve(), REPO.resolve())):  # symlinked data/ too
+        try:
+            return q.relative_to(r).as_posix()
+        except ValueError:
+            pass
+    return str(p).replace("\\", "/")
 
 
 def _mv(r: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -705,11 +726,11 @@ def fit_serial_model(calibration: str | Path = DEFAULT_CALIBRATION, body_props: 
         "schema": SCHEMA, "model": MODEL_NAME, "status": DERIVED_LABEL,
         "created": _dt.datetime.now().astimezone().isoformat(timespec="seconds"),
         "inputs": {
-            "calibration": str(cfk.path).replace("\\", "/"), "calibration_sha256": cfk.sha256,
+            "calibration": rel_path(cfk.path), "calibration_sha256": cfk.sha256,
             "calibration_created": cal.get("created"), "calibration_plant_variant": cal.get("plant_variant"),
-            "raw_sweep": str(cfk.raw_path).replace("\\", "/"), "raw_sweep_sha256": sha256_file(cfk.raw_path),
-            "usd_sha256": cal["usd_sha256"], "body_properties": str(body_props).replace("\\", "/"),
-            "body_properties_sha256": sha256_file(body_props), "sole_hulls": str(sole_hulls).replace("\\", "/"),
+            "raw_sweep": rel_path(cfk.raw_path), "raw_sweep_sha256": sha256_file(cfk.raw_path),
+            "usd_sha256": cal["usd_sha256"], "body_properties": rel_path(body_props),
+            "body_properties_sha256": text_sha256(body_props), "sole_hulls": rel_path(sole_hulls),
             "reference_sample_for_linkage_bodies": ref_src,
         },
         "frames": {
@@ -973,14 +994,14 @@ def write_mjcf(spec: SerialSpec, xml_path: Path | str = DEFAULT_XML, meta_path: 
         ]
         Path(scene_path).write_text("\n".join(scene) + "\n", encoding="utf-8")
     meta = spec.meta
-    meta["visual_meshes"] = {"dir": str(mesh_dir).replace("\\", "/"), "count": len(meshes),
+    meta["visual_meshes"] = {"dir": rel_path(mesh_dir), "count": len(meshes),
                              "source": "per serial body: union of the convex hulls of its USD members' collision hulls "
                                        "(usd_body_properties), baked into the body frame at the model zero; visual "
                                        "only (contype 0)",
                              "meshes": {mh["name"]: {"usd_bodies": mh["usd_bodies"], "triangles": mh["triangles"]}
                                         for mh in meshes}}
-    meta["files"] = {"xml": str(xml_path).replace("\\", "/"), "motionlib_xml": str(motionlib_path).replace("\\", "/"),
-                     "scene": str(scene_path).replace("\\", "/") if scene_path else None}
+    meta["files"] = {"xml": rel_path(xml_path), "motionlib_xml": rel_path(motionlib_path),
+                     "scene": rel_path(scene_path) if scene_path else None}
     meta["sites"] = {sn: {"body": st["body"], "usd_body": st["usd_body"], "label": st["label"]} for sn, st in sites.items()}
     meta["bodies"] = {n: {"parent": b[n]["parent"], "joint": b[n]["joint"], "physical_segment": b[n].get("phys"),
                           "origin_world0": np.asarray(b[n]["origin"]).tolist(),
@@ -1002,8 +1023,10 @@ def write_mjcf(spec: SerialSpec, xml_path: Path | str = DEFAULT_XML, meta_path: 
                     "pos": (rp.T @ (st["pos_world0"] - op)).tolist(),
                     "rot": mat_to_quat(rp.T @ st["rot_world0"]).tolist(), "usd_body": st["usd_body"]})
     meta["motionlib_extend_config"] = ext
-    meta["xml_sha256"] = sha256_file(xml_path)
-    meta["motionlib_xml_sha256"] = sha256_file(motionlib_path)
+    # text pins over CRLF->LF-normalised bytes (item 374): Windows and Linux checkouts of the same text agree
+    meta[SHA_NEWLINES_KEY] = SHA_NEWLINES_LF
+    meta["xml_sha256"] = text_sha256(xml_path)
+    meta["motionlib_xml_sha256"] = text_sha256(motionlib_path)
     Path(meta_path).write_text(json.dumps(meta, indent=1, default=lambda o: np.asarray(o).tolist()), encoding="utf-8")
     return meta
 

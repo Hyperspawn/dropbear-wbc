@@ -1,6 +1,7 @@
 {
  "schema": "dropbear-serial-hw-surrogate-v1",
- "source_xml_sha256": "1564a82c6fcc7f105bddcc10c8b20cb232562aaf7ebe6c9553121dc028ca56fb",
+ "source_xml_sha256": "435028d718ce3831838396c3e702f10fb587bbbf68294b55e0717b45913d9703",
+ "sha256_newlines": "lf",
  "map": "cem6_p330_2026_10_20",
  "profile": "hw_cem6_p330",
  "method": "J = dm/ds at standing_semantic_pos; effort = sum|J| x peak|rated|saturation; velocity = min no_load/|J|; armature = sum J^2 rotor N^2; kp/kd = sum J^2 HW_GAINS",

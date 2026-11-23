@@ -35,7 +35,8 @@ from typing import Any
 import numpy as np
 
 from dropbear_wbc.kinematics.calib_fit import seg_bodies
-from dropbear_wbc.kinematics.serial_model import SIDES, CalibrationFK, resolve_path, sha256_file
+from dropbear_wbc.kinematics.serial_model import SIDES, CalibrationFK, resolve_path
+from dropbear_wbc.kinematics.serial_provenance import text_sha256
 
 from .calibration_view import CalibrationView
 from .contacts import ContactParams, HysteresisParams, detect_contacts, detect_contacts_hysteresis, horizontal_speed
@@ -403,5 +404,5 @@ def joint_range_summary(q: np.ndarray) -> dict[str, list[float]]:
 def serial_provenance(xml: str | Path) -> dict[str, Any]:
     xml = resolve_path(xml)
     meta = json.loads(xml.with_suffix(".json").read_text())
-    return {"serial_model": str(xml).replace("\\", "/"), "serial_model_xml_sha256": sha256_file(xml),
+    return {"serial_model": str(xml).replace("\\", "/"), "serial_model_xml_sha256": text_sha256(xml),
             "serial_model_calibration_sha256": meta["inputs"]["calibration_sha256"], "status": meta["status"]}
