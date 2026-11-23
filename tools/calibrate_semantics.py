@@ -35,6 +35,14 @@ calibration over the current one). When omitted they default to the paths record
 calibration at ``--out`` (``raw_sweep``, ``verification.verify_npz``). A GPU stage refuses to overwrite an existing raw
 file unless ``--force``, and ``fit`` fails when the sweep and verify raws come from different plant variants.
 
+After a re-fit (item 373): every run that ends with a successful ``fit`` stage prints the post-recalibration gate
+``tools/check_calibration_consistency.py`` (dropbear-backlog notes/371): the new calibration makes the serial MJCF, the
+hw surrogates and the sign / symmetry tests stale until they are regenerated and re-run. ``--run-gate`` (``--stage fit``
+only, CPU) runs the check-only gate right after the fit and returns its exit code (1 = regenerate with ``--write``);
+``--gate-no-tests`` limits it to provenance + MJCF. The gate always checks the committed
+``data/calibration/dropbear_semantic_calibration.json``; a fit written elsewhere (``--out``) is reported as not covered
+and ``--run-gate`` refuses it.
+
 Units: radians, metres. Quaternions wxyz.
 """
 from __future__ import annotations
@@ -88,6 +96,11 @@ def _parse() -> tuple[argparse.Namespace, list[str]]:
     p.add_argument("--diag-spherical-tie-rods", action="store_true",
                    help="DIAGNOSTIC sweep (ankle grid only) with *_Revolute111/112 retyped to spherical joints; "
                         "never used for the contract calibration")
+    p.add_argument("--run-gate", action="store_true",
+                   help="--stage fit only: run tools/check_calibration_consistency.py (check only) after the fit and "
+                        "return its exit code (default: only print the gate commands)")
+    p.add_argument("--gate-no-tests", action="store_true",
+                   help="with --run-gate: pass --no-tests (provenance + MJCF only)")
     return p.parse_known_args()
 
 
@@ -300,8 +313,61 @@ def _stage_fit() -> None:
                     max_gap=ARGS.max_gap)
 
 
+# ----------------------------------------------------------------------------------------------------
+# post-recalibration gate (item 373)
+# ----------------------------------------------------------------------------------------------------
+GATE_REL = "tools/check_calibration_consistency.py"
+GATE_TOOL = REPO / GATE_REL
+
+
+def _gate_covers(out: Path) -> bool:
+    return Path(out).resolve() == DEFAULT_OUT.resolve()
+
+
+def gate_message(out: Path) -> str:
+    """Next-step text printed after a successful fit: the gate commands, or why the gate does not cover ``out``."""
+    tool = GATE_REL
+    lines = [f"[calibrate] calibration re-fitted ({out}). The serial MJCF, the hw surrogates and the sign / symmetry",
+             "[calibrate] tests now read a stale model. Next, before any training (notes/371):",
+             f"[calibrate]   python {tool}            # check only (exit 1 = stale or failing)",
+             f"[calibrate]   python {tool} --write    # regenerate serial + hw models, then re-run the tests"]
+    if not _gate_covers(out):
+        lines.append(f"[calibrate] NOTE: the gate checks data/calibration/dropbear_semantic_calibration.json only; "
+                     f"--out {out} is NOT covered (copy it there first)")
+    return "\n".join(lines)
+
+
+def gate_command(no_tests: bool = False) -> list[str]:
+    return [sys.executable, str(GATE_TOOL)] + (["--no-tests"] if no_tests else [])
+
+
+def run_gate(no_tests: bool = False, runner=None) -> int:
+    import subprocess
+
+    runner = runner or (lambda cmd: subprocess.call(cmd, cwd=str(REPO)))
+    cmd = gate_command(no_tests)
+    print(f"[calibrate] running gate: {' '.join(cmd)}", flush=True)
+    rc = int(runner(cmd))
+    print(f"[calibrate] gate exit {rc}" + (" (stale or failing: re-run with --write)" if rc else " (consistent)"),
+          flush=True)
+    return rc
+
+
+def gate_usage_error(args, stages: list[str]) -> str | None:
+    if args.gate_no_tests and not args.run_gate:
+        return "--gate-no-tests needs --run-gate"
+    if args.run_gate and stages != ["fit"]:
+        return "--run-gate needs --stage fit (run the gate outside the Isaac process after a GPU stage)"
+    if args.run_gate and not _gate_covers(args.out):
+        return f"--run-gate: the gate checks {DEFAULT_OUT} only, not --out {args.out}"
+    return None
+
+
 def main() -> int:
     stages = ["sweep", "fit", "verify", "fit"] if ARGS.stage == "all" else [ARGS.stage]
+    err = gate_usage_error(ARGS, stages)
+    if err:
+        raise SystemExit(err)
     if "sweep" in stages and ARGS.raw is None:
         raise SystemExit("--stage sweep/all needs an explicit --raw output path")
     if "verify" in stages and ARGS.verify_raw is None:
@@ -323,6 +389,10 @@ def main() -> int:
             print(f"[calibrate] stage {s}", flush=True)
             {"sweep": _stage_sweep, "fit": _stage_fit, "verify": _stage_verify}[s]()
         rc = 0
+        if stages[-1] == "fit":
+            print(gate_message(ARGS.out), flush=True)
+            if ARGS.run_gate:
+                rc = run_gate(ARGS.gate_no_tests)
     except Exception:
         import traceback
 
