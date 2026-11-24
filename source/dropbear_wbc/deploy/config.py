@@ -535,6 +535,43 @@ def _resolve_hold_pose(value: Any, base: Path, calibration_path: Path | None = N
     return pose, check
 
 
+LOADED_STAND_KEY = "loaded_standing_motor_pos"
+
+
+def load_motor_pose_json(path: Path, key: str = LOADED_STAND_KEY, calibration_path: Path | None = None,
+                         allow_mismatch: bool = False) -> tuple[list[float], dict]:
+    """22 motor angles (SDK order) under ``key`` of a JSON, + check record (tools/hw_stand_test.py --motor_pose_json).
+
+    ``key == "loaded_standing_motor_pos"``: the file is a ``dropbear-loaded-stand-v1`` record and its
+    ``calibration_sha256`` must match ``calibration_path`` (default: the repo calibration) - item 387, same rule as the
+    yaml/sidecar ``hold_pose`` (item 378). Mismatch, missing sha or missing calibration file refuse
+    (:class:`LoadedStandCalibrationMismatch`) unless ``allow_mismatch`` (WARNING, ``sha_match`` False). Any other key
+    is read as before, unchecked (``checked`` False)."""
+    path = Path(path)
+    check: dict = {"motor_pose_json": path.as_posix(), "key": key, "checked": False, "calibration": None,
+                   "sha_match": None, "allowed_mismatch": False}
+    if key != LOADED_STAND_KEY:
+        pose = [float(x) for x in json.loads(path.read_text(encoding="utf-8"))[key]]
+    else:
+        calib = Path(calibration_path) if calibration_path is not None else hold_pose_calibration(None, path.parent)
+        check.update(checked=True, calibration=calib.as_posix(), sha_match=True)
+        try:
+            if not calib.is_file():
+                raise LoadedStandCalibrationMismatch(f"{path}: calibration {calib} not found, cannot check its "
+                                                     f"calibration_sha256")
+            pose = load_loaded_stand_pose(path, calib).tolist()
+        except LoadedStandCalibrationMismatch as e:
+            if not allow_mismatch:
+                raise LoadedStandCalibrationMismatch(f"{e} (--motor_pose_json; override: "
+                                                     f"--allow_loaded_stand_mismatch)") from e
+            print(f"[hw_stand_test] WARNING: {e}; using it anyway (--allow_loaded_stand_mismatch)", flush=True)
+            pose = load_loaded_stand_pose(path).tolist()
+            check.update(sha_match=False, allowed_mismatch=True)
+    if len(pose) != motors.NUM_MOTORS:
+        raise ValueError(f"{path}:{key} has {len(pose)} values, not {motors.NUM_MOTORS}")
+    return pose, check
+
+
 def _resolve_default(value: Any, joint_names: tuple[str, ...], base: Path) -> tuple[np.ndarray, np.ndarray]:
     """Return (policy-order default, SDK-order full default pose)."""
     full = np.asarray(motors.DEFAULT_POS, dtype=float)

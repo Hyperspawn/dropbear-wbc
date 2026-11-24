@@ -37,6 +37,9 @@ parser.add_argument("--motor_pose_json", type=Path, default=None,
                          "under --motor_pose_key (e.g. data/calibration/dropbear_loaded_stand.json). The robot still "
                          "resets to the standing NPZ, so the PD steps to the pose at t=0")
 parser.add_argument("--motor_pose_key", default="loaded_standing_motor_pos")
+parser.add_argument("--allow_loaded_stand_mismatch", "--allow-loaded-stand-mismatch", action="store_true",
+                    help="with --motor_pose_key loaded_standing_motor_pos the record's calibration_sha256 must match "
+                         "the repo calibration (else refuse); this loads a mismatched/unverifiable one with a WARNING")
 parser.add_argument("--ramp_s", type=float, default=0.0,
                     help="ramp the motor targets linearly from the reset pose to the held pose over this many seconds "
                          "(the deploy FSM's MoveToDefault) instead of stepping at t=0")
@@ -44,6 +47,13 @@ parser.add_argument("--out", type=Path, required=True)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
+
+
+def read_hold_pose(a: argparse.Namespace) -> tuple[list[float], dict]:
+    """--motor_pose_json pose + check record (item 387): the loaded stand key is sha-checked vs the repo calibration."""
+    from dropbear_wbc.deploy.config import load_motor_pose_json
+
+    return load_motor_pose_json(a.motor_pose_json, a.motor_pose_key, allow_mismatch=a.allow_loaded_stand_mismatch)
 
 
 def main() -> int:
@@ -65,9 +75,9 @@ def main() -> int:
                 field = LIMIT_FIELDS["effort"]  # cfg field: effort_limit (Lab 2.2) / actuator_effort_limit (3.0)
                 setattr(act, field, {j: 20.0 * v for j, v in getattr(act, field).items()})
                 act.saturation_effort = {j: 20.0 * v for j, v in act.saturation_effort.items()}
-    hold_pose = None
+    hold_pose = pose_check = None
     if args.motor_pose_json is not None:  # zero actions hold the default pose: move the default to the given pose
-        hold_pose = [float(x) for x in json.loads(args.motor_pose_json.read_text(encoding="utf-8"))[args.motor_pose_key]]
+        hold_pose, pose_check = read_hold_pose(args)
         if len(hold_pose) != len(N.MOTOR_NAMES):
             raise ValueError(f"{args.motor_pose_json}:{args.motor_pose_key} has {len(hold_pose)} values, not 22")
         joint_pos = dict(env_cfg.scene.robot.init_state.joint_pos)
@@ -122,6 +132,7 @@ def main() -> int:
     out = {"tool": "tools/hw_stand_test.py", "actuator_profile": args.actuator_profile, "unlimited": args.unlimited,
            "solver_iterations": list(args.solver_iters), "seconds": args.seconds, "num_envs": uw.num_envs,
            "motor_pose_json": None if hold_pose is None else str(args.motor_pose_json), "hold_pose": hold_pose,
+           "motor_pose_check": pose_check,
            "ramp_s": args.ramp_s,
            "final_motor_pos_env0": {n: round(float(as_tensor(robot.data.joint_pos)[0, j]), 4) for n, j in
                                     zip(N.MOTOR_NAMES, robot.find_joints(list(N.MOTOR_NAMES), preserve_order=True)[0])},
