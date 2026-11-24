@@ -14,6 +14,8 @@ Two input formats map onto one :class:`DeployConfig`:
    in **policy order**.
    ``default_joint_pos`` may also be ``"legacy"`` (``DROPBEAR_CFG`` init pose) or
    ``{"calibration": <path>}`` (``standing_motor_pos`` of the semantic calibration).
+   ``hold_pose: {"loaded_stand": <path>}`` (both formats) must have been derived from that calibration, or from the
+   repo calibration when ``default_joint_pos`` names none (sha check, item 378; ``allow_loaded_stand_mismatch``).
 
 2. **Policy sidecar JSON** ``dropbear-policy-sidecar-v1`` written next to an
    exported ONNX (schema in :data:`SIDECAR_SCHEMA` and CONTRACTS section 6.1).
@@ -469,6 +471,10 @@ def pose_mirror_report(q_sdk, calibration_path: Path | None = None) -> dict:
 LOADED_STAND_SCHEMA = "dropbear-loaded-stand-v1"
 
 
+class LoadedStandCalibrationMismatch(ValueError):
+    """A ``dropbear-loaded-stand-v1`` record whose ``calibration_sha256`` is not the sha of the calibration in use."""
+
+
 def load_loaded_stand_pose(path: Path, calibration_path: Path | None = None) -> np.ndarray:
     """``loaded_standing_motor_pos`` (22, SDK order) from ``dropbear-loaded-stand-v1`` (tools/derive_loaded_stand.py).
 
@@ -483,21 +489,50 @@ def load_loaded_stand_pose(path: Path, calibration_path: Path | None = None) -> 
     if calibration_path is not None:
         sha = hashlib.sha256(Path(calibration_path).read_bytes()).hexdigest()
         if sha != rec.get("calibration_sha256"):
-            raise ValueError(f"{path} was derived from calibration {str(rec.get('calibration_sha256'))[:8]}, "
-                             f"not {calibration_path} ({sha[:8]}); re-run tools/derive_loaded_stand.py")
+            raise LoadedStandCalibrationMismatch(
+                f"{path} was derived from calibration {str(rec.get('calibration_sha256'))[:8]}, "
+                f"not {calibration_path} ({sha[:8]}); re-run tools/derive_loaded_stand.py")
     pose = np.asarray(rec["loaded_standing_motor_pos"], dtype=float)
     if pose.shape != (motors.NUM_MOTORS,):
         raise ValueError(f"loaded_standing_motor_pos in {path} has shape {pose.shape}")
     return pose
 
 
-def _resolve_hold_pose(value: Any, base: Path) -> np.ndarray | None:
-    """YAML / sidecar ``hold_pose``: absent or ``"default"`` -> None; ``{"loaded_stand": <path>}`` -> that pose."""
+def hold_pose_calibration(default_value: Any, base: Path) -> Path:
+    """Calibration a yaml/sidecar ``hold_pose`` loaded stand is checked against (item 378): the config's
+    ``default_joint_pos: {"calibration": <path>}`` (relative to the config) if given, else the repo calibration."""
+    if isinstance(default_value, dict) and "calibration" in default_value:
+        return (base / default_value["calibration"]).resolve()
+    from ..kinematics.semantic import DEFAULT_CALIBRATION
+
+    return Path(DEFAULT_CALIBRATION)
+
+
+def _resolve_hold_pose(value: Any, base: Path, calibration_path: Path | None = None,
+                       allow_mismatch: bool = False) -> tuple[np.ndarray | None, dict | None]:
+    """YAML / sidecar ``hold_pose``: absent or ``"default"`` -> (None, None); ``{"loaded_stand": <path>}`` -> (that
+    pose, check record). The loaded stand's ``calibration_sha256`` must match ``calibration_path``
+    (:func:`hold_pose_calibration`; before item 378 it was not checked at all). ``allow_mismatch`` loads a mismatched
+    (or unverifiable: calibration file missing) loaded stand with a WARNING instead of refusing."""
     if value is None or value == "default":
-        return None
-    if isinstance(value, dict) and "loaded_stand" in value:
-        return load_loaded_stand_pose((base / value["loaded_stand"]).resolve())
-    raise ValueError(f"hold_pose: expected 'default' or {{'loaded_stand': <path>}}, got {value!r}")
+        return None, None
+    if not (isinstance(value, dict) and "loaded_stand" in value):
+        raise ValueError(f"hold_pose: expected 'default' or {{'loaded_stand': <path>}}, got {value!r}")
+    path = (base / value["loaded_stand"]).resolve()
+    calib = Path(calibration_path) if calibration_path is not None else hold_pose_calibration(None, base)
+    check = {"loaded_stand": path.as_posix(), "calibration": calib.as_posix(), "sha_match": True}
+    try:
+        if not calib.is_file():
+            raise LoadedStandCalibrationMismatch(f"hold_pose loaded stand {path}: calibration {calib} not found, "
+                                                 f"cannot check its calibration_sha256")
+        pose = load_loaded_stand_pose(path, calib)
+    except LoadedStandCalibrationMismatch as e:
+        if not allow_mismatch:
+            raise LoadedStandCalibrationMismatch(f"{e} (hold_pose in the yaml/sidecar; override: "
+                                                 f"allow_loaded_stand_mismatch / --allow-loaded-stand-mismatch)") from e
+        print(f"[config] WARNING: {e}; loading it anyway (allow_loaded_stand_mismatch)", flush=True)
+        pose, check["sha_match"] = load_loaded_stand_pose(path), False
+    return pose, check
 
 
 def _resolve_default(value: Any, joint_names: tuple[str, ...], base: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -616,7 +651,7 @@ def _obs_from_mapping(obs: dict) -> list[ObsTermCfg]:
     return terms
 
 
-def load_deploy_yaml(path: Path) -> DeployConfig:
+def load_deploy_yaml(path: Path, allow_loaded_stand_mismatch: bool = False) -> DeployConfig:
     """Parse a unitree_rl_lab-style ``deploy.yaml`` (with optional Dropbear extensions)."""
     path = Path(path)
     base = path.parent
@@ -630,6 +665,9 @@ def load_deploy_yaml(path: Path) -> DeployConfig:
     n = len(joint_names)
     motor_ids = [motors.MOTOR_NAMES.index(j) for j in joint_names]
     default_pol, default_full = _resolve_default(d.get("default_joint_pos"), joint_names, base)
+    hold_pose, hold_check = _resolve_hold_pose(d.get("hold_pose"), base,
+                                               hold_pose_calibration(d.get("default_joint_pos"), base),
+                                               allow_loaded_stand_mismatch)
     act = (d.get("actions") or {}).get("JointPositionAction", {}) or {}
     offset = act.get("offset")
     # unitree_rl_lab writes stiffness/damping in *SDK slot order* (export_deploy_cfg.py:
@@ -650,13 +688,14 @@ def load_deploy_yaml(path: Path) -> DeployConfig:
         observations=_obs_from_mapping(d.get("observations")),
         policy_path=None if d.get("policy") is None else (base / d["policy"]).resolve(),
         motion=_motion_from(d.get("motion"), base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
-        hold_pose_sdk=_resolve_hold_pose(d.get("hold_pose"), base), source=str(path))
+        hold_pose_sdk=hold_pose, source=str(path), meta={} if hold_check is None else {"hold_pose_check": hold_check})
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
 
 
-def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> DeployConfig:
+def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None,
+                 allow_loaded_stand_mismatch: bool = False) -> DeployConfig:
     """Parse a ``dropbear-policy-sidecar-v1`` JSON (see module docstring and CONTRACTS 6.1).
 
     ``onnx_metadata`` (BeyondMimic ``attach_onnx_metadata`` keys) fills fields the sidecar omits.
@@ -671,6 +710,9 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
     joint_names = tuple(get("joint_names"))
     n = len(joint_names)
     default_pol, default_full = _resolve_default(get("default_joint_pos"), joint_names, base)
+    hold_pose, hold_check = _resolve_hold_pose(d.get("hold_pose"), base,
+                                               hold_pose_calibration(get("default_joint_pos"), base),
+                                               allow_loaded_stand_mismatch)
     terms = []
     for t in d.get("observations") or [{"name": nm} for nm in meta.get("observation_names", [])]:
         func = t.get("func") or BEYONDMIMIC_ALIASES.get(t["name"], t["name"])
@@ -702,8 +744,9 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None) -> Dep
         policy_path=None if d.get("policy_onnx") is None else (base / d["policy_onnx"]).resolve(),
         onnx_obs_input=onnx_in.get("obs"), onnx_time_input=onnx_in.get("time_step"),
         motion=_motion_from(motion or None, base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
-        hold_pose_sdk=_resolve_hold_pose(d.get("hold_pose"), base), obs_dim=d.get("obs_dim"), source=str(path), meta={k: d[k] for k in ("task", "usd_sha256", "run_path")
-                                                            if k in d})
+        hold_pose_sdk=hold_pose, obs_dim=d.get("obs_dim"), source=str(path),
+        meta={**{k: d[k] for k in ("task", "usd_sha256", "run_path") if k in d},
+              **({} if hold_check is None else {"hold_pose_check": hold_check})})
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg

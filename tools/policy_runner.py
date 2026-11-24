@@ -43,8 +43,9 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy import quat as Q  # noqa: E402
-from dropbear_wbc.deploy.config import (DeployConfig, hold_config, load_deploy_yaml, load_loaded_stand_pose, load_sidecar,  # noqa: E402
-                                        load_standing_pose, pose_mirror_report)
+from dropbear_wbc.deploy.config import (DeployConfig, LoadedStandCalibrationMismatch, hold_config,  # noqa: E402
+                                        load_deploy_yaml, load_loaded_stand_pose, load_sidecar, load_standing_pose,
+                                        pose_mirror_report)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
@@ -71,6 +72,10 @@ def parse_args(argv=None) -> argparse.Namespace:
                          "knee crank ~3 deg, static knee ~0.35x rated, item 241), 'default' (the config's default pose "
                          "= pre-241 behaviour; calibration standing_motor_pos holds ~80 N*m on each knee crank), or a "
                          "dropbear-loaded-stand-v1 JSON path. Overrides a yaml/sidecar hold_pose.")
+    ap.add_argument("--allow-loaded-stand-mismatch", action="store_true",
+                    help="load a loaded stand (--hold-pose or yaml/sidecar hold_pose) whose calibration_sha256 does "
+                         "not match the calibration in use, with a WARNING instead of refusing (experiments only; "
+                         "item 378)")
     ap.add_argument("--allow-privileged", action="store_true", help="allow sim-only observation terms")
     ap.add_argument("--live_dir", type=Path, default=None,
                     help="LIVE reference (deploy.motion.LiveMotion): --motion plays first and is the idle clip; every "
@@ -206,7 +211,13 @@ def resolve_hold_pose(args) -> np.ndarray | None:
     # 376 the sha check was skipped there).
     calib = default_pose_calibration(args) if getattr(args, "mode", None) == "hold" else None
     calib = calib or CALIBRATION_JSON
-    return load_loaded_stand_pose(path, calib)
+    try:
+        return load_loaded_stand_pose(path, calib)
+    except LoadedStandCalibrationMismatch as e:
+        if not getattr(args, "allow_loaded_stand_mismatch", False):
+            raise
+        print(f"[runner] WARNING: {e}; holding it anyway (--allow-loaded-stand-mismatch)", flush=True)
+        return load_loaded_stand_pose(path)
 
 
 def hold_target_symmetry(cfg: DeployConfig) -> dict | None:
@@ -232,16 +243,17 @@ def build(args) -> tuple[DeployConfig, DeployController]:
         from dropbear_wbc.deploy.motion import OnnxMotion, load_motion
         from dropbear_wbc.deploy.policy import OnnxPolicy
 
+        allow_mm = getattr(args, "allow_loaded_stand_mismatch", False)
         if args.sidecar:
             onnx_meta = None
-            cfg = load_sidecar(args.sidecar)
+            cfg = load_sidecar(args.sidecar, allow_loaded_stand_mismatch=allow_mm)
             onnx_path = args.onnx or cfg.policy_path
             policy = OnnxPolicy(onnx_path, cfg.onnx_obs_input, cfg.onnx_time_input)
             if policy.metadata:
                 onnx_meta = policy.metadata
-                cfg = load_sidecar(args.sidecar, onnx_meta)
+                cfg = load_sidecar(args.sidecar, onnx_meta, allow_loaded_stand_mismatch=allow_mm)
         elif args.deploy_yaml:
-            cfg = load_deploy_yaml(args.deploy_yaml)
+            cfg = load_deploy_yaml(args.deploy_yaml, allow_loaded_stand_mismatch=allow_mm)
             onnx_path = args.onnx or cfg.policy_path
             if onnx_path is None:
                 raise SystemExit("policy mode needs an ONNX path (--onnx or 'policy:' in the yaml)")
@@ -337,6 +349,8 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode != "hold":
         cfg.hold_pose_sdk = resolve_hold_pose(args)
         cfg.validate()
+        if cfg.meta.get("hold_pose_check") is not None:  # the yaml/sidecar hold_pose was checked, then replaced
+            cfg.meta["hold_pose_check"]["replaced_by"] = f"--hold-pose {args.hold_pose}"
     print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
           f"(--hold-pose {args.hold_pose})", flush=True)
     cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg)
@@ -388,6 +402,7 @@ def main(argv=None) -> int:
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
                              "hold_target_sdk": cfg.hold_target_sdk.tolist(),
                              "hold_target_symmetry": cfg.meta.get("hold_target_symmetry"),
+                             "hold_pose_check": cfg.meta.get("hold_pose_check"),
                              "hold_kp": cfg.fsm.hold_kp.tolist(), "hold_kd": cfg.fsm.hold_kd.tolist(),
                              "move_to_default_s": cfg.fsm.move_to_default_s,
                              "imu_gate": cfg.fsm.imu_gate, "imu_max_age_s": cfg.fsm.imu_max_age_s,
