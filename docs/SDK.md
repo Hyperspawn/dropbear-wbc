@@ -61,7 +61,8 @@ CUDA_VISIBLE_DEVICES=-1 .venv-newton/Scripts/python.exe tools/newton_bridge.py -
 # 2b) A tracking policy exported by scripts/play.py --export
 .venv-newton/Scripts/python.exe tools/policy_runner.py --mode policy \
     --sidecar logs/rsl_rl/dropbear_tracking/<run>/exported/policy.json --allow-privileged --hold-s 1 --duration 20
-# 2c) The Unitree G1 low-level example, ported
+# 2c) The Unitree G1 low-level example, ported (--default-pose legacy|calibration|<calibration.json>; legacy = default,
+#     hip rolls not mirror-symmetric, warns; summary.default_pose records the target + mirror report)
 .venv-newton/Scripts/python.exe scripts/examples/dropbear_low_level_example.py --duration 8
 
 # End-to-end verification harness (bridge + runner as two processes, merged summary)
