@@ -71,7 +71,9 @@ def parse_args(argv=None) -> argparse.Namespace:
                     help="MoveToDefault/Hold target: 'loaded' (default; data/calibration/dropbear_loaded_stand.json, "
                          "knee crank ~3 deg, static knee ~0.35x rated, item 241), 'default' (the config's default pose "
                          "= pre-241 behaviour; calibration standing_motor_pos holds ~80 N*m on each knee crank), or a "
-                         "dropbear-loaded-stand-v1 JSON path. Overrides a yaml/sidecar hold_pose.")
+                         "dropbear-loaded-stand-v1 JSON path. Overrides a yaml/sidecar hold_pose. Its calibration_sha256 must "
+                         "match --default-pose (hold mode) or the config's default_joint_pos calibration (policy "
+                         "mode, item 389), else the repo calibration.")
     ap.add_argument("--allow-loaded-stand-mismatch", action="store_true",
                     help="load a loaded stand (--hold-pose or yaml/sidecar hold_pose) whose calibration_sha256 does "
                          "not match the calibration in use, with a WARNING instead of refusing (experiments only; "
@@ -200,24 +202,45 @@ def default_pose_calibration(args) -> Path | None:
     return CALIBRATION_JSON if choice == "calibration" else Path(choice)
 
 
-def resolve_hold_pose(args) -> np.ndarray | None:
-    """``--hold-pose`` -> SDK-order hold target (None = the config's default pose)."""
+def resolve_hold_pose_checked(args, calibration_path: Path | None = None) -> tuple[np.ndarray | None, dict | None]:
+    """``--hold-pose`` -> (SDK-order hold target or None = the config's default pose, check record or None).
+
+    The loaded stand's ``calibration_sha256`` must match the calibration of the default pose it replaces as the hold
+    target: hold mode -> ``--default-pose`` (a calibration JSON); policy mode -> ``calibration_path`` = the loaded
+    config's ``default_joint_pos {"calibration"}`` (``DeployConfig.stand_calibration``, item 389; before, policy mode
+    always used the repo calibration, so a config on another calibration got its hold target and its action offset
+    from different calibrations). Otherwise the repo calibration. A mismatch, a record without sha or a missing
+    calibration file refuses unless ``--allow-loaded-stand-mismatch`` (WARNING, ``sha_match`` false)."""
     choice = getattr(args, "hold_pose", "default")
     if choice in (None, "default"):
-        return None
+        return None, None
     path = LOADED_STAND_JSON if choice == "loaded" else Path(choice)
-    # The loaded stand must come from the same calibration as the hold-mode --default-pose; with the legacy default
-    # pose or in policy mode there is no such argument, so it is checked against the repo calibration (before item
-    # 376 the sha check was skipped there).
-    calib = default_pose_calibration(args) if getattr(args, "mode", None) == "hold" else None
-    calib = calib or CALIBRATION_JSON
+    if getattr(args, "mode", None) == "hold":
+        calib, source = default_pose_calibration(args), "--default-pose"
+    else:
+        calib, source = calibration_path, "config default_joint_pos"
+    if calib is None:
+        calib, source = CALIBRATION_JSON, "repo"
+    calib = Path(calib)
+    check = {"hold_pose": f"--hold-pose {choice}", "loaded_stand": path.as_posix(), "calibration": calib.as_posix(),
+             "calibration_source": source, "sha_match": True, "allowed_mismatch": False}
     try:
-        return load_loaded_stand_pose(path, calib)
+        if not calib.is_file():
+            raise LoadedStandCalibrationMismatch(f"--hold-pose {choice}: calibration {calib} ({source}) not found, "
+                                                 f"cannot check the loaded stand's calibration_sha256")
+        return load_loaded_stand_pose(path, calib), check
     except LoadedStandCalibrationMismatch as e:
         if not getattr(args, "allow_loaded_stand_mismatch", False):
-            raise
+            raise LoadedStandCalibrationMismatch(f"{e} (--hold-pose {choice} checked against the {source} "
+                                                 f"calibration; override: --allow-loaded-stand-mismatch)") from e
         print(f"[runner] WARNING: {e}; holding it anyway (--allow-loaded-stand-mismatch)", flush=True)
-        return load_loaded_stand_pose(path)
+        check["sha_match"], check["allowed_mismatch"] = False, True
+        return load_loaded_stand_pose(path), check
+
+
+def resolve_hold_pose(args, calibration_path: Path | None = None) -> np.ndarray | None:
+    """``--hold-pose`` -> SDK-order hold target (None = the config's default pose); see :func:`resolve_hold_pose_checked`."""
+    return resolve_hold_pose_checked(args, calibration_path)[0]
 
 
 def hold_target_symmetry(cfg: DeployConfig) -> dict | None:
@@ -237,7 +260,10 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode == "hold":
         calib = default_pose_calibration(args)
         pose = None if calib is None else load_standing_pose(calib)
-        cfg = hold_config(pose, resolve_hold_pose(args))
+        hold_pose, hold_check = resolve_hold_pose_checked(args)
+        cfg = hold_config(pose, hold_pose)
+        if hold_check is not None:
+            cfg.meta["hold_pose_check"] = hold_check
         policy = motion = None
     else:
         from dropbear_wbc.deploy.motion import OnnxMotion, load_motion
@@ -347,10 +373,14 @@ def build(args) -> tuple[DeployConfig, DeployController]:
     if cfg.target_clip is not None:
         print("[runner] motor targets clipped to the sidecar's target_clip (as in training)", flush=True)
     if args.mode != "hold":
-        cfg.hold_pose_sdk = resolve_hold_pose(args)
+        # checked against the loaded config's calibration (default_joint_pos {"calibration"}), not the repo's (item 389)
+        cfg.hold_pose_sdk, runner_check = resolve_hold_pose_checked(args, cfg.stand_calibration)
         cfg.validate()
-        if cfg.meta.get("hold_pose_check") is not None:  # the yaml/sidecar hold_pose was checked, then replaced
+        config_check = cfg.meta.get("hold_pose_check")
+        if config_check is not None:  # the yaml/sidecar hold_pose was checked, then replaced
             cfg.meta["hold_pose_check"]["replaced_by"] = f"--hold-pose {args.hold_pose}"
+        if runner_check is not None:
+            cfg.meta["hold_pose_check"] = {**runner_check, "replaces": config_check}
     print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
           f"(--hold-pose {args.hold_pose})", flush=True)
     cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg)

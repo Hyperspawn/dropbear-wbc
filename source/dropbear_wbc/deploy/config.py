@@ -309,6 +309,11 @@ class DeployConfig:
     obs_dim: int | None = None
     source: str = ""
     meta: dict = field(default_factory=dict)
+    stand_calibration: Path | None = None
+    """Calibration JSON named by the config's ``default_joint_pos: {"calibration": <path>}`` (resolved), i.e. the
+    calibration of the default pose / action offset. ``None`` = the config names none (legacy pose, explicit list,
+    ONNX metadata, ``hold`` mode). A loaded stand used as the hold target must carry this calibration's sha (the
+    runner ``--hold-pose`` check, item 389); ``None`` -> the repo calibration."""
 
     @property
     def hold_target_sdk(self) -> np.ndarray:
@@ -498,11 +503,19 @@ def load_loaded_stand_pose(path: Path, calibration_path: Path | None = None) -> 
     return pose
 
 
+def config_calibration(default_value: Any, base: Path) -> Path | None:
+    """The config's ``default_joint_pos: {"calibration": <path>}`` resolved relative to ``base``; else ``None``."""
+    if isinstance(default_value, dict) and "calibration" in default_value:
+        return (base / default_value["calibration"]).resolve()
+    return None
+
+
 def hold_pose_calibration(default_value: Any, base: Path) -> Path:
     """Calibration a yaml/sidecar ``hold_pose`` loaded stand is checked against (item 378): the config's
     ``default_joint_pos: {"calibration": <path>}`` (relative to the config) if given, else the repo calibration."""
-    if isinstance(default_value, dict) and "calibration" in default_value:
-        return (base / default_value["calibration"]).resolve()
+    named = config_calibration(default_value, base)
+    if named is not None:
+        return named
     from ..kinematics.semantic import DEFAULT_CALIBRATION
 
     return Path(DEFAULT_CALIBRATION)
@@ -725,7 +738,8 @@ def load_deploy_yaml(path: Path, allow_loaded_stand_mismatch: bool = False) -> D
         observations=_obs_from_mapping(d.get("observations")),
         policy_path=None if d.get("policy") is None else (base / d["policy"]).resolve(),
         motion=_motion_from(d.get("motion"), base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
-        hold_pose_sdk=hold_pose, source=str(path), meta={} if hold_check is None else {"hold_pose_check": hold_check})
+        hold_pose_sdk=hold_pose, source=str(path), meta={} if hold_check is None else {"hold_pose_check": hold_check},
+        stand_calibration=config_calibration(d.get("default_joint_pos"), base))
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
@@ -783,7 +797,8 @@ def load_sidecar(path: Path, onnx_metadata: dict[str, str] | None = None,
         motion=_motion_from(motion or None, base), fsm=_fsm_from(d.get("fsm")), default_pose_sdk=default_full,
         hold_pose_sdk=hold_pose, obs_dim=d.get("obs_dim"), source=str(path),
         meta={**{k: d[k] for k in ("task", "usd_sha256", "run_path") if k in d},
-              **({} if hold_check is None else {"hold_pose_check": hold_check})})
+              **({} if hold_check is None else {"hold_pose_check": hold_check})},
+        stand_calibration=config_calibration(get("default_joint_pos"), base))
     clamp_deploy_motion_mode_gains(cfg)
     cfg.validate()
     return cfg
