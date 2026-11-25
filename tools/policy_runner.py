@@ -202,6 +202,20 @@ def default_pose_calibration(args) -> Path | None:
     return CALIBRATION_JSON if choice == "calibration" else Path(choice)
 
 
+def hold_calibration(args, calibration_path: Path | None = None) -> tuple[Path, str]:
+    """Calibration the hold target is judged against -> (path, source). Hold mode: ``--default-pose`` (a calibration
+    JSON); policy mode: ``calibration_path`` = the loaded config's ``default_joint_pos {"calibration"}``
+    (``DeployConfig.stand_calibration``); otherwise the repo calibration. Shared by the ``--hold-pose`` sha check and
+    the hold-target mirror check (item 391)."""
+    if getattr(args, "mode", None) == "hold":
+        calib, source = default_pose_calibration(args), "--default-pose"
+    else:
+        calib, source = calibration_path, "config default_joint_pos"
+    if calib is None:
+        calib, source = CALIBRATION_JSON, "repo"
+    return Path(calib), source
+
+
 def resolve_hold_pose_checked(args, calibration_path: Path | None = None) -> tuple[np.ndarray | None, dict | None]:
     """``--hold-pose`` -> (SDK-order hold target or None = the config's default pose, check record or None).
 
@@ -215,13 +229,7 @@ def resolve_hold_pose_checked(args, calibration_path: Path | None = None) -> tup
     if choice in (None, "default"):
         return None, None
     path = LOADED_STAND_JSON if choice == "loaded" else Path(choice)
-    if getattr(args, "mode", None) == "hold":
-        calib, source = default_pose_calibration(args), "--default-pose"
-    else:
-        calib, source = calibration_path, "config default_joint_pos"
-    if calib is None:
-        calib, source = CALIBRATION_JSON, "repo"
-    calib = Path(calib)
+    calib, source = hold_calibration(args, calibration_path)
     check = {"hold_pose": f"--hold-pose {choice}", "loaded_stand": path.as_posix(), "calibration": calib.as_posix(),
              "calibration_source": source, "sha_match": True, "allowed_mismatch": False}
     try:
@@ -243,11 +251,22 @@ def resolve_hold_pose(args, calibration_path: Path | None = None) -> np.ndarray 
     return resolve_hold_pose_checked(args, calibration_path)[0]
 
 
-def hold_target_symmetry(cfg: DeployConfig) -> dict | None:
-    """Mirror check of the FSM MoveToDefault/Hold target (item 376); warns, never refuses. None = no calibration."""
-    if not CALIBRATION_JSON.exists():
+def hold_target_symmetry(cfg: DeployConfig, calibration_path: Path | None = None,
+                         calibration_source: str = "repo") -> dict | None:
+    """Mirror check of the FSM MoveToDefault/Hold target (item 376); warns, never refuses. None = calibration missing.
+
+    ``calibration_path`` = the calibration from :func:`hold_calibration` (same one as the ``--hold-pose`` sha check;
+    item 391: before, always the repo calibration, so a config on another calibration was mirrored with the wrong
+    semantic map). None -> the repo calibration."""
+    calib = Path(calibration_path) if calibration_path is not None else CALIBRATION_JSON
+    if calibration_path is None:
+        calibration_source = "repo"
+    if not calib.exists():
+        print(f"[runner] NOTE: hold target mirror check skipped: calibration {calib} ({calibration_source}) not found",
+              flush=True)
         return None
-    rep = pose_mirror_report(cfg.hold_target_sdk, CALIBRATION_JSON)
+    rep = pose_mirror_report(cfg.hold_target_sdk, calib)
+    rep["calibration_source"] = calibration_source
     if rep["asymmetric"]:
         print(f"[runner] WARNING: hold target is not left/right symmetric: max semantic mirror error "
               f"{rep['max_err_deg']:.1f} deg ({rep['worst']}; hip roll {rep['hip_roll_deg']}). The legacy default pose "
@@ -383,7 +402,11 @@ def build(args) -> tuple[DeployConfig, DeployController]:
             cfg.meta["hold_pose_check"] = {**runner_check, "replaces": config_check}
     print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
           f"(--hold-pose {args.hold_pose})", flush=True)
-    cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg)
+    # mirrored with the same calibration as the --hold-pose sha check (item 391)
+    sym_calib, sym_source = hold_calibration(args, None if args.mode == "hold" else cfg.stand_calibration)
+    cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg, sym_calib, sym_source)
+    if isinstance(cfg.meta.get("hold_pose_check"), dict):
+        cfg.meta["hold_pose_check"]["mirror_calibration"] = sym_calib.as_posix()
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,
                             velocity_command=np.asarray(args.velocity_cmd))
     return cfg, ctrl
