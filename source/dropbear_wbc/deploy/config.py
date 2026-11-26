@@ -473,6 +473,58 @@ def pose_mirror_report(q_sdk, calibration_path: Path | None = None) -> dict:
             "calibration": path.as_posix()}
 
 
+
+DEFAULT_POSE_CHOICES_HELP = ("'legacy' (default; sdk motors.DEFAULT_POS, both hip rolls -0.1 rad, NOT mirror-symmetric, "
+                             "item 370), 'calibration' (repo data/calibration/dropbear_semantic_calibration.json "
+                             "standing_motor_pos) or a semantic calibration JSON path")
+
+
+def resolve_default_pose(choice: str | None = "legacy",
+                         repo_calibration: Path | None = None) -> tuple[np.ndarray, Path, str]:
+    """``--default-pose`` -> (pose, SDK order; calibration it is mirror-checked against; source label).
+
+    'legacy' = sdk ``motors.DEFAULT_POS`` (checked against the repo calibration); 'calibration' = the repo calibration
+    ``standing_motor_pos``; anything else = a semantic calibration JSON path (missing/invalid file raises).
+    ``repo_calibration`` None = ``kinematics.semantic.DEFAULT_CALIBRATION``. Shared by the low-level example
+    (item 377) and tools/probe_newton_plant.py (item 393)."""
+    if repo_calibration is None:
+        from ..kinematics.semantic import DEFAULT_CALIBRATION as repo_calibration
+    repo_calibration = Path(repo_calibration)
+    if choice in (None, "legacy"):
+        return np.asarray(motors.DEFAULT_POS, dtype=float).copy(), repo_calibration, "legacy"
+    calib = repo_calibration if choice == "calibration" else Path(choice)
+    pose = load_standing_pose(calib)
+    if not np.all(np.isfinite(pose)):
+        raise ValueError(f"standing_motor_pos in {calib} is not finite")
+    return pose, calib, "calibration" if choice == "calibration" else "path"
+
+
+def default_pose_symmetry(pose, calibration: Path, source: str, tag: str = "[deploy]") -> dict | None:
+    """Left/right mirror report of a ``--default-pose`` target (warn only, as the runner's hold target check, item
+    376). None = calibration file missing (NOTE printed). ``tag`` prefixes the printed lines."""
+    calibration = Path(calibration)
+    if not calibration.is_file():
+        print(f"{tag} NOTE: default pose mirror check skipped: calibration {calibration} not found", flush=True)
+        return None
+    rep = pose_mirror_report(pose, calibration)
+    rep["default_pose_source"] = source
+    if rep["asymmetric"]:
+        print(f"{tag} WARNING: default pose ({source}) is not left/right symmetric: max semantic mirror error "
+              f"{rep['max_err_deg']:.1f} deg ({rep['worst']}; hip roll {rep['hip_roll_deg']}). The legacy pose rolls "
+              f"both hips the same way (item 370); symmetric: --default-pose calibration", flush=True)
+    return rep
+
+
+def default_pose_record(choice: str | None, tag: str = "[deploy]",
+                        repo_calibration: Path | None = None) -> tuple[np.ndarray, dict]:
+    """Resolve ``--default-pose`` and mirror-check it -> (pose, ``default_pose`` summary block)."""
+    pose, calib, source = resolve_default_pose(choice, repo_calibration)
+    mirror = default_pose_symmetry(pose, calib, source, tag)
+    print(f"{tag} default pose: {source} ({calib.as_posix() if source != 'legacy' else 'sdk motors.DEFAULT_POS'})",
+          flush=True)
+    return pose, {"choice": choice, "source": source, "calibration": calib.as_posix(), "mirror": mirror,
+                  "default_pose_sdk": pose.tolist()}
+
 LOADED_STAND_SCHEMA = "dropbear-loaded-stand-v1"
 
 

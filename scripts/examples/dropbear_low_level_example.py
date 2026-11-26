@@ -36,8 +36,11 @@ sys.path[:0] = [str(ROOT / "source")]
 
 import numpy as np  # noqa: E402
 
-from dropbear_wbc.deploy.config import (load_standing_pose, motion_mode_field_kd, motion_mode_field_kp,  # noqa: E402
-                                        pose_mirror_report)
+from dropbear_wbc.deploy.config import DEFAULT_POSE_CHOICES_HELP  # noqa: E402
+from dropbear_wbc.deploy.config import default_pose_record as _default_pose_record  # noqa: E402
+from dropbear_wbc.deploy.config import default_pose_symmetry as _default_pose_symmetry  # noqa: E402
+from dropbear_wbc.deploy.config import motion_mode_field_kd, motion_mode_field_kp  # noqa: E402
+from dropbear_wbc.deploy.config import resolve_default_pose as _resolve_default_pose  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 from dropbear_wbc.sdk.signals import install_stop_handler  # noqa: E402
 from dropbear_wbc.sdk.transport import ChannelFactoryInitialize, ChannelPublisher, ChannelSubscriber  # noqa: E402
@@ -52,33 +55,14 @@ CALIBRATION_JSON = ROOT / "data/calibration/dropbear_semantic_calibration.json"
 
 def resolve_default_pose(choice: str | None = "legacy") -> tuple[np.ndarray, Path, str]:
     """``--default-pose`` -> (Stage-1 target, SDK order; calibration it is mirror-checked against; source label).
-
-    'legacy' = sdk ``motors.DEFAULT_POS`` (checked against the repo calibration); 'calibration' = the repo calibration
-    ``standing_motor_pos``; anything else = a semantic calibration JSON path (missing/invalid file raises before any
+    Shared helper :func:`dropbear_wbc.deploy.config.resolve_default_pose` (missing/invalid file raises before any
     command is written)."""
-    if choice in (None, "legacy"):
-        return np.asarray(motors.DEFAULT_POS, dtype=float).copy(), CALIBRATION_JSON, "legacy"
-    calib = CALIBRATION_JSON if choice == "calibration" else Path(choice)
-    pose = load_standing_pose(calib)
-    if not np.all(np.isfinite(pose)):
-        raise ValueError(f"standing_motor_pos in {calib} is not finite")
-    return pose, calib, "calibration" if choice == "calibration" else "path"
+    return _resolve_default_pose(choice, CALIBRATION_JSON)
 
 
 def default_pose_symmetry(pose, calibration: Path, source: str) -> dict | None:
-    """Left/right mirror report of the Stage-1 target (warn only, as the runner's hold target check, item 376).
-    None = calibration file missing (NOTE printed)."""
-    calibration = Path(calibration)
-    if not calibration.is_file():
-        print(f"[example] NOTE: default pose mirror check skipped: calibration {calibration} not found", flush=True)
-        return None
-    rep = pose_mirror_report(pose, calibration)
-    rep["default_pose_source"] = source
-    if rep["asymmetric"]:
-        print(f"[example] WARNING: default pose ({source}) is not left/right symmetric: max semantic mirror error "
-              f"{rep['max_err_deg']:.1f} deg ({rep['worst']}; hip roll {rep['hip_roll_deg']}). The legacy pose rolls "
-              f"both hips the same way (item 370); symmetric: --default-pose calibration", flush=True)
-    return rep
+    """Left/right mirror report of the Stage-1 target (warn only; shared helper, item 376/393)."""
+    return _default_pose_symmetry(pose, calibration, source, "[example]")
 
 
 class StateLost(RuntimeError):
@@ -191,22 +175,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--connect-timeout-s", type=float, default=20.0, help="wait for the first LowState")
     ap.add_argument("--state-timeout-s", type=float, default=0.5, help="abort on older LowState (<=0 off)")
     ap.add_argument("--default-pose", default="legacy",
-                    help="Stage-1 target: 'legacy' (default; sdk motors.DEFAULT_POS, both hip rolls -0.1 rad, NOT "
-                         "mirror-symmetric, item 370), 'calibration' (repo data/calibration/"
-                         "dropbear_semantic_calibration.json standing_motor_pos) or a semantic calibration JSON path")
+                    help="Stage-1 target: " + DEFAULT_POSE_CHOICES_HELP)
     return ap.parse_args(argv)
 
 
 def default_pose_record(choice) -> tuple[np.ndarray, dict]:
     """Resolve ``--default-pose`` and mirror-check it -> (pose, summary ``default_pose`` block). Runs before any
     transport is opened."""
-    pose, calib, source = resolve_default_pose(choice)
-    mirror = default_pose_symmetry(pose, calib, source)
-    print(f"[example] default pose: {source} ({calib.as_posix() if source != 'legacy' else 'sdk motors.DEFAULT_POS'})",
-          flush=True)
-    return pose, {"choice": choice, "source": source, "calibration": calib.as_posix(), "mirror": mirror,
-                  "default_pose_sdk": pose.tolist()}
-
+    return _default_pose_record(choice, "[example]", CALIBRATION_JSON)
 
 if __name__ == "__main__":
     args = parse_args()

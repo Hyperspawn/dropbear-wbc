@@ -2,11 +2,18 @@
 
 Holds the 22 motors with the legacy DROPBEAR_CFG gains for ``--ticks`` control
 ticks, either at their initial (USD-authored) positions (``--target initial``) or
-ramping linearly to the legacy default pose over ``--ramp-s`` and holding it
+ramping linearly to the default pose over ``--ramp-s`` and holding it
 (``--target default``). Reports timing, per-motor tracking error, the model's
 motor joint limits, root height and closure residuals. Acquires the GPU lock,
 except with ``--no-gpu-lock``, which is only accepted for a pure-CPU run
 (``--device cpu --mujoco-cpu`` with ``CUDA_VISIBLE_DEVICES=-1``).
+
+Default pose (item 393): ``--default-pose legacy`` (default, unchanged: sdk ``motors.DEFAULT_POS``, both hip rolls
+-0.1 rad, semantic mirror error 11.5 deg, item 370), ``calibration`` (repo calibration ``standing_motor_pos``) or a
+semantic calibration JSON path; same shared helpers as the low-level example and tools/policy_runner.py
+(``deploy.config.resolve_default_pose`` / ``default_pose_symmetry``). Resolved and mirror-checked (warn only) before
+the GPU lock and plant build; recorded as ``default_pose`` in the report and the printed summary (``used`` = whether
+``--target default`` drove the plant to it).
 
 Example::
 
@@ -27,11 +34,18 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 
 import numpy as np  # noqa: E402
 
+from dropbear_wbc.deploy.config import DEFAULT_POSE_CHOICES_HELP, default_pose_record  # noqa: E402
 from dropbear_wbc.newton_sim.gpu_lock import GpuLock  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
 
 
-def main() -> int:
+def resolve_probe_default_pose(choice: str | None, target: str) -> tuple[np.ndarray, dict]:
+    """``--default-pose`` -> (pose, report ``default_pose`` block incl. ``used`` = ``--target default``)."""
+    pose, info = default_pose_record(choice, "[probe]")
+    return pose, dict(info, used=target == "default")
+
+
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fixed-base", action="store_true")
     ap.add_argument("--ticks", type=int, default=500)
@@ -44,6 +58,8 @@ def main() -> int:
     ap.add_argument("--ls-iterations", type=int, default=50)
     ap.add_argument("--collisions", default="convex-hull", choices=["convex-hull", "box"])
     ap.add_argument("--target", choices=["initial", "default"], default="initial")
+    ap.add_argument("--default-pose", default="legacy",
+                    help="--target default goal: " + DEFAULT_POSE_CHOICES_HELP)
     ap.add_argument("--ramp-s", type=float, default=2.0)
     ap.add_argument("--passive-damping", type=float, default=motors.PASSIVE_DAMPING)
     ap.add_argument("--no-gpu-lock", action="store_true")
@@ -53,7 +69,7 @@ def main() -> int:
     ap.add_argument("--diag-axis", action="append", default=[], metavar="JOINT=AXIS",
                     help="DIAGNOSTIC in-memory revolute axis override (repeatable); never plant authority")
     ap.add_argument("--report", type=Path, required=True)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     if args.no_gpu_lock and not (args.device == "cpu" and args.mujoco_cpu
                                  and os.environ.get("CUDA_VISIBLE_DEVICES") == "-1"):
         ap.error("--no-gpu-lock requires --device cpu --mujoco-cpu and CUDA_VISIBLE_DEVICES=-1")
@@ -61,6 +77,7 @@ def main() -> int:
     report: dict = {"args": {k: str(v) for k, v in vars(args).items()}, "status": "failed"}
     lock = GpuLock(owner=f"sdk_bridge/probe_newton_plant {args.report.name}")
     try:
+        default_pose, report["default_pose"] = resolve_probe_default_pose(args.default_pose, args.target)
         if not args.no_gpu_lock:
             lock.acquire()
             report["gpu_lock_wait_s"] = lock.waited_s
@@ -77,7 +94,7 @@ def main() -> int:
         report["plant"] = plant.report
         r0 = plant.initial_readout()
         q_init = r0.motor_q.copy()
-        q_goal = np.asarray(motors.DEFAULT_POS) if args.target == "default" else q_init
+        q_goal = default_pose if args.target == "default" else q_init
         report["initial_motor_q"] = q_init.tolist()
         report["initial_root_pos_w"] = r0.root_pos_w.tolist()
         lo = plant.model.joint_limit_lower.numpy()[plant.motor_qd_idx]
@@ -139,8 +156,20 @@ def main() -> int:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2, default=str) + "\n")
         print(json.dumps({"status": report["status"], "timing": report.get("timing"),
+                          "default_pose": _pose_summary(report.get("default_pose")),
                           "error": report.get("error")}, indent=2))
     return 0 if report["status"] == "executed" else 1
+
+
+def _pose_summary(info: dict | None) -> dict | None:
+    """Printed-summary view of the report's ``default_pose`` block (no per-joint lists except the pose)."""
+    if info is None:
+        return None
+    m = info.get("mirror")
+    return {"source": info["source"], "used": info["used"], "calibration": info["calibration"],
+            "default_pose_sdk": info["default_pose_sdk"],
+            "mirror_max_err_deg": None if m is None else round(m["max_err_deg"], 3),
+            "asymmetric": None if m is None else m["asymmetric"]}
 
 
 if __name__ == "__main__":

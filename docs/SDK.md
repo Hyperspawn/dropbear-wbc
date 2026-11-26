@@ -65,6 +65,10 @@ CUDA_VISIBLE_DEVICES=-1 .venv-newton/Scripts/python.exe tools/newton_bridge.py -
 #     hip rolls not mirror-symmetric, warns; summary.default_pose records the target + mirror report)
 .venv-newton/Scripts/python.exe scripts/examples/dropbear_low_level_example.py --duration 8
 
+# Plant probe without ZMQ (--target default ramps to --default-pose legacy|calibration|<calibration.json>; same
+# shared helpers and mirror report as 2c; report/summary default_pose records the goal)
+.venv-newton/Scripts/python.exe tools/probe_newton_plant.py --fixed-base --target default --default-pose calibration --report logs/sdk_bridge/probe_default.json
+
 # End-to-end verification harness (bridge + runner as two processes, merged summary)
 .venv-newton/Scripts/python.exe scripts/verify_sdk_bridge.py --case fixed --hold-s 5 --realtime
 ```
