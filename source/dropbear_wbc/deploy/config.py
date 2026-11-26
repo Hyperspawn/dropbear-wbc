@@ -479,6 +479,24 @@ DEFAULT_POSE_CHOICES_HELP = ("'legacy' (default; sdk motors.DEFAULT_POS, both hi
                              "standing_motor_pos) or a semantic calibration JSON path")
 
 
+def default_pose_calibration_path(choice: str | None = "legacy",
+                                  repo_calibration: Path | None = None) -> tuple[Path, str]:
+    """``--default-pose`` -> (calibration JSON, source label) without reading any file: the one parser of the choice.
+
+    'legacy' / None -> (repo calibration, "legacy"; the pose is sdk ``motors.DEFAULT_POS``, the calibration is only the
+    mirror-check map); 'calibration' -> (repo calibration, "calibration"); anything else -> (``Path(choice)``, "path").
+    ``repo_calibration`` None = ``kinematics.semantic.DEFAULT_CALIBRATION``. Used by :func:`resolve_default_pose` and
+    by tools/policy_runner.py ``default_pose_calibration`` (item 394), which needs the path before the file is read."""
+    if repo_calibration is None:
+        from ..kinematics.semantic import DEFAULT_CALIBRATION as repo_calibration
+    repo_calibration = Path(repo_calibration)
+    if choice in (None, "legacy"):
+        return repo_calibration, "legacy"
+    if choice == "calibration":
+        return repo_calibration, "calibration"
+    return Path(choice), "path"
+
+
 def resolve_default_pose(choice: str | None = "legacy",
                          repo_calibration: Path | None = None) -> tuple[np.ndarray, Path, str]:
     """``--default-pose`` -> (pose, SDK order; calibration it is mirror-checked against; source label).
@@ -486,17 +504,14 @@ def resolve_default_pose(choice: str | None = "legacy",
     'legacy' = sdk ``motors.DEFAULT_POS`` (checked against the repo calibration); 'calibration' = the repo calibration
     ``standing_motor_pos``; anything else = a semantic calibration JSON path (missing/invalid file raises).
     ``repo_calibration`` None = ``kinematics.semantic.DEFAULT_CALIBRATION``. Shared by the low-level example
-    (item 377) and tools/probe_newton_plant.py (item 393)."""
-    if repo_calibration is None:
-        from ..kinematics.semantic import DEFAULT_CALIBRATION as repo_calibration
-    repo_calibration = Path(repo_calibration)
-    if choice in (None, "legacy"):
-        return np.asarray(motors.DEFAULT_POS, dtype=float).copy(), repo_calibration, "legacy"
-    calib = repo_calibration if choice == "calibration" else Path(choice)
+    (item 377), tools/probe_newton_plant.py (item 393) and tools/policy_runner.py hold mode (item 394)."""
+    calib, source = default_pose_calibration_path(choice, repo_calibration)
+    if source == "legacy":
+        return np.asarray(motors.DEFAULT_POS, dtype=float).copy(), calib, source
     pose = load_standing_pose(calib)
     if not np.all(np.isfinite(pose)):
         raise ValueError(f"standing_motor_pos in {calib} is not finite")
-    return pose, calib, "calibration" if choice == "calibration" else "path"
+    return pose, calib, source
 
 
 def default_pose_symmetry(pose, calibration: Path, source: str, tag: str = "[deploy]") -> dict | None:

@@ -43,9 +43,10 @@ sys.path[:0] = [str(ROOT / "source"), str(ROOT / "third_party" / "pydeps")]
 import numpy as np  # noqa: E402
 
 from dropbear_wbc.deploy import quat as Q  # noqa: E402
-from dropbear_wbc.deploy.config import (DeployConfig, LoadedStandCalibrationMismatch, hold_config,  # noqa: E402
-                                        load_deploy_yaml, load_loaded_stand_pose, load_sidecar, load_standing_pose,
-                                        pose_mirror_report)
+from dropbear_wbc.deploy.config import (DEFAULT_POSE_CHOICES_HELP, DeployConfig,  # noqa: E402
+                                        LoadedStandCalibrationMismatch, default_pose_calibration_path, hold_config,
+                                        load_deploy_yaml, load_loaded_stand_pose, load_sidecar, pose_mirror_report,
+                                        resolve_default_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
@@ -63,10 +64,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--sidecar", type=Path)
     ap.add_argument("--onnx", type=Path, help="override the policy path of the yaml/sidecar")
     ap.add_argument("--default-pose", default="legacy",
-                    help="hold mode: 'legacy' (sdk motors.DEFAULT_POS; both hip rolls -0.1 rad = semantic L -5.9 / "
-                         "R -5.6 deg, NOT mirror-symmetric, item 370), 'calibration' (the repo calibration "
-                         "data/calibration/dropbear_semantic_calibration.json standing_motor_pos, symmetric < 0.05 deg) "
-                         "or a semantic calibration JSON path")
+                    help="hold mode: " + DEFAULT_POSE_CHOICES_HELP)
     ap.add_argument("--hold-pose", default="loaded",
                     help="MoveToDefault/Hold target: 'loaded' (default; data/calibration/dropbear_loaded_stand.json, "
                          "knee crank ~3 deg, static knee ~0.35x rated, item 241), 'default' (the config's default pose "
@@ -195,11 +193,11 @@ CALIBRATION_JSON = ROOT / "data/calibration/dropbear_semantic_calibration.json"
 
 
 def default_pose_calibration(args) -> Path | None:
-    """Hold-mode ``--default-pose`` -> calibration JSON (``None`` = legacy pose); 'calibration' = the repo file."""
-    choice = getattr(args, "default_pose", "legacy")
-    if choice in (None, "legacy"):
-        return None
-    return CALIBRATION_JSON if choice == "calibration" else Path(choice)
+    """Hold-mode ``--default-pose`` -> calibration JSON (``None`` = legacy pose); 'calibration' = the repo file.
+    Parsed by the shared :func:`dropbear_wbc.deploy.config.default_pose_calibration_path` (item 394; same parser as
+    the low-level example and tools/probe_newton_plant.py); no file is read here."""
+    calib, source = default_pose_calibration_path(getattr(args, "default_pose", "legacy"), CALIBRATION_JSON)
+    return None if source == "legacy" else calib
 
 
 def hold_calibration(args, calibration_path: Path | None = None) -> tuple[Path, str]:
@@ -277,8 +275,9 @@ def hold_target_symmetry(cfg: DeployConfig, calibration_path: Path | None = None
 
 def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode == "hold":
-        calib = default_pose_calibration(args)
-        pose = None if calib is None else load_standing_pose(calib)
+        # shared resolver (item 394): legacy -> sdk motors.DEFAULT_POS (= hold_config(None)); a non-finite
+        # standing_motor_pos now refuses (before: accepted, NaN MoveToDefault/Hold target)
+        pose, _, _ = resolve_default_pose(getattr(args, "default_pose", "legacy"), CALIBRATION_JSON)
         hold_pose, hold_check = resolve_hold_pose_checked(args)
         cfg = hold_config(pose, hold_pose)
         if hold_check is not None:
