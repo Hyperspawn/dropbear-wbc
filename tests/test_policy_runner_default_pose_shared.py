@@ -111,7 +111,8 @@ def test_build_hold_calls_shared_resolver(monkeypatch):
         calls.append((choice, repo))
         return fake.copy(), CALIB, "calibration"
 
-    monkeypatch.setattr(pr, "resolve_default_pose", spy)
+    # item 395: hold mode reaches it through deploy.config.default_pose_record (summary block), so spy on deploy.config
+    monkeypatch.setattr(dc, "resolve_default_pose", spy)
     cfg = _build("--default-pose", "calibration")
     assert calls == [("calibration", pr.CALIBRATION_JSON)]
     assert np.array_equal(cfg.default_pose_sdk, fake)

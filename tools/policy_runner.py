@@ -46,7 +46,7 @@ from dropbear_wbc.deploy import quat as Q  # noqa: E402
 from dropbear_wbc.deploy.config import (DEFAULT_POSE_CHOICES_HELP, DeployConfig,  # noqa: E402
                                         LoadedStandCalibrationMismatch, default_pose_calibration_path, hold_config,
                                         load_deploy_yaml, load_loaded_stand_pose, load_sidecar, pose_mirror_report,
-                                        resolve_default_pose)
+                                        default_pose_record, resolve_default_pose)
 from dropbear_wbc.deploy.fsm import DeployController, FsmState  # noqa: E402
 from dropbear_wbc.deploy.rt import WallSchedule, apply_rt  # noqa: E402
 from dropbear_wbc.sdk import motors  # noqa: E402
@@ -273,13 +273,29 @@ def hold_target_symmetry(cfg: DeployConfig, calibration_path: Path | None = None
     return rep
 
 
+def policy_default_pose_record(args, cfg: DeployConfig) -> dict:
+    """Policy mode ``default_pose`` block (item 395): the default pose comes from the loaded config
+    (``default_joint_pos``); ``--default-pose`` is not used. A non-legacy ``--default-pose`` prints a NOTE so a run
+    log never suggests that a calibration pose was used."""
+    choice = getattr(args, "default_pose", "legacy")
+    if choice not in (None, "legacy"):
+        print(f"[runner] NOTE: --default-pose {choice} ignored in policy mode (default pose from the config "
+              f"default_joint_pos)", flush=True)
+    calib = cfg.stand_calibration
+    return {"choice": choice, "source": "config default_joint_pos", "used": False,
+            "calibration": Path(calib).as_posix() if calib is not None else None, "mirror": None,
+            "default_pose_sdk": cfg.default_pose_sdk.tolist()}
+
+
 def build(args) -> tuple[DeployConfig, DeployController]:
     if args.mode == "hold":
         # shared resolver (item 394): legacy -> sdk motors.DEFAULT_POS (= hold_config(None)); a non-finite
-        # standing_motor_pos now refuses (before: accepted, NaN MoveToDefault/Hold target)
-        pose, _, _ = resolve_default_pose(getattr(args, "default_pose", "legacy"), CALIBRATION_JSON)
+        # standing_motor_pos now refuses (before: accepted, NaN MoveToDefault/Hold target). Item 395: the
+        # default_pose block (choice, source, calibration, mirror; warn only) as the example and the probe record it.
+        pose, pose_rec = default_pose_record(getattr(args, "default_pose", "legacy"), "[runner]", CALIBRATION_JSON)
         hold_pose, hold_check = resolve_hold_pose_checked(args)
         cfg = hold_config(pose, hold_pose)
+        cfg.meta["default_pose"] = {**pose_rec, "used": True}
         if hold_check is not None:
             cfg.meta["hold_pose_check"] = hold_check
         policy = motion = None
@@ -399,6 +415,8 @@ def build(args) -> tuple[DeployConfig, DeployController]:
             cfg.meta["hold_pose_check"]["replaced_by"] = f"--hold-pose {args.hold_pose}"
         if runner_check is not None:
             cfg.meta["hold_pose_check"] = {**runner_check, "replaces": config_check}
+    if args.mode != "hold":
+        cfg.meta["default_pose"] = policy_default_pose_record(args, cfg)
     print(f"[runner] hold target: {'loaded stand' if cfg.hold_pose_sdk is not None else 'default pose'} "
           f"(--hold-pose {args.hold_pose})", flush=True)
     # mirrored with the same calibration as the --hold-pose sha check (item 391)
@@ -452,6 +470,7 @@ def main(argv=None) -> int:
         summary["config"] = {"source": cfg.source, "runtime_motion": cfg.meta.get("runtime_motion"),
                              "joint_names": list(cfg.joint_names), "step_dt": cfg.step_dt,
                              "default_pose_sdk": cfg.default_pose_sdk.tolist(),
+                             "default_pose": cfg.meta.get("default_pose"),
                              "hold_target_sdk": cfg.hold_target_sdk.tolist(),
                              "hold_target_symmetry": cfg.meta.get("hold_target_symmetry"),
                              "hold_pose_check": cfg.meta.get("hold_pose_check"),
