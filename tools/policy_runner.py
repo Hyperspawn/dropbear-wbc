@@ -250,12 +250,16 @@ def resolve_hold_pose(args, calibration_path: Path | None = None) -> np.ndarray 
 
 
 def hold_target_symmetry(cfg: DeployConfig, calibration_path: Path | None = None,
-                         calibration_source: str = "repo") -> dict | None:
+                         calibration_source: str = "repo", default_pose: dict | None = None) -> dict | None:
     """Mirror check of the FSM MoveToDefault/Hold target (item 376); warns, never refuses. None = calibration missing.
 
     ``calibration_path`` = the calibration from :func:`hold_calibration` (same one as the ``--hold-pose`` sha check;
     item 391: before, always the repo calibration, so a config on another calibration was mirrored with the wrong
-    semantic map). None -> the repo calibration."""
+    semantic map). None -> the repo calibration.
+
+    ``default_pose`` = the ``default_pose`` block already printed (hold mode, item 395). When the hold target is that
+    default pose, judged against the same calibration, and its asymmetry was already warned about, the second WARNING
+    is replaced by a NOTE (item 396); the report is kept and gets ``warning_duplicate_of`` = "default_pose"."""
     calib = Path(calibration_path) if calibration_path is not None else CALIBRATION_JSON
     if calibration_path is None:
         calibration_source = "repo"
@@ -265,12 +269,29 @@ def hold_target_symmetry(cfg: DeployConfig, calibration_path: Path | None = None
         return None
     rep = pose_mirror_report(cfg.hold_target_sdk, calib)
     rep["calibration_source"] = calibration_source
-    if rep["asymmetric"]:
+    if rep["asymmetric"] and default_pose_already_warned(cfg, calib, default_pose):
+        rep["warning_duplicate_of"] = "default_pose"
+        print(f"[runner] NOTE: hold target = default pose ({default_pose['source']}); its mirror error "
+              f"{rep['max_err_deg']:.1f} deg was reported in the default pose WARNING above", flush=True)
+    elif rep["asymmetric"]:
         print(f"[runner] WARNING: hold target is not left/right symmetric: max semantic mirror error "
               f"{rep['max_err_deg']:.1f} deg ({rep['worst']}; hip roll {rep['hip_roll_deg']}). The legacy default pose "
               f"rolls both hips the same way (item 370); a symmetric stand: --hold-pose loaded or --default-pose "
               f"calibration", flush=True)
     return rep
+
+
+def default_pose_already_warned(cfg: DeployConfig, calibration: Path, default_pose: dict | None) -> bool:
+    """True when the hold target is the default pose whose asymmetry WARNING was already printed (item 396): no
+    ``--hold-pose`` override, same pose, same calibration, and the ``default_pose`` mirror report is asymmetric."""
+    if not isinstance(default_pose, dict) or cfg.hold_pose_sdk is not None:
+        return False
+    mirror = default_pose.get("mirror")
+    if not isinstance(mirror, dict) or not mirror.get("asymmetric"):
+        return False
+    if default_pose.get("calibration") is None or Path(default_pose["calibration"]) != Path(calibration):
+        return False
+    return bool(np.array_equal(np.asarray(default_pose.get("default_pose_sdk"), float), cfg.hold_target_sdk))
 
 
 def policy_default_pose_record(args, cfg: DeployConfig) -> dict:
@@ -421,7 +442,8 @@ def build(args) -> tuple[DeployConfig, DeployController]:
           f"(--hold-pose {args.hold_pose})", flush=True)
     # mirrored with the same calibration as the --hold-pose sha check (item 391)
     sym_calib, sym_source = hold_calibration(args, None if args.mode == "hold" else cfg.stand_calibration)
-    cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg, sym_calib, sym_source)
+    # item 396: no second WARNING when the hold target is the default pose already warned about (hold mode)
+    cfg.meta["hold_target_symmetry"] = hold_target_symmetry(cfg, sym_calib, sym_source, cfg.meta.get("default_pose"))
     if isinstance(cfg.meta.get("hold_pose_check"), dict):
         cfg.meta["hold_pose_check"]["mirror_calibration"] = sym_calib.as_posix()
     ctrl = DeployController(cfg, policy, motion, allow_privileged=args.allow_privileged,

@@ -105,7 +105,9 @@ def test_hold_target_symmetry_warns_only_on_legacy_target(capsys):
     cfg = _build("--hold-pose", "default")
     rep = cfg.meta["hold_target_symmetry"]
     assert rep["asymmetric"] and set(rep["over_threshold_deg"]) == HIPS
-    assert "WARNING: hold target is not left/right symmetric" in capsys.readouterr().out
+    out = capsys.readouterr().out  # item 396: the default pose WARNING covers it; the hold target line is a NOTE
+    assert "WARNING: default pose (legacy) is not left/right symmetric" in out
+    assert "WARNING: hold target is not left/right symmetric" not in out and "NOTE: hold target = default pose" in out
     cfg = _build()  # all defaults: hold target = loaded stand
     assert cfg.meta["hold_target_symmetry"]["asymmetric"] is False
     assert "WARNING: hold target" not in capsys.readouterr().out
