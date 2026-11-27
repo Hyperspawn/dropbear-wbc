@@ -2,11 +2,17 @@
 
 The old defaults (legs DEFAULT x 2 -> kd 10/10/10/24/8/8, elbow kp 600 / kd 10, exit damping with the raw knee
 kd 12) made a field-checking HAL (item 156) refuse every teleop LowCmd, the damping exit included.
+
+The fake robot binds OS-assigned ports and hands them to the client: the old fixed ports 28655/28656 made the test
+wait 20 s and fail with a misleading "no LowState received" whenever another process (a second checkout's suite on
+the shared box) held either port, because the robot thread died on EADDRINUSE without failing the test.
 """
 from __future__ import annotations
 
 import json
 import threading
+
+import zmq
 
 import numpy as np
 import pytest
@@ -38,14 +44,36 @@ def test_default_gains_inside_field_and_reported():
 
 
 class FieldCheckRobot(lb.FakeArmRobot):
-    """Fake robot that records every LowCmd's gains (what a field-checking HAL would accept or refuse)."""
+    """Fake robot that records every LowCmd's gains (what a field-checking HAL would accept or refuse).
 
-    def __init__(self, ik, ep):
+    It binds its two channels before the client starts: ``ep`` defaults to port 0 on both channels (OS-assigned
+    free ports, held from bind to close, so no check-then-bind race), and :meth:`wait_bound` returns the
+    endpoints actually bound or raises the bind error at once instead of letting the client time out.
+    """
+
+    BIND_TIMEOUT_S = 10.0
+
+    def __init__(self, ik, ep=None):
         super().__init__(ik)
-        self.ep = ep
+        self.ep = ep if ep is not None else Endpoints(cmd_port=0, state_port=0)
+        self.bound_ep = None
+        self.error = None
+        self._bound = threading.Event()
         self.n_out_of_field = 0
         self.max_kp = self.max_kd = 0.0
         self.last_kp = self.last_kd = None
+
+    def wait_bound(self, timeout=BIND_TIMEOUT_S):
+        if not self._bound.wait(timeout):
+            raise TimeoutError(f"fake robot did not bind within {timeout} s")
+        if self.error is not None:
+            raise RuntimeError(f"fake robot could not bind {self.ep}: {self.error!r}") from self.error
+        return self.bound_ep
+
+    @staticmethod
+    def _port(channel) -> int:
+        sock = (channel._pub if hasattr(channel, "_pub") else channel._sub)._sock  # bound endpoint readback
+        return int(sock.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
 
     def run(self):  # same loop as the parent, on our own ports, plus the gain check
         from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber
@@ -53,8 +81,17 @@ class FieldCheckRobot(lb.FakeArmRobot):
         import time
         pub = ChannelPublisher(LOWSTATE, LowState, endpoints=self.ep, role="robot")
         sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=self.ep, role="robot")
-        pub.Init()
-        sub.Init()
+        try:
+            pub.Init()
+            sub.Init()
+            self.bound_ep = Endpoints(host=self.ep.host, cmd_port=self._port(sub), state_port=self._port(pub))
+        except Exception as e:  # noqa: BLE001 - reported to the test thread by wait_bound()
+            self.error = e
+            pub.Close()
+            sub.Close()
+            return
+        finally:
+            self._bound.set()
         try:
             while self.running:
                 cmd = sub.Read(timeout=0.0)
@@ -75,14 +112,85 @@ class FieldCheckRobot(lb.FakeArmRobot):
             sub.Close()
 
 
+def _hold_port() -> tuple[zmq.Socket, int]:
+    sock = zmq.Context.instance().socket(zmq.PUB)
+    sock.setsockopt(zmq.LINGER, 0)
+    sock.bind("tcp://127.0.0.1:*")
+    return sock, int(sock.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
+
+
+def test_fake_robot_binds_os_assigned_ports_even_when_the_old_fixed_ports_are_taken():
+    from dropbear_wbc.teleop.arm_ik import DropbearArmIK
+
+    held = []
+    for port in (28655, 28656):  # the old fixed ports; a concurrent run of the old test would hold them
+        sock = zmq.Context.instance().socket(zmq.PUB)
+        sock.setsockopt(zmq.LINGER, 0)
+        try:
+            sock.bind(f"tcp://127.0.0.1:{port}")
+        except zmq.ZMQError:
+            sock.close(linger=0)  # already taken by someone else: the point of the test holds anyway
+            continue
+        held.append(sock)
+    robot = FieldCheckRobot(DropbearArmIK())
+    robot.start()
+    try:
+        ep = robot.wait_bound()
+        assert robot.error is None
+        assert ep.cmd_port != ep.state_port
+        assert {ep.cmd_port, ep.state_port}.isdisjoint({0, 28655, 28656})
+    finally:
+        robot.running = False
+        robot.join(timeout=5)
+        for sock in held:
+            sock.close(linger=0)
+    assert not robot.is_alive()
+
+
+def test_fake_robot_bind_failure_is_raised_at_once_not_a_client_timeout():
+    import time
+
+    from dropbear_wbc.teleop.arm_ik import DropbearArmIK
+
+    sock, port = _hold_port()
+    try:
+        robot = FieldCheckRobot(DropbearArmIK(), Endpoints(cmd_port=port, state_port=0))
+        robot.start()
+        t0 = time.perf_counter()
+        with pytest.raises(RuntimeError, match="could not bind"):
+            robot.wait_bound()
+        assert time.perf_counter() - t0 < FieldCheckRobot.BIND_TIMEOUT_S
+        assert isinstance(robot.error, zmq.ZMQError)
+        robot.join(timeout=5)
+        assert not robot.is_alive()
+    finally:
+        sock.close(linger=0)
+
+
+def test_two_fake_robots_get_distinct_ports():
+    from dropbear_wbc.teleop.arm_ik import DropbearArmIK
+
+    robots = [FieldCheckRobot(DropbearArmIK()) for _ in range(2)]
+    for r in robots:
+        r.start()
+    try:
+        eps = [r.wait_bound() for r in robots]
+        ports = [p for ep in eps for p in (ep.cmd_port, ep.state_port)]
+        assert len(set(ports)) == 4
+    finally:
+        for r in robots:
+            r.running = False
+            r.join(timeout=5)
+
+
 @pytest.mark.skipif(not lb.DEFAULT_CALIBRATION.exists(), reason="no semantic calibration JSON")
 def test_every_teleop_lowcmd_inside_field(tmp_path):
     from dropbear_wbc.teleop.arm_ik import DropbearArmIK
 
-    ep = Endpoints(cmd_port=28655, state_port=28656)
-    robot = FieldCheckRobot(DropbearArmIK(), ep)
+    robot = FieldCheckRobot(DropbearArmIK())  # OS-assigned ports: no clash with a concurrent run
     robot.start()
     try:
+        ep = robot.wait_bound()
         tool = lb._load_tool()
         summary_path = tmp_path / "summary.json"
         rc = tool.main(["--device", "scripted", "--duration", "1.0", "--ramp-s", "0.3", "--move-in-s", "0.2",
