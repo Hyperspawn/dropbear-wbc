@@ -39,8 +39,8 @@ write_queue() {  # gpu, then job lines on stdin
 }
 
 T=tools/run_chunked_training.py
-V7=data/motions_v6ts/libraries/accepted_v7gen.json
-LOW=data/motions_v6ts/libraries/lowbody_v1.json
+V7=data/motions_v6ts/libraries/accepted_v7gen_hw.json
+LOW=data/motions_v6ts/libraries/lowbody_v1_hw.json
 
 job lib_v8_v2ie $T --task Dropbear-Tracking-Library-NoState-v0 --motion_library $V7 --run_name lib_v8_v2ie $LIB_INIT \
   --chunks 30 --iters_per_chunk 200 --num_envs \$LIB_ENVS --solver_iters \$SPOS 4 --seed 301 $COMMON \

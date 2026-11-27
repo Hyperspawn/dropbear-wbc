@@ -18,7 +18,7 @@ for g in 0 1; do
   rm -f ~/dbw$g/.locks/gpu.lock
 done
 
-LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen.json \
+LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen_hw.json \
   --chunks 40 --iters_per_chunk 200 --num_envs 8192 --solver_iters 16 4 --save_interval 200 --timeout 7200 --gap_s 5 \
   --log_dir logs/brev --isaac_python python --calibration \$CAL \
   --hw_regularizers --feet_slide_penalty=-1 --target_clamp_margin_deg=0 --action_rate_weight=-0.3 --knee_stop_penalty=-3 \

@@ -19,11 +19,11 @@ run() {  # tag, then play.py arguments
   python tools/gpu_lock_run.py --owner session3_eval --log "$D/rollout.log" --timeout 3600 -- $ISAACPY -u "$@" --headless
   [ -f "$D/telemetry.npz" ] && python tools/telemetry_issue_scan.py "$D/telemetry.npz" --md "$D/issue_scan.md" | tail -1
 }
-V7=data/motions_v6ts/libraries/accepted_v7gen.json
+V7=data/motions_v6ts/libraries/accepted_v7gen_hw.json
 for name in lib_v8_v2ie lib_v8_v2ie_nokstop; do
   ck=$(latest $name); [ -z "$ck" ] && { echo "no $name"; continue; }
   run ${name}_library scripts/play.py --task Dropbear-Tracking-Library-NoState-Play-v0 --motion_library $V7 --checkpoint "$ck" \
-    --actuator_profile hw_v2ie --num_envs 138 --steps 1700 --solver_iters 32 4 --continuous_loop
+    --actuator_profile hw_v2ie --num_envs 100 --steps 1700 --solver_iters 32 4 --continuous_loop
 done
 for clip in kimodo_gen/squat_ts1.19_v6 kimodo_gen/half_squat_ts1.19_v6 kimodo_gen/lunge_ts1.19_v6 \
             asap_g1/motions_raw_tairantestbed_smpl_video_squat_level1_filter_amass_ts1.19_v6; do

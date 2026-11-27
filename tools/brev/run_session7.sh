@@ -22,7 +22,7 @@ BAND="--knee_band 150,15"
 OBJ="--anchor_height_weight=1.0 --feet_height_weight=1.0 --body_pos_std=0.2 --joint_pos_weight=0.5"
 TRK="--save_interval 200 --timeout 7200 --gap_s 5 --log_dir logs/brev --isaac_python python --calibration \$CAL \
   --actuator_profile hw_v4 --hw_regularizers --feet_slide_penalty=-1 --target_clamp_margin_deg=0 --solver_iters 16 4"
-LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen.json \
+LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen_hw.json \
   --chunks 60 --iters_per_chunk 200 --num_envs 8192"
 SQUAT="--task Dropbear-Tracking-Flat-NoState-v0 --motion_file data/motions_v6ts/kimodo_gen/squat_ts1.19_v6.npz \
   --chunks 60 --iters_per_chunk 200 --num_envs 4096 --anchor_height_weight=1.0 --feet_height_weight=1.0"

@@ -23,7 +23,7 @@ export PYTHONUNBUFFERED=1
 CAL=data/calibration/snapshots/dropbear_semantic_calibration_e51033d4.json
 EOF
 
-LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen.json \
+LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen_hw.json \
   --init_run 2026-10-15_00-00-00_lib99_init --init_checkpoint model_19800.pt --chunks 40 --iters_per_chunk 200 \
   --num_envs $LIB_ENVS --solver_iters 16 4 --save_interval 200 --timeout 7200 --gap_s 5 --log_dir logs/brev \
   --isaac_python python --calibration \$CAL \

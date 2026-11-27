@@ -19,7 +19,7 @@ EOF
 SAFE="--stop_load_penalty=-5 --impact_penalty=-0.005"
 LOCO="--chunks 100 --iters_per_chunk 150 --num_envs 4096 --solver_iters 8 4 --save_interval 150 --timeout 7200   --first_wait_minutes 5 --wait_minutes 5 --gap_s 5 --log_dir logs/brev --isaac_python python --calibration \$CAL   --actuator_profile hw_v4 --gait_v3 --terrain rough --feet_width_weight=-5 --action_rate_weight=-0.05   --target_clamp_margin_deg=0 --stair_max_m=0.15 --slope_max=0.35 --push_interval 4 8"
 TRK="--save_interval 200 --timeout 7200 --gap_s 5 --log_dir logs/brev --isaac_python python --calibration \$CAL   --actuator_profile hw_v4 --hw_regularizers --feet_slide_penalty=-1 --target_clamp_margin_deg=0 --solver_iters 16 4"
-LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen.json   --chunks 60 --iters_per_chunk 200 --num_envs 8192"
+LIB="--task Dropbear-Tracking-Library-NoState-v0 --motion_library data/motions_v6ts/libraries/accepted_v7gen_hw.json   --chunks 60 --iters_per_chunk 200 --num_envs 8192"
 OBJ="--anchor_height_weight=1.0 --feet_height_weight=1.0 --body_pos_std=0.2 --joint_pos_weight=0.5"
 T=tools/run_chunked_training.py
 L=tools/run_chunked_locomotion.py

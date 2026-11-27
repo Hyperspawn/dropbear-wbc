@@ -40,8 +40,8 @@ write_queue() {  # gpu, then job lines on stdin
 }
 
 T=tools/run_chunked_training.py
-V7=data/motions_v6ts/libraries/accepted_v7gen.json
-LOW=data/motions_v6ts/libraries/lowbody_v1.json
+V7=data/motions_v6ts/libraries/accepted_v7gen_hw.json
+LOW=data/motions_v6ts/libraries/lowbody_v1_hw.json
 
 job vel_rough_v2i_kstop10 tools/run_chunked_locomotion.py --run_name vel_rough_v2i_kstop10 \
   --resume_run 2026-10-15_20-00-00_vel_rough_v2i_kstop10 --seed 401 $LOCO --knee_stop_penalty=-10 | write_queue 0
