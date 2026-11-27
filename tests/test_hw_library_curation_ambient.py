@@ -146,7 +146,7 @@ def test_sim_profile_unchecked(tmp_path):
 
 def test_shipped_hw_manifests_pass_strict():
     hw = sorted(LIBS.glob("*_hw.json"))
-    assert [p.name for p in hw] == ["lowbody_v1_hw.json"]
+    assert [p.name for p in hw] == ["accepted_v7gen_hw.json", "lowbody_v1_hw.json"]
     for p in hw:
         m = json.loads(p.read_text(encoding="utf-8"))
         assert curation_problems(m) == []
