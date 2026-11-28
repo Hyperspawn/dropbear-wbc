@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 from pathlib import Path
 
@@ -13,16 +14,43 @@ TESTS = Path(__file__).resolve().parent
 LOOPBACK = {"test_sdk_transport.py", "test_runner_loopback.py", "test_lowcmd_stop_signals.py",
             "test_teleop_loopback.py", "test_stop_cause.py"}
 
+# Holder A: takes the lock, reports, keeps it until the parent writes a line to its stdin, reports
+# the wall-clock instant it released, then stays alive until a second line (so B must get the lock
+# from release(), not from A's process exit).
 HOLDER = textwrap.dedent("""
     import sys, time
     from pathlib import Path
     sys.path.insert(0, sys.argv[1])
     import conftest
     lock = conftest.HostLock(Path(sys.argv[2]), 30.0)
-    waited = lock.acquire()
-    print(f"{time.time():.6f} {waited:.6f}", flush=True)
-    time.sleep(float(sys.argv[3]))
+    lock.acquire()
+    print("held", flush=True)
+    sys.stdin.readline()
+    t_release = time.time()
     lock.release()
+    print(f"{t_release:.6f}", flush=True)
+    sys.stdin.readline()
+""")
+
+# Waiter B: first proves the lock is held right now (a zero-timeout probe must time out), reports
+# that, then blocks in acquire and reports the wall-clock instant it got the lock.
+WAITER = textwrap.dedent("""
+    import sys, time
+    from pathlib import Path
+    sys.path.insert(0, sys.argv[1])
+    import conftest
+    try:
+        conftest.HostLock(Path(sys.argv[2]), 0.0).acquire()
+    except TimeoutError:
+        print("contended", flush=True)
+    else:
+        print("free", flush=True)
+        sys.exit(0)
+    lock = conftest.HostLock(Path(sys.argv[2]), 30.0)
+    waited = lock.acquire()
+    t_acquired = time.time()
+    lock.release()
+    print(f"{t_acquired:.6f} {waited:.6f}", flush=True)
 """)
 
 
@@ -35,18 +63,38 @@ def test_fixed_port_modules_are_locked_and_free_port_modules_are_not():
 
 
 def test_second_process_waits_for_the_holder(tmp_path):
+    # Ordered by handshakes, not by sleeps: B is known to be blocked on the lock before A is told to
+    # release, so the result does not depend on interpreter start-up time or CPU load (item 403: the
+    # old waited_b > 0.2 check measured from B's start and gave 0.151 s under a loaded full suite).
     lock = tmp_path / "ports.lock"
-    hold_s = 0.6
-    a = subprocess.Popen([sys.executable, "-c", HOLDER, str(TESTS), str(lock), str(hold_s)],
-                         stdout=subprocess.PIPE, text=True)
-    t_a = float(a.stdout.readline().split()[0])  # A holds the lock from here
-    b = subprocess.run([sys.executable, "-c", HOLDER, str(TESTS), str(lock), "0"],
-                       capture_output=True, text=True, timeout=30)
-    a.wait(timeout=30)
-    t_b, waited_b = map(float, b.stdout.split())
-    assert a.returncode == 0 and b.returncode == 0, b.stderr
-    assert t_b - t_a >= hold_s - 0.05, (t_a, t_b)
-    assert waited_b > 0.2
+    a = subprocess.Popen([sys.executable, "-c", HOLDER, str(TESTS), str(lock)],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    b = None
+    procs = [a]
+    watchdog = threading.Timer(20.0, lambda: [p.kill() for p in procs])  # a hang becomes a failure
+    watchdog.start()
+    try:
+        assert a.stdout.readline().strip() == "held", a.stderr.read()
+        b = subprocess.Popen([sys.executable, "-c", WAITER, str(TESTS), str(lock)],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        procs.append(b)
+        probe = b.stdout.readline().strip()
+        assert probe == "contended", f"B saw the lock {probe or 'nothing'} while A held it: {b.stderr.read()}"
+        time.sleep(0.2)  # B is now polling inside acquire()
+        a.stdin.write("release\n")
+        a.stdin.flush()
+        t_release = float(a.stdout.readline())
+        t_acquired, waited_b = map(float, b.stdout.readline().split())
+        a.stdin.write("exit\n")
+        a.stdin.flush()
+        assert a.wait(timeout=30) == 0 and b.wait(timeout=30) == 0, b.stderr.read()
+    finally:
+        watchdog.cancel()
+        for p in procs:
+            if p.poll() is None:
+                p.kill()
+    # B only got the lock after A let go
+    assert t_acquired >= t_release, dict(t_release=t_release, t_acquired=t_acquired, waited_b=waited_b)
 
 
 def test_lock_times_out_instead_of_hanging(tmp_path):
