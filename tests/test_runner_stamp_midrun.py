@@ -34,19 +34,15 @@ _CASES = {
     "ahead_10s": lambda: time.perf_counter_ns() + 10_000_000_000,
     "placeholder": lambda: 1,
 }
-_OFFSET = {"behind_1h": 0, "ahead_10s": 2, "placeholder": 4}
 
 
 @pytest.mark.parametrize("case", list(_CASES))
 def test_runner_midrun_foreign_stamp_falls_back_to_tick_gating(tmp_path, capsys, case):
-    from dropbear_wbc.sdk.transport import Endpoints
-
     foreign = _CASES[case]
     if case == "behind_1h" and time.perf_counter_ns() < 3_600_000_000_000:
         foreign = lambda: 1  # noqa: E731  (fresh boot: perf_counter < 1 h)
-    ep = Endpoints(cmd_port=27621 + _OFFSET[case], state_port=27622 + _OFFSET[case])
-    robot = _stamped_robot(ep, _switching(foreign))
-    s = _run_wall(tmp_path, ep, robot)
+    robot = _stamped_robot(_switching(foreign))
+    s = _run_wall(tmp_path, robot)
     out = capsys.readouterr().out
     assert "is not a same-host perf_counter stamp; gating on tick re-use and tick lag only from here on" in out, \
         out[-2000:]
@@ -72,10 +68,7 @@ def test_runner_midrun_foreign_stamp_falls_back_to_tick_gating(tmp_path, capsys,
 
 
 def test_runner_same_host_stamp_has_no_fallback(tmp_path, capsys):
-    from dropbear_wbc.sdk.transport import Endpoints
-
-    ep = Endpoints(cmd_port=27627, state_port=27628)
-    s = _run_wall(tmp_path, ep, _stamped_robot(ep, lambda: 0))
+    s = _run_wall(tmp_path, _stamped_robot(lambda: 0))
     assert "is not a same-host perf_counter stamp" not in capsys.readouterr().out
     assert s["state_gate"]["stamp_age"] is True and s["state_gate"]["stamp_fallback"] is None
 
@@ -90,15 +83,11 @@ _DEGRADE = {
     # frames keep arriving with fresh ticks, but the tick clock runs at 0.5x (backlogged link): only tick lag sees it
     "backlog": lambda e: e if e < _DEGRADE_S else _DEGRADE_S + 0.5 * (e - _DEGRADE_S),
 }
-_DEGRADE_OFFSET = {"silent_stall": 0, "backlog": 2}
 
 
 @pytest.mark.parametrize("case", list(_DEGRADE))
 def test_runner_stale_stream_after_stamp_fallback_still_trips(tmp_path, capsys, case):
-    from dropbear_wbc.sdk.transport import Endpoints
-
-    ep = Endpoints(cmd_port=27631 + _DEGRADE_OFFSET[case], state_port=27632 + _DEGRADE_OFFSET[case])
-    s = _run_wall(tmp_path, ep, _stamped_robot(ep, _switching(lambda: 1), clock_fn=_DEGRADE[case]))
+    s = _run_wall(tmp_path, _stamped_robot(_switching(lambda: 1), clock_fn=_DEGRADE[case]))
     assert "is not a same-host perf_counter stamp" in capsys.readouterr().out
     g = s["state_gate"]
     assert g["stamp_age"] is False and g["stamp_fallback"] is not None, g

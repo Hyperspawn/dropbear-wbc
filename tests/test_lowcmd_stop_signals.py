@@ -86,19 +86,17 @@ def _cmd(rel: str, ep: Endpoints) -> list[str]:
     return [sys.executable, "-u", str(ROOT / rel), *extra, *ports]
 
 
-CASES = [("tools/policy_runner.py", "SIGTERM", 27811), ("tools/policy_runner.py", "SIGHUP", 27813),
-         ("tools/teleop_arm.py", "SIGTERM", 27815),
-         ("scripts/examples/dropbear_low_level_example.py", "SIGTERM", 27817)]
+CASES = [("tools/policy_runner.py", "SIGTERM"), ("tools/policy_runner.py", "SIGHUP"), ("tools/teleop_arm.py", "SIGTERM"),
+         ("scripts/examples/dropbear_low_level_example.py", "SIGTERM")]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX signals")
-@pytest.mark.parametrize("rel,signame,port", CASES)
-def test_stop_signal_leaves_damping_as_last_lowcmd(rel, signame, port):
+@pytest.mark.parametrize("rel,signame", CASES)
+def test_stop_signal_leaves_damping_as_last_lowcmd(rel, signame):
     from test_runner_loopback import FakeRobot
 
-    ep = Endpoints(cmd_port=port, state_port=port + 1)
-    robot = FakeRobot(ep)
-    robot.start()
+    robot = FakeRobot()
+    ep = robot.start_bound()  # OS-assigned ports, bound before the tool starts
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT / "source"), str(ROOT / "tests"),
                                                       os.environ.get("PYTHONPATH", "")]))
     proc = subprocess.Popen(_cmd(rel, ep), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT, env=env,

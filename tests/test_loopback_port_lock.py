@@ -11,8 +11,9 @@ from pathlib import Path
 import conftest
 
 TESTS = Path(__file__).resolve().parent
-LOOPBACK = {"test_sdk_transport.py", "test_runner_loopback.py", "test_lowcmd_stop_signals.py",
-            "test_teleop_loopback.py", "test_stop_cause.py"}
+# Formerly fixed-port modules, now bind-first on OS-assigned ports (item 398): they no longer need the lock.
+BIND_FIRST = {"test_sdk_transport.py", "test_runner_loopback.py", "test_lowcmd_stop_signals.py",
+              "test_teleop_loopback.py", "test_stop_cause.py", "test_runner_stamp_warning.py"}
 
 # Holder A: takes the lock, reports, keeps it until the parent writes a line to its stdin, reports
 # the wall-clock instant it released, then stays alive until a second line (so B must get the lock
@@ -54,9 +55,17 @@ WAITER = textwrap.dedent("""
 """)
 
 
-def test_fixed_port_modules_are_locked_and_free_port_modules_are_not():
+def test_fixed_port_modules_are_locked_and_free_port_modules_are_not(tmp_path):
+    # Samples are built from ``old`` (no digits after cmd_port= in this file), or this module would take the lock.
+    old = 27555
+    samples = {"endpoints.py": f"ep = Endpoints(cmd_port={old}, state_port={old + 1})\n",
+               "cases.py": f'CASES = [("tools/policy_runner.py", "SIGTERM", {old})]\nEndpoints(cmd_port=p)\n',
+               "bind_first.py": "ep = robot.start_bound()\nEndpoints(cmd_port=port, state_port=0)\n"}
+    for name, text in samples.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    assert {n for n in samples if conftest.module_uses_fixed_ports(tmp_path / n)} == {"endpoints.py", "cases.py"}
     locked = {p.name for p in TESTS.glob("test_*.py") if conftest.module_uses_fixed_ports(p)}
-    assert LOOPBACK <= locked
+    assert not BIND_FIRST & locked
     assert "test_publisher_close_flush.py" not in locked  # binds tcp://127.0.0.1:*
     assert "test_teleop_devices.py" not in locked  # _free_port()
     assert "test_loopback_port_plan.py" not in locked  # only scans source

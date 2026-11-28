@@ -14,7 +14,6 @@ import pytest
 import deploy_fixtures as fx
 import sdk_test_paths  # noqa: F401
 from dropbear_wbc.sdk import motors
-from dropbear_wbc.sdk.transport import Endpoints
 from dropbear_wbc.sdk.types import MOTOR_AGE_UNKNOWN
 from dropbear_wbc.teleop.recorder import EXTRA_COLUMNS, SessionRecorder
 
@@ -58,13 +57,12 @@ def test_recorder_requires_the_column(tmp_path):
 
 
 def test_runner_log_records_tau_valid_and_age(tmp_path):
-    ep = Endpoints(cmd_port=27597, state_port=27598)
     valid = np.ones(22, np.uint8)
     valid[KNEES] = 0
     age = np.full(22, 3000, np.uint32)
     age[0] = MOTOR_AGE_UNKNOWN
-    robot = rl.FakeRobot(ep, tau_valid=valid, age_us=age)
-    robot.start()
+    robot = rl.FakeRobot(tau_valid=valid, age_us=age)
+    ep = robot.start_bound()
     try:
         runner = rl._load_runner()
         rc = runner.main(["--mode", "hold", "--duration", "0.6", "--passive-s", "0.1", "--move-s", "0.2",

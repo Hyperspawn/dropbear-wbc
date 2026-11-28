@@ -1,6 +1,6 @@
 """CPU-only end-to-end test of tools/policy_runner.py over ZMQ against a fake robot (no simulator).
 
-The fake robot binds rt/lowstate + rt/lowcmd on test ports, advances a tick
+The fake robot binds rt/lowstate + rt/lowcmd on OS-assigned ports (tests/loopback_ports.py), advances a tick
 counter as fast as it can and moves each motor toward the commanded position
 (first-order lag), publishing a privileged sim block. The real runner ``main()``
 runs Passive -> MoveToDefault -> Hold -> Policy with the synthetic BeyondMimic
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import threading
 import time
 from pathlib import Path
 
@@ -19,20 +18,18 @@ import pytest
 
 import deploy_fixtures as fx
 import sdk_test_paths  # noqa: F401
-from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints
-from dropbear_wbc.sdk.types import LowCmd, LowState, MotorMode
+from dropbear_wbc.sdk.transport import Endpoints
+from dropbear_wbc.sdk.types import MotorMode
+from loopback_ports import BindFirstRobot
 
 ROOT = Path(__file__).resolve().parents[1]
-EP = Endpoints(cmd_port=27555, state_port=27556)
 
 
-class FakeRobot(threading.Thread):
-    def __init__(self, endpoints: Endpoints = EP, *, echo_mode: bool = True, tick_offset: int = 0,
+class FakeRobot(BindFirstRobot):
+    def __init__(self, endpoints: Endpoints | None = None, *, echo_mode: bool = True, tick_offset: int = 0,
                  freeze_after: int | None = None, restart_after: int | None = None,
                  tau_valid: np.ndarray | None = None, age_us: np.ndarray | None = None):
-        super().__init__(daemon=True)
-        self.endpoints = endpoints
-        self.running = True
+        super().__init__(endpoints)
         self.q = np.zeros(22)
         self.q_des = None
         self.ticks = 0
@@ -47,10 +44,10 @@ class FakeRobot(threading.Thread):
         self.age_us = age_us
 
     def run(self):
-        pub = ChannelPublisher(LOWSTATE, LowState, endpoints=self.endpoints, role="robot")
-        sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=self.endpoints, role="robot")
-        pub.Init()
-        sub.Init()
+        channels = self.bind()
+        if channels is None:
+            return
+        pub, sub = channels
         try:
             while self.running:
                 cmd = sub.Read(timeout=0.0)
@@ -92,13 +89,13 @@ def test_runner_policy_mode_over_zmq(tmp_path):
     fx.write_beyondmimic_onnx(tmp_path / "policy.onnx", obs_dim=sum(t["dim"] for t in fx.OBS_TERMS_FULL))
     fx.write_sidecar(tmp_path / "policy.json", "policy.onnx", terms=fx.OBS_TERMS_FULL)
     robot = FakeRobot()
-    robot.start()
+    ep = robot.start_bound()
     try:
         runner = _load_runner()
         summary_path = tmp_path / "summary.json"
         rc = runner.main(["--mode", "policy", "--sidecar", str(tmp_path / "policy.json"), "--allow-privileged",
                           "--duration", "1.6", "--passive-s", "0.1", "--move-s", "0.5", "--hold-s", "0.3",
-                          "--cmd-port", str(EP.cmd_port), "--state-port", str(EP.state_port),
+                          "--cmd-port", str(ep.cmd_port), "--state-port", str(ep.state_port),
                           "--connect-timeout-s", "20", "--summary", str(summary_path),
                           "--log", str(tmp_path / "steps.jsonl")])
     finally:
@@ -119,9 +116,8 @@ def test_runner_policy_mode_over_zmq(tmp_path):
 
 def test_runner_fails_when_motor_mode_never_enable(tmp_path):
     """Item 156: summary must not report executed when LowState.mode stays 0 (HAL refuse / never armed)."""
-    ep = Endpoints(cmd_port=27575, state_port=27576)
-    robot = FakeRobot(ep, echo_mode=False)  # mode stays 0
-    robot.start()
+    robot = FakeRobot(echo_mode=False)  # mode stays 0
+    ep = robot.start_bound()
     try:
         runner = _load_runner()
         summary_path = tmp_path / "summary.json"
@@ -140,9 +136,8 @@ def test_runner_fails_when_motor_mode_never_enable(tmp_path):
 
 
 def test_runner_hold_mode_passes_with_enable_echo(tmp_path):
-    ep = Endpoints(cmd_port=27565, state_port=27566)
-    robot = FakeRobot(ep, echo_mode=True)
-    robot.start()
+    robot = FakeRobot(echo_mode=True)
+    ep = robot.start_bound()
     try:
         runner = _load_runner()
         summary_path = tmp_path / "summary.json"
@@ -166,9 +161,8 @@ def test_runner_hold_mode_passes_with_enable_echo(tmp_path):
 def test_runner_sim_clock_survives_the_uint32_tick_wrap(tmp_path):
     """Item 258: started 150 ticks before the uint32 wrap, the sim-clock scheduler compared raw ticks
     (``st.tick >= last_tick + decim``) and spun in its keepalive loop forever after the wrap."""
-    ep = Endpoints(cmd_port=27585, state_port=27586)
-    robot = FakeRobot(ep, echo_mode=True, tick_offset=(1 << 32) - 150)
-    robot.start()
+    robot = FakeRobot(echo_mode=True, tick_offset=(1 << 32) - 150)
+    ep = robot.start_bound()
     try:
         runner = _load_runner()
         summary_path = tmp_path / "summary.json"
@@ -184,9 +178,9 @@ def test_runner_sim_clock_survives_the_uint32_tick_wrap(tmp_path):
     assert summary["ticks_per_step"]["mean"] >= 10 and summary["steps"] >= 25
 
 
-def _run_stalled(tmp_path, ep, robot, stall_s, duration=2.0):
-    robot.start()
+def _run_stalled(tmp_path, robot, stall_s, duration=2.0):
     t0 = time.perf_counter()
+    ep = robot.start_bound()
     try:
         runner = _load_runner()
         summary_path = tmp_path / "summary.json"
@@ -203,9 +197,8 @@ def _run_stalled(tmp_path, ep, robot, stall_s, duration=2.0):
 def test_runner_sim_clock_aborts_on_frozen_tick(tmp_path):
     """Item 263: a producer that keeps publishing one tick used to spin the keepalive loop forever
     (frames keep last_rx fresh, so --state-timeout-s never fires)."""
-    ep = Endpoints(cmd_port=27587, state_port=27588)
-    robot = FakeRobot(ep, freeze_after=100)
-    rc, summary, wall = _run_stalled(tmp_path, ep, robot, 0.5)
+    robot = FakeRobot(freeze_after=100)
+    rc, summary, wall = _run_stalled(tmp_path, robot, 0.5)
     assert rc != 0
     assert "TickStallError" in summary["error"] and "frozen at tick" in summary["error"]
     assert wall < 10
@@ -216,8 +209,7 @@ def test_runner_sim_clock_aborts_on_frozen_tick(tmp_path):
 def test_runner_sim_clock_aborts_on_producer_restart(tmp_path):
     """Item 263: a restart (tick back to 0) stalls the scheduler until the tick passes the old value
     (3000 ticks here, about 1.5 s of catch-up at the fake robot rate; 0.5 s stall limit)."""
-    ep = Endpoints(cmd_port=27589, state_port=27590)
-    rc, summary, wall = _run_stalled(tmp_path, ep, FakeRobot(ep, restart_after=3000), 0.5, duration=8.0)
+    rc, summary, wall = _run_stalled(tmp_path, FakeRobot(restart_after=3000), 0.5, duration=8.0)
     assert rc != 0
     assert "TickStallError" in summary["error"] and "producer restart" in summary["error"]
     assert wall < 10

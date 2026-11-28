@@ -13,7 +13,6 @@ import sdk_test_paths  # noqa: F401
 from dropbear_wbc.deploy.config import FsmCfg, _fsm_from, hold_config
 from dropbear_wbc.deploy.fsm import DeployController, FsmState
 from dropbear_wbc.sdk import motors
-from dropbear_wbc.sdk.transport import Endpoints
 
 ROOT = Path(__file__).resolve().parents[1]
 N = motors.NUM_MOTORS
@@ -188,9 +187,8 @@ def test_runner_trips_when_fake_robot_drops_a_motor(tmp_path):
             threading.Thread(target=dropper, daemon=True).start()
             super().run()
 
-    ep = Endpoints(cmd_port=27595, state_port=27596)
-    robot = DroppingRobot(ep)
-    robot.start()
+    robot = DroppingRobot()
+    ep = robot.start_bound()
     try:
         runner = lb._load_runner()
         sp = tmp_path / "summary.json"

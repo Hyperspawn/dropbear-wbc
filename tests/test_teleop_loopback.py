@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import threading
 import time
 from pathlib import Path
 
@@ -19,22 +18,23 @@ import pytest
 import sdk_test_paths  # noqa: F401
 from dropbear_wbc.kinematics.semantic import DEFAULT_CALIBRATION
 from dropbear_wbc.sdk import motors
-from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints
-from dropbear_wbc.sdk.types import IMUState, LowCmd, LowState, MotorStateBlock, SimState
+from dropbear_wbc.sdk.transport import Endpoints
+from dropbear_wbc.sdk.types import IMUState, LowState, MotorStateBlock, SimState
+from loopback_ports import BindFirstRobot
 
 ROOT = Path(__file__).resolve().parents[1]
-EP = Endpoints(cmd_port=28555, state_port=28556)
 pytestmark = pytest.mark.skipif(not DEFAULT_CALIBRATION.exists(), reason="no semantic calibration JSON")
 
 
 KNEE_SLOTS = tuple(i for i, nm in enumerate(motors.MOTOR_NAMES) if "knee" in nm)
 
 
-class FakeArmRobot(threading.Thread):
-    def __init__(self, ik):
-        super().__init__(daemon=True)
+class FakeArmRobot(BindFirstRobot):
+    """Arm fake robot on OS-assigned ports (``endpoints=None``); start with ``ep = robot.start_bound()``."""
+
+    def __init__(self, ik, endpoints: Endpoints | None = None):
+        super().__init__(endpoints)
         self.ik = ik
-        self.running = True
         self.q = np.asarray(motors.DEFAULT_POS, dtype=float).copy()
         self.q_des = None
         self.ticks = 0
@@ -60,10 +60,10 @@ class FakeArmRobot(threading.Thread):
         return st
 
     def run(self):
-        pub = ChannelPublisher(LOWSTATE, LowState, endpoints=EP, role="robot")
-        sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=EP, role="robot")
-        pub.Init()
-        sub.Init()
+        channels = self.bind()
+        if channels is None:
+            return
+        pub, sub = channels
         try:
             while self.running:
                 cmd = sub.Read(timeout=0.0)
@@ -93,14 +93,14 @@ def test_teleop_scripted_session_over_zmq(tmp_path):
 
     ik = DropbearArmIK()
     robot = FakeArmRobot(ik)
-    robot.start()
+    ep = robot.start_bound()
     try:
         tool = _load_tool()
         rec = tmp_path / "session"
         summary_path = tmp_path / "summary.json"
         rc = tool.main(["--device", "scripted", "--duration", "3.0", "--ramp-s", "1.0", "--move-in-s", "0.3",
-                        "--settle-s", "0.2", "--home-s", "0.3", "--cmd-port", str(EP.cmd_port),
-                        "--state-port", str(EP.state_port), "--connect-timeout-s", "20", "--record", str(rec),
+                        "--settle-s", "0.2", "--home-s", "0.3", "--cmd-port", str(ep.cmd_port),
+                        "--state-port", str(ep.state_port), "--connect-timeout-s", "20", "--record", str(rec),
                         "--summary", str(summary_path), "--task", "loopback test"])
     finally:
         robot.running = False

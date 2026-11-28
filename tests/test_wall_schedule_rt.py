@@ -116,8 +116,6 @@ def _run_runner_with_stall(tmp_path, stall_steps, stall_s, extra=()):
     from test_state_freshness_gate import _wall_robot
 
     from dropbear_wbc.deploy.fsm import DeployController
-    from dropbear_wbc.sdk.transport import Endpoints
-
     root = Path(__file__).resolve().parents[1]
     fx.write_beyondmimic_onnx(tmp_path / "policy.onnx", obs_dim=sum(t["dim"] for t in fx.OBS_TERMS_FULL))
     fx.write_sidecar(tmp_path / "policy.json", "policy.onnx", terms=fx.OBS_TERMS_FULL)
@@ -133,9 +131,8 @@ def _run_runner_with_stall(tmp_path, stall_steps, stall_s, extra=()):
             time.sleep(stall_s)
         return orig(self, *a, **k)
 
-    ep = Endpoints(cmd_port=27961, state_port=27962)
-    robot = _wall_robot(ep)
-    robot.start()
+    robot = _wall_robot()
+    ep = robot.start_bound()
     try:
         DeployController.step = step
         rc = runner.main(["--mode", "policy", "--sidecar", str(tmp_path / "policy.json"), "--allow-privileged",

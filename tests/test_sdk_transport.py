@@ -1,4 +1,7 @@
-"""ZMQ round-trip tests for rt/lowcmd and rt/lowstate (CPU only, localhost, non-default ports)."""
+"""ZMQ round-trip tests for rt/lowcmd and rt/lowstate (CPU only, localhost).
+
+The bind side always binds port 0 (OS-assigned, tests/loopback_ports.py) and the connect side uses the port read back
+from it: fixed ports clashed with any other process on the host holding them (item 398)."""
 from __future__ import annotations
 
 import subprocess
@@ -11,15 +14,20 @@ import pytest
 import sdk_test_paths  # noqa: F401
 from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber, Endpoints, ZmqSubscriber
 from dropbear_wbc.sdk.types import LowCmd, LowState, MotorCmdBlock
+from loopback_ports import ANY_PORT, bind_robot_channels, bound_port
 
 
 HOST_STALL_S = 1.0  # poll-loop gap that marks a starved host, not a transport fault
-RETRY_OFFSET = 90  # spare _endpoints offset for the single stall retry in the burst test
 
 
-def _endpoints(offset: int) -> Endpoints:
-    # Ports away from the contract defaults so tests never collide with a running bridge.
-    return Endpoints(cmd_port=26555 + offset, state_port=26556 + offset)
+def _state_pair():
+    """Robot-side rt/lowstate PUB bound on an OS-assigned port and a client SUB connected to it."""
+    pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ANY_PORT, role="robot")
+    pub.Init()
+    ep = Endpoints(cmd_port=0, state_port=bound_port(pub))
+    sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
+    sub.Init()
+    return pub, sub, ep
 
 
 def _tcp_states(port: int) -> list[str]:
@@ -63,12 +71,10 @@ def _wait_connected(pub, sub, make_msg, timeout=3.0, port: int | None = None):
 
 
 def test_lowcmd_lowstate_roundtrip_through_zmq():
-    ep = _endpoints(0)
-    robot_state_pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-    robot_cmd_sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=ep, role="robot")
+    robot_state_pub, robot_cmd_sub, ep = bind_robot_channels()
     client_state_sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
     client_cmd_pub = ChannelPublisher(LOWCMD, LowCmd, endpoints=ep, role="client")
-    for ch in (robot_state_pub, robot_cmd_sub, client_state_sub, client_cmd_pub):
+    for ch in (client_state_sub, client_cmd_pub):
         ch.Init()
     try:
         state = LowState(tick=41)
@@ -90,11 +96,7 @@ def test_lowcmd_lowstate_roundtrip_through_zmq():
 
 
 def test_latest_message_semantics_and_nonblocking():
-    ep = _endpoints(10)
-    pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-    sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
-    pub.Init()
-    sub.Init()
+    pub, sub, _ = _state_pair()
     try:
         _wait_connected(pub, sub, lambda: LowState(tick=0))
         assert sub.Read(timeout=0.0) is None  # nothing new -> non-blocking None
@@ -116,11 +118,10 @@ def test_latest_message_semantics_and_nonblocking():
 
 
 def test_handler_thread_and_bad_frames_counted():
-    ep = _endpoints(20)
-    pub = ChannelPublisher(LOWCMD, LowCmd, endpoints=ep, role="client")
     received: list[int] = []
-    sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=ep, role="robot")
+    sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=ANY_PORT, role="robot")
     sub.Init(lambda m: received.append(m.tick))
+    pub = ChannelPublisher(LOWCMD, LowCmd, endpoints=Endpoints(cmd_port=bound_port(sub), state_port=0), role="client")
     pub.Init()
     try:
         deadline = time.monotonic() + 3.0
@@ -143,10 +144,10 @@ def test_wrong_channel_type_rejected():
 
 
 def test_topic_filtering():
-    ep = _endpoints(30)
     # A stray publisher on the state port with a different topic must not be received.
     from dropbear_wbc.sdk.transport import ZmqPublisher
-    stray = ZmqPublisher(ep.for_channel(LOWSTATE), "rt/other", bind=True)
+    stray = ZmqPublisher(ANY_PORT.for_channel(LOWSTATE), "rt/other", bind=True)
+    ep = Endpoints(cmd_port=0, state_port=bound_port(stray))
     sub = ZmqSubscriber(ep.for_channel(LOWSTATE), LOWSTATE, bind=False)
     try:
         deadline = time.monotonic() + 0.5
@@ -162,17 +163,13 @@ def test_latest_wins_is_deterministic_on_bursts():
     """20-frame burst > SNDHWM: the newest frame must win every time (was 62-74 % before CONFLATE, notes/202).
 
     The property under test is burst delivery, not connection setup. A connect timeout is retried once on a
-    fresh socket pair on a spare port (closing a ZMQ socket unbinds asynchronously, so rebinding the same port
-    can hit EADDRINUSE) only when our own poll loop was starved for > 1 s (host stall, CI run 41608080261);
+    fresh socket pair (a new OS-assigned port, so the asynchronous unbind of the closed one does not matter)
+    only when our own poll loop was starved for > 1 s (host stall, CI run 41608080261);
     any other connect failure, or a second stall anywhere in the test, fails with the diagnostic (notes/309)."""
     retried = []
     for i in range(25):
         for attempt in (0, 1):
-            ep = _endpoints(40 + i if attempt == 0 else RETRY_OFFSET)
-            pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-            sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
-            pub.Init()
-            sub.Init()
+            pub, sub, ep = _state_pair()
             try:
                 try:
                     _wait_connected(pub, sub, lambda: LowState(tick=0), port=ep.state_port)
@@ -198,11 +195,7 @@ def test_reader_stall_does_not_return_stale_state():
     """Publisher at 500 Hz, reader stalls 400 ms: the next Read must be fresh (was 286 ms old, notes/202)."""
     import threading
 
-    ep = _endpoints(80)
-    pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-    sub = ChannelSubscriber(LOWSTATE, LowState, endpoints=ep, role="client")
-    pub.Init()
-    sub.Init()
+    pub, sub, _ = _state_pair()
     stop = threading.Event()
     sent = [0]
 

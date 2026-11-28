@@ -19,7 +19,6 @@ import pytest
 
 import sdk_test_paths  # noqa: F401
 from dropbear_wbc.sdk.signals import StopRequest
-from dropbear_wbc.sdk.transport import Endpoints
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,11 +36,11 @@ def test_stop_request_records_first_cause_and_exit_code():
     assert d.cause == "duration" and not d.by_signal and d.exit_code() == 0
 
 
-def _run(rel: str, extra: list[str], ep: Endpoints, summary: Path, signame: str | None):
+def _run(rel: str, extra: list[str], summary: Path, signame: str | None):
     from test_runner_loopback import FakeRobot
 
-    robot = FakeRobot(ep)
-    robot.start()
+    robot = FakeRobot()
+    ep = robot.start_bound()  # OS-assigned ports, bound before the tool starts
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT / "source"), str(ROOT / "tests"),
                                                       os.environ.get("PYTHONPATH", "")]))
     cmd = [sys.executable, "-u", str(ROOT / rel), *extra, "--summary", str(summary),
@@ -64,16 +63,15 @@ def _run(rel: str, extra: list[str], ep: Endpoints, summary: Path, signame: str 
 
 
 RUNNER = ["--mode", "hold", "--passive-s", "0.05", "--move-s", "0.3", "--connect-timeout-s", "20"]
-CASES = [("tools/policy_runner.py", "SIGTERM", 27821), ("tools/policy_runner.py", "SIGINT", 27823),
-         ("tools/teleop_arm.py", "SIGTERM", 27825)]
+CASES = [("tools/policy_runner.py", "SIGTERM"), ("tools/policy_runner.py", "SIGINT"), ("tools/teleop_arm.py", "SIGTERM")]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX signals")
-@pytest.mark.parametrize("rel,signame,port", CASES)
-def test_signal_stop_is_reported_as_interrupted(rel, signame, port, tmp_path):
+@pytest.mark.parametrize("rel,signame", CASES)
+def test_signal_stop_is_reported_as_interrupted(rel, signame, tmp_path):
     extra = RUNNER + ["--duration", "60"] if rel.endswith("policy_runner.py") else ["--device", "scripted",
                                                                                    "--duration", "60"]
-    rc, summ, out = _run(rel, extra, Endpoints(cmd_port=port, state_port=port + 1), tmp_path / "s.json", signame)
+    rc, summ, out = _run(rel, extra, tmp_path / "s.json", signame)
     assert summ["status"] == "interrupted", out[-2000:]
     assert summ["stop"]["cause"] == signame and summ["stop"]["by_signal"] is True
     assert rc == 128 + getattr(signal, signame)
@@ -81,7 +79,6 @@ def test_signal_stop_is_reported_as_interrupted(rel, signame, port, tmp_path):
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX signals")
 def test_duration_stop_is_executed(tmp_path):
-    rc, summ, out = _run("tools/policy_runner.py", RUNNER + ["--duration", "1.5"],
-                         Endpoints(cmd_port=27827, state_port=27828), tmp_path / "s.json", None)
+    rc, summ, out = _run("tools/policy_runner.py", RUNNER + ["--duration", "1.5"], tmp_path / "s.json", None)
     assert summ["status"] == "executed" and rc == 0, out[-2000:]
     assert summ["stop"] == {"cause": "duration", "by_signal": False, "signals": [], "count": 0}

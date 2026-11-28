@@ -162,28 +162,25 @@ def _clock_tick(t0: float, now: float, dt: float = 0.002) -> int:
     return 1 + int((now - t0) / dt + 1e-9)
 
 
-def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
-    """500 Hz fake robot in real time; stamp_ns=0 so the transport stamps it. Optionally stops publishing for
+def _wall_robot(stall_after_cmds=None, stall_s=0.0):
+    """500 Hz fake robot in real time on OS-assigned ports (tests/loopback_ports.py); stamp_ns=0 so the transport stamps it. Optionally stops publishing for
     ``stall_s`` after ``stall_after_cmds`` LowCmds (a reader- or bus-side stall, notes/202 F2)."""
-    import threading
     import time
 
-    from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber
-    from dropbear_wbc.sdk.types import LowCmd, LowState
+    from loopback_ports import BindFirstRobot
 
-
-    class R(threading.Thread):
+    class R(BindFirstRobot):
         def __init__(self):
-            super().__init__(daemon=True)
+            super().__init__()
             self.running, self.cmds, self.ticks, self.stalled = True, 0, 0, False
             self.q = np.zeros(22)
             self.pub_t = {}  # tick -> perf_counter() at publish (item 289: attribute state faults to publisher gaps)
 
         def run(self):
-            pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-            sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=ep, role="robot")
-            pub.Init()
-            sub.Init()
+            channels = self.bind()
+            if channels is None:
+                return
+            pub, sub = channels
             mode = np.zeros(22, dtype=np.uint8)
             nxt = t0 = time.perf_counter()
             try:
@@ -217,7 +214,7 @@ def _wall_robot(ep, stall_after_cmds=None, stall_s=0.0):
     return R()
 
 
-def _run_wall(tmp_path, ep, robot):
+def _run_wall(tmp_path, robot):
     import importlib.util
     import json
 
@@ -230,7 +227,7 @@ def _run_wall(tmp_path, ep, robot):
     spec = importlib.util.spec_from_file_location("policy_runner", root / "tools" / "policy_runner.py")
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
-    robot.start()
+    ep = robot.start_bound()
     try:
         runner.main(["--mode", "policy", "--sidecar", str(tmp_path / "policy.json"), "--allow-privileged",
                      "--clock", "wall", "--duration", "2.0", "--passive-s", "0.1", "--move-s", "0.4",
@@ -244,11 +241,8 @@ def _run_wall(tmp_path, ep, robot):
 
 
 def test_runner_wall_clock_no_false_trip(tmp_path):
-    from dropbear_wbc.sdk.transport import Endpoints
-
-    ep = Endpoints(cmd_port=27591, state_port=27592)
-    robot = _wall_robot(ep)
-    s = _run_wall(tmp_path, ep, robot)
+    robot = _wall_robot()
+    s = _run_wall(tmp_path, robot)
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names and not any("state_" in n for n in names), names
     assert s["state_gate"]["stamp_age"] is True
@@ -259,11 +253,8 @@ def test_runner_wall_clock_no_false_trip(tmp_path):
 
 
 def test_runner_wall_clock_publisher_stall_goes_passive(tmp_path):
-    from dropbear_wbc.sdk.transport import Endpoints
-
-    ep = Endpoints(cmd_port=27593, state_port=27594)
     # 0.1+0.4+0.2 s = 35 steps before POLICY; stall 0.25 s ten steps into POLICY.
-    s = _run_wall(tmp_path, ep, _wall_robot(ep, stall_after_cmds=45, stall_s=0.25))
+    s = _run_wall(tmp_path, _wall_robot(stall_after_cmds=45, stall_s=0.25))
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names, names
     assert "policy->passive(state_stale)" in names, names

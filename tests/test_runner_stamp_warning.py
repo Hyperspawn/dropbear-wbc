@@ -15,29 +15,26 @@ def test_fixture_low_state_leaves_stamp_to_transport():
     assert fx.low_state(5, np.zeros(22)).stamp_ns == 0
 
 
-def _stamped_robot(ep, stamp_fn, clock_fn=None):
-    """500 Hz fake robot that writes ``stamp_fn()`` into every LowState (non-zero => the transport keeps it).
+def _stamped_robot(stamp_fn, clock_fn=None):
+    """500 Hz fake robot (OS-assigned ports, tests/loopback_ports.py) that writes ``stamp_fn()`` into every LowState (non-zero => the transport keeps it).
 
     ``clock_fn(elapsed_s)`` optionally maps robot wall time to the time its tick counter reads; returning ``None``
     publishes nothing (a silent publisher or bus stall), a value behind ``elapsed_s`` delivers frames whose tick trails
     wall time (a backlogged link). Ticks never move backwards (item 283)."""
-    import threading
+    from loopback_ports import BindFirstRobot
 
-    from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber
-    from dropbear_wbc.sdk.types import LowCmd, LowState
-
-    class R(threading.Thread):
+    class R(BindFirstRobot):
         def __init__(self):
-            super().__init__(daemon=True)
+            super().__init__()
             self.running, self.ticks = True, 0
             self.q = np.zeros(22)
             self.pub_t = {}  # tick -> perf_counter() at publish (item 288: attribute state faults to publisher gaps)
 
         def run(self):
-            pub = ChannelPublisher(LOWSTATE, LowState, endpoints=ep, role="robot")
-            sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=ep, role="robot")
-            pub.Init()
-            sub.Init()
+            channels = self.bind()
+            if channels is None:
+                return
+            pub, sub = channels
             mode = np.zeros(22, dtype=np.uint8)
             nxt = t0 = time.perf_counter()
             try:
@@ -78,19 +75,15 @@ _CASES = {
     "behind_1h": (lambda: max(1, time.perf_counter_ns() - 3_600_000_000_000), False),
     "same_host": (lambda: 0, True),
 }
-_OFFSET = {"placeholder": 0, "ahead_10s": 2, "behind_1h": 4, "same_host": 6}
 
 
 @pytest.mark.parametrize("case", list(_CASES))
 def test_runner_non_same_host_stamp_warns_and_gates_on_ticks(tmp_path, capsys, case):
-    from dropbear_wbc.sdk.transport import Endpoints
-
     stamp_fn, expect_stamp_age = _CASES[case]
     if case == "behind_1h" and time.perf_counter_ns() < 3_600_000_000_000:
         stamp_fn = lambda: 1  # noqa: E731  (fresh boot: perf_counter < 1 h; still a non-same-host stamp)
-    ep = Endpoints(cmd_port=27601 + _OFFSET[case], state_port=27602 + _OFFSET[case])
-    robot = _stamped_robot(ep, stamp_fn)
-    s = _run_wall(tmp_path, ep, robot)
+    robot = _stamped_robot(stamp_fn)
+    s = _run_wall(tmp_path, robot)
     out = capsys.readouterr().out
     warned = "is not a same-host perf_counter stamp" in out
     assert warned is (not expect_stamp_age), out[-2000:]
@@ -107,14 +100,11 @@ def test_runner_non_same_host_stamp_warns_and_gates_on_ticks(tmp_path, capsys, c
 def test_publisher_stall_faults_are_attributed_not_hidden(tmp_path):
     """A 100 ms publisher stall during MOVE_TO_DEFAULT (no trip outside POLICY) yields state_stale steps that the
     attribution explains, so the relaxed assertion above still sees real faults and cannot mask a false trip."""
-    from dropbear_wbc.sdk.transport import Endpoints
-
     stamp = lambda: max(1, time.perf_counter_ns() - 3_600_000_000_000)  # noqa: E731
     if time.perf_counter_ns() < 3_600_000_000_000:
         stamp = lambda: 1  # noqa: E731
-    ep = Endpoints(cmd_port=27609, state_port=27610)
-    robot = _stamped_robot(ep, stamp, clock_fn=lambda e: None if 0.25 <= e < 0.35 else e)
-    s = _run_wall(tmp_path, ep, robot)
+    robot = _stamped_robot(stamp, clock_fn=lambda e: None if 0.25 <= e < 0.35 else e)
+    s = _run_wall(tmp_path, robot)
     names = [t["transition"] for t in s["transitions"]]
     assert "hold->policy" in names and not any("state_" in n for n in names), names
     assert s["state_gate"]["fault_steps"].get("state_stale", 0) >= 3, s["state_gate"]

@@ -10,7 +10,6 @@ the shared box) held either port, because the robot thread died on EADDRINUSE wi
 from __future__ import annotations
 
 import json
-import threading
 
 import zmq
 
@@ -46,52 +45,23 @@ def test_default_gains_inside_field_and_reported():
 class FieldCheckRobot(lb.FakeArmRobot):
     """Fake robot that records every LowCmd's gains (what a field-checking HAL would accept or refuse).
 
-    It binds its two channels before the client starts: ``ep`` defaults to port 0 on both channels (OS-assigned
-    free ports, held from bind to close, so no check-then-bind race), and :meth:`wait_bound` returns the
-    endpoints actually bound or raises the bind error at once instead of letting the client time out.
+    Binds first like every fake robot (tests/loopback_ports.py): ``ep`` defaults to port 0 on both channels
+    (OS-assigned free ports, held from bind to close, so no check-then-bind race), and :meth:`wait_bound` returns
+    the endpoints actually bound or raises the bind error at once instead of letting the client time out.
     """
 
-    BIND_TIMEOUT_S = 10.0
-
     def __init__(self, ik, ep=None):
-        super().__init__(ik)
-        self.ep = ep if ep is not None else Endpoints(cmd_port=0, state_port=0)
-        self.bound_ep = None
-        self.error = None
-        self._bound = threading.Event()
+        super().__init__(ik, ep)
         self.n_out_of_field = 0
         self.max_kp = self.max_kd = 0.0
         self.last_kp = self.last_kd = None
 
-    def wait_bound(self, timeout=BIND_TIMEOUT_S):
-        if not self._bound.wait(timeout):
-            raise TimeoutError(f"fake robot did not bind within {timeout} s")
-        if self.error is not None:
-            raise RuntimeError(f"fake robot could not bind {self.ep}: {self.error!r}") from self.error
-        return self.bound_ep
-
-    @staticmethod
-    def _port(channel) -> int:
-        sock = (channel._pub if hasattr(channel, "_pub") else channel._sub)._sock  # bound endpoint readback
-        return int(sock.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
-
     def run(self):  # same loop as the parent, on our own ports, plus the gain check
-        from dropbear_wbc.sdk.transport import LOWCMD, LOWSTATE, ChannelPublisher, ChannelSubscriber
-        from dropbear_wbc.sdk.types import LowCmd, LowState
         import time
-        pub = ChannelPublisher(LOWSTATE, LowState, endpoints=self.ep, role="robot")
-        sub = ChannelSubscriber(LOWCMD, LowCmd, endpoints=self.ep, role="robot")
-        try:
-            pub.Init()
-            sub.Init()
-            self.bound_ep = Endpoints(host=self.ep.host, cmd_port=self._port(sub), state_port=self._port(pub))
-        except Exception as e:  # noqa: BLE001 - reported to the test thread by wait_bound()
-            self.error = e
-            pub.Close()
-            sub.Close()
+        channels = self.bind()
+        if channels is None:
             return
-        finally:
-            self._bound.set()
+        pub, sub = channels
         try:
             while self.running:
                 cmd = sub.Read(timeout=0.0)
@@ -136,7 +106,7 @@ def test_fake_robot_binds_os_assigned_ports_even_when_the_old_fixed_ports_are_ta
     robot.start()
     try:
         ep = robot.wait_bound()
-        assert robot.error is None
+        assert robot.bind_error is None
         assert ep.cmd_port != ep.state_port
         assert {ep.cmd_port, ep.state_port}.isdisjoint({0, 28655, 28656})
     finally:
@@ -160,7 +130,7 @@ def test_fake_robot_bind_failure_is_raised_at_once_not_a_client_timeout():
         with pytest.raises(RuntimeError, match="could not bind"):
             robot.wait_bound()
         assert time.perf_counter() - t0 < FieldCheckRobot.BIND_TIMEOUT_S
-        assert isinstance(robot.error, zmq.ZMQError)
+        assert isinstance(robot.bind_error, zmq.ZMQError)
         robot.join(timeout=5)
         assert not robot.is_alive()
     finally:

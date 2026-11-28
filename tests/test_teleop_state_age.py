@@ -14,7 +14,6 @@ import pytest
 
 import sdk_test_paths  # noqa: F401
 from dropbear_wbc.kinematics.semantic import DEFAULT_CALIBRATION
-from dropbear_wbc.sdk.transport import Endpoints
 
 import test_teleop_loopback as loop
 
@@ -51,13 +50,11 @@ class ForeignStampRobot(loop.FakeArmRobot):
 
 @pytest.mark.skipif(not DEFAULT_CALIBRATION.exists(), reason="no semantic calibration JSON")
 @pytest.mark.parametrize("robot_cls,foreign", [(loop.FakeArmRobot, False), (ForeignStampRobot, True)])
-def test_session_state_age_ignores_foreign_stamps(tmp_path, monkeypatch, robot_cls, foreign):
+def test_session_state_age_ignores_foreign_stamps(tmp_path, robot_cls, foreign):
     from dropbear_wbc.teleop.arm_ik import DropbearArmIK
 
-    ep = Endpoints(cmd_port=28565 + 2 * int(foreign), state_port=28566 + 2 * int(foreign))
-    monkeypatch.setattr(loop, "EP", ep)
     robot = robot_cls(DropbearArmIK())
-    robot.start()
+    ep = robot.start_bound()  # OS-assigned ports, bound before the tool starts
     try:
         tool = loop._load_tool()
         rec, summary_path = tmp_path / "session", tmp_path / "summary.json"
